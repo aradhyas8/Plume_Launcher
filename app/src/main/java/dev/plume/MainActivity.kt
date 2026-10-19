@@ -489,7 +489,7 @@ class MainActivity : Activity() {
     private fun uploadWallpaper(forDark: Boolean) {
         val ip = lanAddress() ?: return Toast.makeText(this, R.string.need_network, Toast.LENGTH_LONG).show()
         val dir = wallpaperDir() ?: return
-        val status = label(getString(R.string.waiting_for_photo), 14f).apply { gravity = Gravity.CENTER; setTextColor(Color.WHITE) }
+        val status = label(getString(R.string.waiting_for_photo), 14f).apply { gravity = Gravity.CENTER; textAlignment = View.TEXT_ALIGNMENT_CENTER; setTextColor(Color.WHITE) }
         val server = try {
             UploadServer((1000..9999).random().toString(), File(cacheDir, "upload.tmp")) { file ->
                 val saved = importWallpaper(file, dir) ?: return@UploadServer null
@@ -509,9 +509,10 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(24), dp(8), dp(24), dp(8))
             addView(ImageView(this@MainActivity).apply { setImageBitmap(qrBitmap(url, dp(220))) })
-            addView(label(url, 15f).apply { gravity = Gravity.CENTER; setTextColor(Color.WHITE); setPadding(0, dp(12), 0, dp(4)) })
+            addView(label(url, 15f).apply { gravity = Gravity.CENTER; textAlignment = View.TEXT_ALIGNMENT_CENTER; setTextColor(Color.WHITE); setPadding(0, dp(12), 0, dp(4)) })
             addView(label(getString(R.string.upload_hint), 13f).apply {
                 gravity = Gravity.CENTER
+                textAlignment = View.TEXT_ALIGNMENT_CENTER // overrides label()'s start alignment
                 setTextColor(Color.WHITE)
                 alpha = 0.7f
                 maxLines = 3
@@ -851,6 +852,7 @@ class MainActivity : Activity() {
             val t = appRow.getChildAt(i)
             row.addView(label(t.contentDescription.toString(), 13f).apply {
                 gravity = Gravity.CENTER
+                textAlignment = View.TEXT_ALIGNMENT_CENTER // overrides label()'s start alignment
                 alpha = if (dark) 0.85f else 1f
             }, LinearLayout.LayoutParams(t.layoutParams as LinearLayout.LayoutParams).apply { height = MATCH_PARENT })
         }
@@ -884,6 +886,7 @@ class MainActivity : Activity() {
         val text = label?.let {
             label(it, 13f).apply {
                 gravity = Gravity.CENTER
+                textAlignment = View.TEXT_ALIGNMENT_CENTER // overrides label()'s start alignment
                 setPadding(dp(6), dp(7), dp(6), 0)
             }
         }
