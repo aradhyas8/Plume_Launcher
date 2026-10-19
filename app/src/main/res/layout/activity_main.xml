@@ -81,6 +81,16 @@
                 android:src="@drawable/ic_wifi" />
 
             <ImageView
+                android:id="@+id/addAppsButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="Apps on home screen"
+                android:focusable="true"
+                android:padding="7dp"
+                android:src="@drawable/ic_add" />
+
+            <ImageView
                 android:id="@+id/allAppsButton"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
@@ -179,40 +189,29 @@
             </LinearLayout>
         </dev.plume.SnapScrollView>
 
-        <TextView
-            android:id="@+id/watchTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:alpha="0.7"
-            android:fontFamily="sans-serif-medium"
-            android:text="Continue Watching"
-            android:textSize="14sp"
-            android:visibility="gone" />
-
-        <dev.plume.SnapScrollView
+        <!-- Continue Watching: one row per app, built in code (title + a scroller like the apps row).
+             Shows as many rows as fit under the apps and scrolls down for the rest. It reaches the screen's
+             left edge, so each row's ▲ ▼ buttons fit in the margin; the right side reaches 16dp past the
+             content edge, like the rows, so focus lift isn't clipped. -->
+        <ScrollView
             android:id="@+id/watchScroll"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="-16dp"
-            android:layout_marginTop="-16dp"
+            android:layout_marginStart="-48dp"
             android:layout_marginEnd="-16dp"
-            android:layout_marginBottom="-24dp"
-            android:clipToPadding="false"
-            android:paddingStart="16dp"
-            android:paddingTop="24dp"
-            android:paddingEnd="16dp"
-            android:paddingBottom="24dp"
             android:scrollbars="none"
             android:visibility="gone">
 
             <LinearLayout
-                android:id="@+id/watchRow"
-                android:layout_width="wrap_content"
+                android:id="@+id/watchRows"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:orientation="horizontal" />
-        </dev.plume.SnapScrollView>
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:paddingStart="48dp"
+                android:paddingEnd="16dp" />
+        </ScrollView>
     </LinearLayout>
 
     <!-- All apps: hidden until the Apps tile is pressed; Back closes it. -->
