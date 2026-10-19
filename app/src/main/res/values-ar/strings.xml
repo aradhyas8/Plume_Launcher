@@ -1,0 +1,121 @@
+<resources>
+    <string name="override_desc">يفتح Plume كلما ظهرت الشاشة الرئيسية لـ Google TV، فيعود زر الرئيسية إلى هنا.</string>
+    <string name="home_button_service">Plume: زر الرئيسية</string>
+    <string name="gallery">المعرض</string>
+
+    <!-- Top bar and overlays -->
+    <string name="network_settings">إعدادات الشبكة</string>
+    <string name="apps_in_row">التطبيقات في الصف</string>
+    <string name="all_apps">كل التطبيقات</string>
+    <string name="settings">الإعدادات</string>
+    <string name="launcher_settings">إعدادات الواجهة</string>
+
+    <!-- Common -->
+    <string name="done">تم</string>
+    <string name="cancel">إلغاء</string>
+    <string name="delete">حذف</string>
+    <string name="on">مفعّل</string>
+    <string name="off">متوقف</string>
+    <string name="all">الكل</string>
+    <string name="n_of_m">%1$d من %2$d</string>
+
+    <!-- Launcher settings rows -->
+    <string name="s_edit_row">ترتيب صف التطبيقات</string>
+    <string name="s_theme">المظهر</string>
+    <string name="theme_light">فاتح</string>
+    <string name="theme_dark">داكن</string>
+    <string name="theme_auto">تلقائي</string>
+    <string name="wp_light">خلفية الوضع الفاتح</string>
+    <string name="wp_dark">خلفية الوضع الداكن</string>
+    <string name="s_sort">ترتيب التطبيقات</string>
+    <string name="sort_manual">يدوي</string>
+    <string name="sort_usage">الأكثر استخدامًا</string>
+    <string name="s_names">أسماء التطبيقات</string>
+    <string name="names_focus">عند التحديد</string>
+    <string name="names_always">دائمًا</string>
+    <string name="names_never">أبدًا</string>
+    <string name="s_icons">شكل الأيقونات</string>
+    <string name="icons_colour">ملوّنة</string>
+    <string name="icons_mono">أحادية اللون</string>
+    <string name="s_restore_shows">استعادة العروض المخفية</string>
+    <string name="none_hidden">لا يوجد مخفي</string>
+    <string name="n_hidden">%1$d مخفي</string>
+    <string name="s_cw_apps">تطبيقات متابعة المشاهدة</string>
+    <string name="all_on">الكل مفعّل</string>
+    <string name="n_off">%1$d متوقف</string>
+    <string name="s_weather">الطقس</string>
+    <string name="s_screensaver">شاشة التوقف</string>
+    <string name="downloading_gallery">جارٍ تنزيل المعرض…</string>
+    <string name="screensaver_value">%1$s · المعرض %2$s</string>
+    <string name="s_test_screensaver">تجربة شاشة التوقف</string>
+    <string name="s_home_button">زر الرئيسية</string>
+    <string name="off_press_to_turn_on">متوقف: اضغط للتفعيل</string>
+    <string name="s_default_launcher">الواجهة الافتراضية</string>
+    <string name="press_to_set">اضغط للتعيين</string>
+    <string name="s_updates">التحديثات</string>
+    <string name="updating">جارٍ التحديث…</string>
+    <string name="checking">جارٍ البحث…</string>
+    <string name="update_available">الإصدار %1$s متاح: اضغط للتحديث</string>
+    <string name="up_to_date_version">محدّث (%1$s)</string>
+    <string name="system_default">افتراضي النظام</string>
+
+    <!-- Wallpapers -->
+    <string name="add_from_phone">إضافة من الجوال…</string>
+    <string name="remove_a_photo">حذف صورة…</string>
+    <string name="remove_photo_title">حذف صورة</string>
+    <string name="delete_photo">حذف "%1$s"؟</string>
+    <string name="need_network">وصّل التلفاز بشبكة Wi-Fi أو إيثرنت أولًا</string>
+    <string name="waiting_for_photo">بانتظار صورة…</string>
+    <string name="photo_added">تمت إضافة "%1$s". أرسل صورة أخرى أو اضغط رجوع.</string>
+    <string name="upload_failed">تعذّر تشغيل صفحة الرفع</string>
+    <string name="upload_hint">امسح الرمز بكاميرا الجوال أو افتح هذا العنوان. يجب أن يكون الجوال والتلفاز على شبكة Wi-Fi نفسها.</string>
+    <string name="upload_title">أضف خلفية من جوالك</string>
+    <string name="wp_rockies_day">جبال روكي (نهارًا)</string>
+    <string name="wp_rockies_dusk">جبال روكي (غروبًا)</string>
+    <string name="wp_pure_black">أسود خالص</string>
+    <string name="wp_soft_white">أبيض ناعم</string>
+
+    <!-- Apps row -->
+    <string name="tip_hold">تلميح: اضغط مطولًا على OK فوق أي تطبيق لنقله أو إزالته</string>
+    <string name="menu_move">نقل</string>
+    <string name="menu_remove">إزالة من الصف</string>
+    <string name="menu_open">فتح</string>
+    <string name="removed_from_row">تمت الإزالة. أعده من زر + في الأعلى.</string>
+    <string name="moving_hint">نقل:  ◀ ▶ للتحريك  ·  OK للتثبيت</string>
+    <string name="editing_hint">ترتيب الصف:  OK للالتقاط أو الإفلات  ·  ◀ ▶ للتحريك  ·  رجوع للإنهاء</string>
+    <string name="turn_on_home_service">فعّل "Plume: زر الرئيسية" في الشاشة التالية</string>
+
+    <!-- Screensaver -->
+    <string name="needs_adb">يحتاج إلى إذن adb لمرة واحدة: pm grant dev.plume android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="downloading_paintings">جارٍ تنزيل لوحات المعرض (%1$s)…</string>
+    <string name="paintings_failed">تعذّر تنزيل اللوحات. تحقق من الاتصال وحاول مرة أخرى.</string>
+    <string name="no_dream_now">لا يستطيع هذا التلفاز تشغيل شاشة التوقف عند الطلب</string>
+
+    <!-- Updates -->
+    <string name="update_toast">الإصدار %1$s من Plume متاح. حدّثه من إعدادات Plume.</string>
+    <string name="update_check_failed">تعذّر البحث عن تحديثات. تحقق من الاتصال.</string>
+    <string name="up_to_date">Plume محدّث</string>
+    <string name="allow_installs">فعّل Plume في القائمة التالية، ثم اضغط التحديثات مرة أخرى</string>
+    <string name="update_download_failed">تعذّر تنزيل التحديث. تحقق من الاتصال وحاول مرة أخرى.</string>
+    <string name="update_install_failed">فشل تثبيت التحديث</string>
+
+    <!-- Weather (WMO codes) -->
+    <string name="wx_clear">صافٍ</string>
+    <string name="wx_partly_cloudy">غائم جزئيًا</string>
+    <string name="wx_cloudy">غائم</string>
+    <string name="wx_fog">ضباب</string>
+    <string name="wx_drizzle">رذاذ</string>
+    <string name="wx_rain">مطر</string>
+    <string name="wx_snow">ثلج</string>
+    <string name="wx_thunderstorm">عاصفة رعدية</string>
+
+    <!-- Continue Watching -->
+    <string name="continue_watching">متابعة المشاهدة</string>
+    <string name="no_cw_apps">لا توجد تطبيقات مثبتة تدعم متابعة المشاهدة</string>
+    <string name="hidden_from_cw">أُخفي من متابعة المشاهدة</string>
+    <string name="season_episode">م%1$s ح%2$s</string>
+    <string name="time_left_hr">متبقٍ %1$d س %2$d د</string>
+    <string name="time_left_min">متبقٍ %1$d د</string>
+    <string name="move_row_up">نقل الصف لأعلى</string>
+    <string name="move_row_down">نقل الصف لأسفل</string>
+</resources>

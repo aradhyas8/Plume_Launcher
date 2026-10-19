@@ -1,3 +1,121 @@
 <resources>
     <string name="override_desc">Opens Plume whenever the Google TV home screen appears, so the Home button lands here.</string>
+    <string name="home_button_service">Plume: Home button</string>
+    <string name="gallery">Gallery</string>
+
+    <!-- Top bar and overlays -->
+    <string name="network_settings">Network settings</string>
+    <string name="apps_in_row">Apps in row</string>
+    <string name="all_apps">All apps</string>
+    <string name="settings">Settings</string>
+    <string name="launcher_settings">Launcher settings</string>
+
+    <!-- Common -->
+    <string name="done">Done</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+    <string name="all">All</string>
+    <string name="n_of_m">%1$d of %2$d</string>
+
+    <!-- Launcher settings rows -->
+    <string name="s_edit_row">Edit apps row</string>
+    <string name="s_theme">Theme</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_auto">Auto</string>
+    <string name="wp_light">Light mode wallpaper</string>
+    <string name="wp_dark">Dark mode wallpaper</string>
+    <string name="s_sort">Sort apps</string>
+    <string name="sort_manual">Manual</string>
+    <string name="sort_usage">Most used</string>
+    <string name="s_names">App names</string>
+    <string name="names_focus">On focus</string>
+    <string name="names_always">Always</string>
+    <string name="names_never">Never</string>
+    <string name="s_icons">Icon style</string>
+    <string name="icons_colour">Colour</string>
+    <string name="icons_mono">Monochrome</string>
+    <string name="s_restore_shows">Restore hidden shows</string>
+    <string name="none_hidden">None hidden</string>
+    <string name="n_hidden">%1$d hidden</string>
+    <string name="s_cw_apps">Continue Watching apps</string>
+    <string name="all_on">All on</string>
+    <string name="n_off">%1$d off</string>
+    <string name="s_weather">Weather</string>
+    <string name="s_screensaver">Screensaver</string>
+    <string name="downloading_gallery">Downloading Gallery…</string>
+    <string name="screensaver_value">%1$s · Gallery %2$s</string>
+    <string name="s_test_screensaver">Test screensaver</string>
+    <string name="s_home_button">Home button</string>
+    <string name="off_press_to_turn_on">Off: press to turn on</string>
+    <string name="s_default_launcher">Default launcher</string>
+    <string name="press_to_set">Press to set</string>
+    <string name="s_updates">Updates</string>
+    <string name="updating">Updating…</string>
+    <string name="checking">Checking…</string>
+    <string name="update_available">%1$s available: press to update</string>
+    <string name="up_to_date_version">Up to date (%1$s)</string>
+    <string name="system_default">System default</string>
+
+    <!-- Wallpapers -->
+    <string name="add_from_phone">Add from phone…</string>
+    <string name="remove_a_photo">Remove a photo…</string>
+    <string name="remove_photo_title">Remove a photo</string>
+    <string name="delete_photo">Delete "%1$s"?</string>
+    <string name="need_network">Connect the TV to Wi-Fi or Ethernet first</string>
+    <string name="waiting_for_photo">Waiting for a photo…</string>
+    <string name="photo_added">Added "%1$s". Send another, or press Back.</string>
+    <string name="upload_failed">Couldn\'t start the upload page</string>
+    <string name="upload_hint">Scan with your phone\'s camera, or open this address. Phone and TV must be on the same Wi-Fi.</string>
+    <string name="upload_title">Add a wallpaper from your phone</string>
+    <string name="wp_rockies_day">Rockies (day)</string>
+    <string name="wp_rockies_dusk">Rockies (dusk)</string>
+    <string name="wp_pure_black">Pure black</string>
+    <string name="wp_soft_white">Soft white</string>
+
+    <!-- Apps row -->
+    <string name="tip_hold">Tip: hold OK on an app to move or remove it</string>
+    <string name="menu_move">Move</string>
+    <string name="menu_remove">Remove from row</string>
+    <string name="menu_open">Open</string>
+    <string name="removed_from_row">Removed. Add it back with the + at the top.</string>
+    <string name="moving_hint">Moving:  ◀ ▶ to move  ·  OK to place it</string>
+    <string name="editing_hint">Editing apps row:  OK pick up / drop  ·  ◀ ▶ move  ·  Back done</string>
+    <string name="turn_on_home_service">Turn on "Plume: Home button" on the next screen</string>
+
+    <!-- Screensaver -->
+    <string name="needs_adb">Needs a one-time adb permission: pm grant dev.plume android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="downloading_paintings">Downloading Gallery paintings (%1$s)…</string>
+    <string name="paintings_failed">Couldn\'t download the paintings. Check the connection and try again.</string>
+    <string name="no_dream_now">This TV can\'t start the screensaver on demand</string>
+
+    <!-- Updates -->
+    <string name="update_toast">Plume %1$s is available. Update it in Plume settings.</string>
+    <string name="update_check_failed">Couldn\'t check for updates. Check the connection.</string>
+    <string name="up_to_date">Plume is up to date</string>
+    <string name="allow_installs">Turn on Plume in the next list, then press Updates again</string>
+    <string name="update_download_failed">Couldn\'t download the update. Check the connection and try again.</string>
+    <string name="update_install_failed">Update failed to install</string>
+
+    <!-- Weather (WMO codes) -->
+    <string name="wx_clear">Clear</string>
+    <string name="wx_partly_cloudy">Partly cloudy</string>
+    <string name="wx_cloudy">Cloudy</string>
+    <string name="wx_fog">Fog</string>
+    <string name="wx_drizzle">Drizzle</string>
+    <string name="wx_rain">Rain</string>
+    <string name="wx_snow">Snow</string>
+    <string name="wx_thunderstorm">Thunderstorm</string>
+
+    <!-- Continue Watching -->
+    <string name="continue_watching">Continue Watching</string>
+    <string name="no_cw_apps">No installed apps support Continue Watching</string>
+    <string name="hidden_from_cw">Hidden from Continue Watching</string>
+    <string name="season_episode">S%1$s E%2$s</string>
+    <string name="time_left_hr">%1$d hr %2$d min left</string>
+    <string name="time_left_min">%1$d min left</string>
+    <string name="move_row_up">Move row up</string>
+    <string name="move_row_down">Move row down</string>
 </resources>

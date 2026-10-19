@@ -75,7 +75,7 @@
                 android:id="@+id/wifi"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
-                android:contentDescription="Network settings"
+                android:contentDescription="@string/network_settings"
                 android:focusable="true"
                 android:padding="8dp"
                 android:src="@drawable/ic_wifi" />
@@ -85,7 +85,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:layout_marginStart="8dp"
-                android:contentDescription="Apps on home screen"
+                android:contentDescription="@string/apps_in_row"
                 android:focusable="true"
                 android:padding="7dp"
                 android:src="@drawable/ic_add" />
@@ -95,7 +95,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:layout_marginStart="8dp"
-                android:contentDescription="All apps"
+                android:contentDescription="@string/all_apps"
                 android:focusable="true"
                 android:padding="9dp"
                 android:src="@drawable/ic_apps" />
@@ -105,7 +105,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:layout_marginStart="8dp"
-                android:contentDescription="Settings"
+                android:contentDescription="@string/settings"
                 android:focusable="true"
                 android:padding="8dp"
                 android:src="@drawable/ic_settings" />
@@ -115,7 +115,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:layout_marginStart="8dp"
-                android:contentDescription="Launcher settings"
+                android:contentDescription="@string/launcher_settings"
                 android:focusable="true"
                 android:padding="8dp"
                 android:src="@drawable/ic_tune" />
@@ -191,7 +191,7 @@
 
         <!-- Continue Watching: one row per app, built in code (title + a scroller like the apps row).
              Shows as many rows as fit under the apps and scrolls down for the rest. It reaches the screen's
-             left edge, so each row's ▲ ▼ buttons fit in the margin; the right side reaches 16dp past the
+             start edge, so each row's ▲ ▼ buttons fit in the margin; the end side reaches 16dp past the
              content edge, like the rows, so focus lift isn't clipped. -->
         <ScrollView
             android:id="@+id/watchScroll"
@@ -239,7 +239,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:fontFamily="sans-serif"
-                android:text="All apps"
+                android:text="@string/all_apps"
                 android:textSize="20sp" />
 
             <GridLayout
@@ -277,7 +277,7 @@
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
                 android:paddingStart="14dp"
-                android:text="Launcher settings"
+                android:text="@string/launcher_settings"
                 android:textSize="20sp" />
 
             <!-- Scrolls once the rows outgrow the screen; focus moving down scrolls it along. -->

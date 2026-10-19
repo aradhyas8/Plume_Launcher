@@ -27,6 +27,7 @@
 
     <application
         android:label="Plume"
+        android:supportsRtl="true"
         android:banner="@drawable/banner"
         android:icon="@drawable/banner"
         android:usesCleartextTraffic="true"
@@ -62,7 +63,7 @@
         <service
             android:name=".GalleryDream"
             android:exported="true"
-            android:label="Gallery"
+            android:label="@string/gallery"
             android:permission="android.permission.BIND_DREAM_SERVICE">
             <intent-filter>
                 <action android:name="android.service.dreams.DreamService" />
@@ -74,7 +75,7 @@
         <service
             android:name=".HomeOverride"
             android:exported="false"
-            android:label="Plume: Home button"
+            android:label="@string/home_button_service"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
