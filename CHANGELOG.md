@@ -15,6 +15,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- You can change what a button on your remote does. Select **Plume settings → Remote keys → Add a key**, then press the button. Choose what a press and a hold do. A button can open an app, switch to an HDMI input, control media or do nothing. This needs the Home button to be on.
 - Every HDMI input can be a tile. A device that names itself, like a PS5, Xbox or Nintendo Switch, gets a tile with its logo. Other HDMI devices get a tile while they send a picture. Every HDMI input is in **All apps**. Hold OK on one to pin it to the row.
 - You can set the weather location by hand. Select **Plume settings → Weather location**.
 - **Plume settings → Home button** is now a switch. Use it to turn the Home button on or off.

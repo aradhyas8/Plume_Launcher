@@ -180,4 +180,30 @@
     <string name="section_weather">Weather</string>
     <string name="section_screensaver">Screensaver</string>
     <string name="section_home">Home button</string>
+    <!-- Remote keys: change what a button on the remote does -->
+    <string name="section_keys">Remote keys</string>
+    <string name="key_add">Add a key</string>
+    <string name="key_press_prompt">Press the key to change on your remote. Back, OK and the arrows can\'t be changed. A key set here stops doing its usual job.</string>
+    <string name="key_short">Press</string>
+    <string name="key_long">Hold</string>
+    <string name="key_unset">Not set</string>
+    <string name="key_block">Do nothing</string>
+    <string name="key_open_app">Open an app or input…</string>
+    <string name="key_remove">Remove this key</string>
+    <string name="key_number">Key %1$d</string>
+    <string name="act_play_pause">Play / Pause</string>
+    <string name="act_next">Next</string>
+    <string name="act_previous">Previous</string>
+    <string name="act_stop">Stop</string>
+    <string name="act_rewind">Rewind</string>
+    <string name="act_forward">Fast-forward</string>
+    <string name="act_back">Back</string>
+    <string name="act_recents">Recent apps</string>
+    <string name="act_notifications">Notifications</string>
+    <string name="act_quick">Quick settings</string>
+    <string name="act_power">Power menu</string>
+    <plurals name="n_keys">
+        <item quantity="one">%d key</item>
+        <item quantity="other">%d keys</item>
+    </plurals>
 </resources>
