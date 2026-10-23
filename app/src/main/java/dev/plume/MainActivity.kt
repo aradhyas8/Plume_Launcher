@@ -1987,7 +1987,7 @@ class MainActivity : Activity() {
     private fun openAllApps() {
         allAppsGrid.removeAllViews()
         val gap = dp(10)
-        val width = (resources.displayMetrics.widthPixels - dp(96) - gap * 5) / 6
+        val width = (resources.displayMetrics.widthPixels - dp(96) - gap * 6) / 6 // 6 gaps: the last column's end margin counts too
         for (a in sortedApps()) {
             val t = appTile(a) // holding OK here pins it to the row (see onHold)
             allAppsGrid.addView(t, GridLayout.LayoutParams().apply {
