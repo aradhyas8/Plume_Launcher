@@ -50,6 +50,7 @@
     <string name="edit_apps_row">Edit apps row</string>
     <string name="theme">Theme</string>
     <string name="photo_fade">Photo fade</string>
+    <string name="glass">Glass</string>
     <string name="sort_apps">Sort apps</string>
     <string name="manual">Manual</string>
     <string name="most_used">Most used</string>

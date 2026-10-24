@@ -49,6 +49,7 @@
     <string name="edit_apps_row">Modifier la ligne d\'applis</string>
     <string name="theme">Thème</string>
     <string name="photo_fade">Fondu des photos</string>
+    <string name="glass">Verre dépoli</string>
     <string name="sort_apps">Trier les applis</string>
     <string name="manual">Manuel</string>
     <string name="most_used">Les plus utilisées</string>
