@@ -827,11 +827,16 @@ class MainActivity : Activity() {
         } ?: return null
         // Bing's pictures are often bright daylight, which fights true black: dim them in dark mode.
         if (dark && choice == Bing.CHOICE) Canvas(bmp).drawColor(Color.argb(DARK_DIM, 0, 0, 0))
+        // Same fade as the bundled ones: clear above 28% height, into the background colour by 50%.
         val h = bmp.height.toFloat()
         val base = ground and 0x00FFFFFF
+        if (wallpaperFade()) Canvas(bmp).drawRect(0f, 0f, bmp.width.toFloat(), h, Paint().apply {
+            isDither = true
+            shader = LinearGradient(0f, h * 0.28f, 0f, h * 0.5f, base, base or 0xE6000000.toInt(), Shader.TileMode.CLAMP)
+        })
         // Photos rarely have the bundled ones' empty sky: a soft veil behind the clock and top-bar icons keeps them readable.
         // Strong over the clock and icons (top ~20%), gone by 30% so the photo still shows above the apps.
-        if (wallpaperFade()) Canvas(bmp).drawRect(0f, 0f, bmp.width.toFloat(), h * 0.3f, Paint().apply {
+        Canvas(bmp).drawRect(0f, 0f, bmp.width.toFloat(), h * 0.3f, Paint().apply {
             isDither = true
             shader = LinearGradient(0f, 0f, 0f, h * 0.3f, intArrayOf(base or 0xC0000000.toInt(), base or 0xA0000000.toInt(), base),
                 floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
@@ -2985,8 +2990,6 @@ class MainActivity : Activity() {
             isSingleLine = true
             ellipsize = TextUtils.TruncateAt.MARQUEE
             marqueeRepeatLimit = -1
-            setTextColor(Color.WHITE)
-            setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), 0x99000000.toInt())
         }
         val frame = FrameLayout(this)
         style(frame, dp(8), card = true, lift = 1.1f) { focused ->
@@ -3002,25 +3005,17 @@ class MainActivity : Activity() {
         frame.setTag(R.id.watchRow, p) // holding OK hides it (see onHold)
         // 2:1 keeps logos and badges that providers bake into 16:9 art.
         col.addView(frame, LinearLayout.LayoutParams(w, w / 2))
-        // Title/progress/source sit over the home wallpaper, which can be anything: a dark scrim panel
-        // under them (not just text shadows) keeps them readable regardless of what's behind.
-        val info = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(0x8A000000.toInt()) }
-            setPadding(dp(8), dp(6), dp(8), dp(8))
-        }
         // Thin bar under the poster, card width. Kept (invisible) when there's no progress so titles line up.
-        info.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+        col.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
             progress = p.progress
             progressDrawable = progressBarDrawable()
             visibility = if (p.progress > 0) View.VISIBLE else View.INVISIBLE
-        }, LinearLayout.LayoutParams(MATCH_PARENT, dp(3)).apply { topMargin = dp(2) })
-        info.addView(title)
+        }, LinearLayout.LayoutParams(w, dp(3)).apply { topMargin = dp(8) })
+        col.addView(title)
         val icon = sourceIcon(p.pkg)
         if (p.sub.isNotEmpty() || icon != null) {
-            info.addView(label(p.sub, 12f).apply {
-                setTextColor(Color.WHITE)
+            col.addView(label(p.sub, 12f).apply {
                 alpha = 0.8f
                 setPadding(0, dp(2), 0, 0)
                 icon?.let {
@@ -3030,7 +3025,6 @@ class MainActivity : Activity() {
                 }
             })
         }
-        col.addView(info, LinearLayout.LayoutParams(w, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
         loadPoster(img, p.image)
         return col
     }
