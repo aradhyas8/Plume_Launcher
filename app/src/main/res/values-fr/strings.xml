@@ -61,6 +61,8 @@
     <string name="icon_style">Style des icônes</string>
     <string name="colour">Couleur</string>
     <string name="monochrome">Monochrome</string>
+    <string name="banner">Bannière</string>
+    <string name="banner_mono">Bannière monochrome</string>
     <string name="restore_hidden">Restaurer les contenus masqués</string>
     <string name="none_hidden">Aucun masqué</string>
     <string name="cw_apps">Applis de Reprendre la lecture</string>
@@ -220,4 +222,10 @@
         <item quantity="one">%d touche</item>
         <item quantity="other">%d touches</item>
     </plurals>
+    <string name="n_on">Actives : %1$d</string>
+    <string name="cw_channels">Chaînes</string>
+    <string name="row_name">Nom de la rangée</string>
+    <string name="watch_next">À suivre (Android TV)</string>
+    <string name="bottom_row">Rangée du bas</string>
+    <string name="automatic">Automatique</string>
 </resources>

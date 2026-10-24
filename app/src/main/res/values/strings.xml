@@ -62,6 +62,8 @@
     <string name="icon_style">Icon style</string>
     <string name="colour">Colour</string>
     <string name="monochrome">Monochrome</string>
+    <string name="banner">Banner</string>
+    <string name="banner_mono">Monochrome banner</string>
     <string name="restore_hidden">Restore hidden shows</string>
     <string name="none_hidden">None hidden</string>
     <string name="cw_apps">Apps</string>

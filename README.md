@@ -24,7 +24,7 @@ Plume replaces the cluttered stock home screen with the two things you actually 
 - **Tiny and fast.** A 0.4 MB APK with no third-party libraries. It uses about 50–70 MB of RAM and has no extra background services.
 - **Home button support on Google TV.** The Home button opens Plume directly, even on devices where the system launcher can't be replaced. Holding Home still opens the Google TV dashboard.
 - **Continue Watching.** Resume shows and films from Android TV's Watch Next list and from apps that publish their own "Continue Watching" channel, such as Stremio.
-- **Clean apps row.** Monochrome logos (or the same logos in brand colour) in a single row, with names on focus, always or never. Rearrange it by holding OK, sort by most used, or hide apps you don't use (they stay in All apps). An optional PIN locks the layout so small hands can't rearrange it.
+- **Clean apps row.** Monochrome logos (or the same logos in brand colour, or each app's own banner) in a single row, with names on focus, always or never. Rearrange it by holding OK, sort by most used, or hide apps you don't use (they stay in All apps). An optional PIN locks the layout so small hands can't rearrange it.
 - **Sources list.** The Sources icon in the top bar opens the list of the TV inputs. A console or set-top box that names itself over HDMI-CEC (for example "PlayStation 5") shows with its logo, and selecting it switches the TV to that input. A port with no signal says so. Hold OK on an input to put it in the apps row, and again to take it out.
 - **Remote keys.** Change what a button on your remote does, for example the TV, Netflix or Settings button. A key can do one thing on a press and another when you hold it. See [Remote keys](#remote-keys).
 - **Light, dark or automatic theme**, each with its own wallpaper. Add your own photos from your phone by scanning a QR code, or show a folder of photos from the TV or a USB drive that changes on a timer.
@@ -115,7 +115,7 @@ Open **Plume settings** with the sliders icon in the top bar. Settings are in se
 | Hide apps from the row | **Plume settings → App row → Apps in row** |
 | Show app names always, on focus or never | **Plume settings → App row → App names** |
 | Use the Bing picture of the day as wallpaper | **Plume settings → Appearance → Light mode wallpaper** or **Dark mode wallpaper**, then **Bing picture of the day** |
-| Switch between monochrome and colour icons | **Plume settings → App row → Icon style** |
+| Switch between monochrome icons, colour icons and app banners | **Plume settings → App row → Icon style** |
 | Update Plume | **Plume settings → Updates** |
 | Change what a remote key does | **Plume settings → Remote keys** |
 | Lock the layout with a PIN | **Plume settings → Lock layout** |
