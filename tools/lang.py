@@ -5,7 +5,8 @@
 
 For every app/src/main/res/values-<code>/strings.xml it lists the keys of values/strings.xml that the translation lacks
 (the English text shows there), the keys it has that English does not (probably a typo or a removed string), and
-the texts whose %s / %d / %1$s markers differ from English (a plural form may leave its number out). --strict exits with 1 on unknown keys and wrong markers;
+the texts whose %s / %d / %1$s markers differ from English. A plural that a translation lacks completely is listed as
+missing; each of its forms is checked against English "other" (a form may leave its number out, not add a marker). --strict exits with 1 on unknown keys and wrong markers;
 missing keys never fail the check, they are only listed. --table prints a Markdown table, for a CI job summary.
 """
 import glob
@@ -31,20 +32,29 @@ def read(path):
     return out
 
 
+def wrong_markers(key, text, en):
+    """A string must have the markers of its English text. A plural form, whatever its quantity (zero, two, few, many…),
+    is held to English's "other" of the same plural: it may leave the number out ("one photo"), but must not add a marker."""
+    if ':' in key:
+        other = en.get(key.split(':')[0] + ':other')
+        return other is not None and bool(set(MARKER.findall(text)) - set(MARKER.findall(other)))
+    return key in en and sorted(MARKER.findall(text)) != sorted(MARKER.findall(en[key]))
+
+
 def check(strict, table):
     en = read(os.path.join(RES, 'values', 'strings.xml'))
     # A language may use other plural quantities than English: only the strings are required.
     required = [k for k in en if ':' not in k]
-    plural_names = {k.split(':')[0] for k in en if ':' in k}
+    plural_names = sorted({k.split(':')[0] for k in en if ':' in k})
     rows, bad = [], 0
     for path in sorted(glob.glob(os.path.join(RES, 'values-*', 'strings.xml'))):
         code = os.path.basename(os.path.dirname(path))[len('values-'):]
         tr = read(path)
-        missing = [k for k in required if k not in tr]
+        # A plural counts as missing when the translation has none of its forms (English has one and other; a language
+        # may have more, or other quantities).
+        missing = [k for k in required if k not in tr] + [n for n in plural_names if not any(k.startswith(n + ':') for k in tr)]
         unknown = [k for k in tr if k not in en and k.split(':')[0] not in plural_names]
-        # A plural form may leave the number out ("one photo"); it must not add a marker English does not have.
-        markers = [k for k in tr if k in en and (set(MARKER.findall(tr[k])) - set(MARKER.findall(en[k])) if ':' in k
-                   else sorted(MARKER.findall(tr[k])) != sorted(MARKER.findall(en[k])))]
+        markers = [k for k in tr if wrong_markers(k, tr[k], en)]
         rows.append((code, len(tr), missing, unknown, markers))
         if unknown or markers:
             bad += 1
