@@ -3,6 +3,7 @@ package dev.plume
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.ActivityOptions
 import android.app.Dialog
 import android.app.PendingIntent
 import android.app.role.RoleManager
@@ -76,6 +77,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.GridLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
@@ -83,6 +85,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
+import java.lang.ref.WeakReference
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -381,6 +384,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
+        openedFrom = null
         ensureHomeService()
         homeSetupResumed()
         if (wantDark() != dark) {
@@ -1506,6 +1511,10 @@ class MainActivity : Activity() {
             // Select steps up like Right, and past 100% starts again at 0%.
             R.string.fade_top to Triple(getString(R.string.fade_top), "$SLIDER${fade("fade_top")}") { steps[R.string.fade_top]!!(if (fade("fade_top") == 100) -100 / FADE_STEP else 1) },
             R.string.fade_bottom to Triple(getString(R.string.fade_bottom), "$SLIDER${fade("fade_bottom")}") { steps[R.string.fade_bottom]!!(if (fade("fade_bottom") == 100) -100 / FADE_STEP else 1) },
+            R.string.app_animations to Triple(getString(R.string.app_animations), toggle(animationsOn())) {
+                prefs.edit().putBoolean("app_anim", !animationsOn()).apply()
+                renderSettings(R.string.app_animations)
+            },
             R.string.folder_photo_changes to Triple(getString(R.string.folder_photo_changes), getString(PHOTO_EVERY[photoEvery()]!!)) { pickPhotoEvery() },
             R.string.sort_apps to Triple(getString(R.string.sort_apps), if (sort == "manual") getString(R.string.manual) else getString(R.string.most_used)) {
                 prefs.edit().putString("sort", if (sort == "manual") "usage" else "manual").apply()
@@ -1599,7 +1608,7 @@ class MainActivity : Activity() {
         val sections = listOf(
             Triple(R.string.section_appearance, "${rows[R.string.theme]!!.second} · ${wallpaperName(currentWallpaper(dark))}",
                 listOfNotNull(R.string.theme, R.string.light_wallpaper, R.string.dark_wallpaper, R.string.fade_top.takeIf { photo },
-                    R.string.fade_bottom.takeIf { photo }, R.string.glass,
+                    R.string.fade_bottom.takeIf { photo }, R.string.glass, R.string.app_animations,
                     R.string.folder_photo_changes.takeIf { folder })),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${rows[R.string.weather_location]!!.second}",
                 listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
@@ -2887,11 +2896,46 @@ class MainActivity : Activity() {
     private fun launch(a: App) {
         prefs.edit().putInt("n_" + a.pkg, prefs.getInt("n_" + a.pkg, 0) + 1).putLong("t_" + a.pkg, System.currentTimeMillis()).apply()
         if (prefs.getString("sort", "manual") == "usage") appsDirty = true
+        val from = currentFocus?.takeIf { it.tag == a.pkg } // the tile that was pressed, not one a remote key opened it from
         try {
-            if (a.pkg.startsWith(HDMI)) Remap.openInput(this, a.pkg.removePrefix(HDMI)) else startActivity(a.launch)
+            if (a.pkg.startsWith(HDMI)) Remap.openInput(this, a.pkg.removePrefix(HDMI)) else startApp(a.launch, from)
         } catch (e: Exception) {
-            packageManager.getLeanbackLaunchIntentForPackage(a.pkg)?.let { startActivity(it) }
+            packageManager.getLeanbackLaunchIntentForPackage(a.pkg)?.let { startApp(it, from) }
         }
+    }
+
+    private fun animationsOn() = prefs.getBoolean("app_anim", true)
+
+    private var openedFrom: WeakReference<View>? = null // the tile or card an app was opened from, until we come back
+
+    /** Starts an app. With [from] and the animations on, the app opens out of that tile and the row settles on return. */
+    private fun startApp(intent: Intent, from: View?) {
+        val source = from?.takeIf { animationsOn() && it.isAttachedToWindow && it.width > 0 }
+        val options = source?.let { ActivityOptions.makeScaleUpAnimation(it, 0, 0, it.width, it.height).toBundle() }
+        startActivity(intent, options)
+        openedFrom = source?.let { WeakReference(it) }
+    }
+
+    /**
+     * Back from an app: the row of the tile it came from settles in, a little larger and dimmer at first. It settles
+     * around that tile when it is on screen, and around the middle of the row's window when Home has moved the row.
+     */
+    private fun settleRow(tile: View) {
+        // A Continue watching card sits in a column of its own: the row is the one that holds the columns.
+        val row = (if (tile.getTag(R.id.watchRow) is Prog) watchRow else tile.parent) as? ViewGroup ?: return
+        row.animate().cancel()
+        val at = Rect(0, 0, tile.width, tile.height)
+        row.offsetDescendantRectToMyCoords(tile, at) // the tile's place in the row, whatever sits between them
+        var pivot = at.exactCenterX()
+        val scroll = generateSequence(row.parent) { it.parent }.firstOrNull { it is HorizontalScrollView } as? HorizontalScrollView
+        if (scroll != null && (at.left < scroll.scrollX || at.right > scroll.scrollX + scroll.width)) pivot = scroll.scrollX + scroll.width / 2f
+        row.pivotX = pivot
+        row.pivotY = at.exactCenterY()
+        row.scaleX = 1.12f
+        row.scaleY = 1.12f
+        row.alpha = 0.4f
+        // A moment late: the app's own window is still fading out over us for the first part.
+        row.animate().scaleX(1f).scaleY(1f).alpha(1f).setStartDelay(90).setDuration(420).setInterpolator(DECELERATE).start()
     }
 
     // ---------- all apps ----------
@@ -3711,10 +3755,11 @@ class MainActivity : Activity() {
 
     private fun open(p: Prog) {
         prefs.edit().putLong("t_${p.pkg}", System.currentTimeMillis()).apply()
+        val from = currentFocus?.takeIf { it.getTag(R.id.watchRow) is Prog }
         try {
-            startActivity(Intent.parseUri(p.intent, Intent.URI_INTENT_SCHEME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            startApp(Intent.parseUri(p.intent, Intent.URI_INTENT_SCHEME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), from)
         } catch (e: Exception) {
-            p.pkg?.let { packageManager.getLeanbackLaunchIntentForPackage(it) }?.let { startActivity(it) }
+            p.pkg?.let { packageManager.getLeanbackLaunchIntentForPackage(it) }?.let { startApp(it, from) }
         }
     }
 

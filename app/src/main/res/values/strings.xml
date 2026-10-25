@@ -48,6 +48,7 @@
     <string name="done">Done</string>
     <string name="edit_apps_row">Rearrange apps</string>
     <string name="theme">Theme</string>
+    <string name="app_animations">App animations</string>
     <string name="fade_top">Top fade</string>
     <string name="fade_bottom">Bottom fade</string>
     <string name="glass">Glass</string>
