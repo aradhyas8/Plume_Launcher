@@ -1,0 +1,23 @@
+# Prints what each translation lacks, in the summary of the job. It only informs: it never fails the build.
+name: Translations
+
+on:
+  pull_request:
+    paths:
+      - 'app/src/main/res/values*/strings.xml'
+      - 'tools/lang.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Translations against English
+        continue-on-error: true
+        run: |
+          { echo '### Translations against English'; echo; python3 tools/lang.py check --table; } >> "$GITHUB_STEP_SUMMARY"
