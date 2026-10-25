@@ -316,7 +316,7 @@ class MainActivity : Activity() {
         allApps = findViewById(R.id.allApps)
         allAppsGrid = findViewById(R.id.allAppsGrid)
         wifi = findViewById(R.id.wifi)
-        findViewById<View>(R.id.sourcesButton).visibility = if (sources.isEmpty()) View.GONE else View.VISIBLE
+        applyTopBar()
         applyTheme()
         loadWallpaper()
         // "Show row: On Down": the row slides in while one of its cards has focus, however focus got there.
@@ -348,6 +348,7 @@ class MainActivity : Activity() {
                     .setDuration(160).setInterpolator(DECELERATE).start()
             }
             setOnClickListener { action() }
+            setOnLongClickListener { if (!holdFired) fireHold(this); true } // hold OK: move, hide or add icons
         }
         if (fakeSetup(intent)) {
             // debug: setup for a pretend TV already started
@@ -848,7 +849,7 @@ class MainActivity : Activity() {
     private var watchInk = Color.BLACK
     private var iconInk = Color.BLACK
 
-    private fun topIcons() = listOf(R.id.wifi, R.id.sourcesButton, R.id.allAppsButton, R.id.systemSettings, R.id.launcherSettings)
+    private fun topIcons() = TOP_KEYS.keys.toList()
         .map { findViewById<ImageView>(it) }
 
     private fun fitInk() {
@@ -1662,7 +1663,13 @@ class MainActivity : Activity() {
                 RowStyle(R.drawable.ic_update, rows[R.string.updates]!!.second, help = getString(R.string.help_updates))) +
             listOfNotNull(if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) null
                 else Triple(R.string.preview_home_setup, page(getString(R.string.preview_home_setup)) { closeLauncherSettings(); previewHomeSetup() }, null))
-        showPage(getString(R.string.plume_settings), top.map { it.second }, maxOf(0, top.indexOfFirst { it.first == at }), styles = top.map { it.third }, back = null)
+        val hint = label(getString(R.string.top_bar_hint), 13f).apply {
+            secondary(0.6f)
+            isSingleLine = false // it wraps onto a second line rather than being cut
+            maxLines = 2
+            setPadding(dp(14), dp(2), dp(14), dp(8))
+        }
+        showPage(getString(R.string.plume_settings), top.map { it.second }, maxOf(0, top.indexOfFirst { it.first == at }), top = hint, styles = top.map { it.third }, back = null)
     }
 
     private var lastSettings = 0 // section used last, focused when settings open again
@@ -2149,7 +2156,7 @@ class MainActivity : Activity() {
                 APPS = list
                 sources = inputs
                 SOURCES = inputs
-                findViewById<View>(R.id.sourcesButton).visibility = if (inputs.isEmpty()) View.GONE else View.VISIBLE
+                if (movingTop == null) applyTopBar() // Sources shows only while the TV has an input
                 renderApps()
             }
         }
@@ -2575,6 +2582,7 @@ class MainActivity : Activity() {
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         val confirm = e.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || e.keyCode == KeyEvent.KEYCODE_ENTER ||
             e.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+        if (movingTop != null && topMoveKey(e, confirm)) return true
         if (confirm) {
             if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) holdFired = false
             if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount > 0) {
@@ -2618,8 +2626,8 @@ class MainActivity : Activity() {
             v.parent === wifi.parent -> when (key) { // top bar
                 KeyEvent.KEYCODE_DPAD_DOWN -> apps ?: cards ?: v // the apps row can be empty (all hidden)
                 KeyEvent.KEYCODE_DPAD_UP -> v
-                KeyEvent.KEYCODE_DPAD_LEFT -> if (v.id == R.id.wifi) v else null
-                KeyEvent.KEYCODE_DPAD_RIGHT -> if (v.id == R.id.launcherSettings) v else null
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (v.id == shownTop().first()) v else null
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (v.id == shownTop().last()) v else null
                 else -> null
             }
             v.parent === appRow -> when (key) {
@@ -2666,6 +2674,7 @@ class MainActivity : Activity() {
                 closeAllApps()
                 appRow.getChildAt(0)?.requestFocus() // show the app just pinned
             }
+            v.parent === wifi.parent -> topMenu(v)
             v.parent === appRow -> appMenu(v)
             v.getTag(R.id.watchRow) is Prog -> watchMenu(v, v.getTag(R.id.watchRow) as Prog)
         }
@@ -2760,8 +2769,140 @@ class MainActivity : Activity() {
         list.getChildAt(0).requestFocus()
     }
 
-    private fun holdMenu(anchor: View, items: List<Pair<String, () -> Unit>>) =
-        popupMenu(anchor) { dismiss -> items.map { (name, action) -> settingsRow(name, "") { dismiss(); action() } } }
+    private fun holdMenu(anchor: View, items: List<Pair<String, () -> Unit>>, below: Boolean = false) =
+        popupMenu(anchor, below) { dismiss -> items.map { (name, action) -> settingsRow(name, "") { dismiss(); action() } } }
+
+    // ---------- the top bar: hold OK on an icon to move it, hide it, or add one back ----------
+
+    /** The bar's icons in their default order, with the key each is saved under. */
+    private val TOP_KEYS = linkedMapOf(R.id.wifi to "wifi", R.id.sourcesButton to "sources", R.id.allAppsButton to "apps",
+        R.id.systemSettings to "system", R.id.launcherSettings to "plume")
+
+    private var movingTop: View? = null // the icon being moved, while Left and Right slide it
+    private var topLive: List<Int> = emptyList() // the order while moving; saved when OK places the icon
+    private var topBefore: List<Int> = emptyList() // the order when the move started, for Back
+
+    /** The icons the bar shows, in order: the saved list, or all of them. Plume settings is always on it. */
+    private fun topOrder(): List<Int> =
+        TopBar.parse(prefs.getString("top_bar", null), TOP_KEYS.values.toList(), TOP_KEYS.values.toList(), "plume").map { key -> TOP_KEYS.entries.first { it.value == key }.key }
+
+    /** What is really on screen: Sources stays out while the TV has no input. */
+    private fun shownTop(order: List<Int> = topOrder()) = order.filter { it != R.id.sourcesButton || sources.isNotEmpty() }
+
+    /** Puts the icons in [order], hides the others, and gives the first one on screen no left margin. */
+    private fun applyTopBar(order: List<Int> = topOrder()) {
+        val bar = wifi.parent as LinearLayout
+        // Found before they leave the bar: findViewById cannot see a view that has been removed.
+        val views = TOP_KEYS.keys.associateWith { findViewById<View>(it) }
+        val start = views.values.minOf { bar.indexOfChild(it) }
+        views.values.forEach { bar.removeView(it) }
+        val shown = shownTop(order)
+        (order + (TOP_KEYS.keys - order.toSet())).forEachIndexed { i, id ->
+            val v = views.getValue(id)
+            val lp = v.layoutParams as LinearLayout.LayoutParams
+            lp.marginStart = if (id == shown.firstOrNull()) 0 else dp(8)
+            v.visibility = if (id in shown) View.VISIBLE else View.GONE
+            bar.addView(v, start + i, lp)
+        }
+    }
+
+    private fun saveTopOrder(order: List<Int>) {
+        prefs.edit().putString("top_bar", order.joinToString(",") { TOP_KEYS.getValue(it) }).apply()
+    }
+
+    private fun keyList(ids: List<Int>) = ids.map { TOP_KEYS.getValue(it) }
+
+    private fun keys(list: List<String>) = list.map { key -> TOP_KEYS.entries.first { it.value == key }.key }
+
+    /** Hold OK on a top-bar icon: Move, Hide (not Plume settings, so the bar is never empty) and Add icon. */
+    private fun topMenu(v: View) {
+        if (locked()) return holdMenu(v, listOf(getString(R.string.unlock_to_edit) to { unlock { v.requestFocus(); topMenu(v) } }), below = true)
+        val hidden = TOP_KEYS.keys - topOrder().toSet()
+        holdMenu(v, listOfNotNull(
+            getString(R.string.move) to { startTopMove(v) },
+            if (v.id == R.id.launcherSettings) null else getString(R.string.hide) to { hideTop(v) },
+            if (hidden.isEmpty()) null else getString(R.string.add_icon) to { addIconMenu(v) },
+        ), below = true)
+    }
+
+    private fun hideTop(v: View) {
+        val order = topOrder()
+        val shown = shownTop(order)
+        val next = shown.getOrNull(shown.indexOf(v.id) + 1) ?: shown.getOrNull(shown.indexOf(v.id) - 1)
+        val left = order - v.id
+        saveTopOrder(left)
+        applyTopBar(left)
+        next?.let { findViewById<View>(it).requestFocus() }
+        Toast.makeText(this, getString(R.string.icon_hidden), Toast.LENGTH_LONG).show()
+    }
+
+    /** The hidden icons, with their pictures. Picking one puts it next to [anchor] and goes straight into Move. */
+    private fun addIconMenu(anchor: View) {
+        val hidden = TOP_KEYS.keys.filter { it !in topOrder() }
+        popupMenu(anchor, below = true) { dismiss ->
+            hidden.map { id ->
+                val icon = findViewById<ImageView>(id)
+                val note = if (id == R.id.sourcesButton && sources.isEmpty()) getString(R.string.shows_with_input) else ""
+                settingsRow(icon.contentDescription.toString(), note) { dismiss(); addTopIcon(id, anchor) }.also { row ->
+                    (row as LinearLayout).addView(ImageView(this).apply {
+                        setImageDrawable(icon.drawable.constantState?.newDrawable(resources)?.mutate() ?: icon.drawable)
+                        setColorFilter(if (dark) DARK_TEXT_2 else fg)
+                    }, 0, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(12) })
+                }
+            }
+        }
+    }
+
+    private fun addTopIcon(id: Int, after: View) {
+        topBefore = topOrder()
+        topLive = keys(TopBar.addAfter(keyList(topBefore), TOP_KEYS.getValue(id), TOP_KEYS.getValue(after.id)))
+        applyTopBar(topLive)
+        beginTopMove(findViewById(id))
+    }
+
+    private fun startTopMove(v: View) {
+        topBefore = topOrder()
+        topLive = topBefore
+        beginTopMove(v)
+    }
+
+    private fun beginTopMove(v: View) {
+        movingTop = v
+        appsTitle.text = getString(R.string.moving_hint)
+        appsTitle.visibility = View.VISIBLE
+        v.alpha = 0.6f
+        v.requestFocus()
+    }
+
+    /** OK places the icon, Back puts everything as it was; Left and Right slide the icon past the ones on screen. */
+    private fun endTopMove(save: Boolean) {
+        val v = movingTop ?: return
+        movingTop = null
+        v.alpha = 1f
+        appsTitle.visibility = View.GONE
+        if (save) saveTopOrder(topLive) else applyTopBar(topBefore)
+        (if (v.visibility == View.VISIBLE) v else findViewById(shownTop().first())).requestFocus() // an added icon is gone again after Back
+    }
+
+    private fun topMoveKey(e: KeyEvent, confirm: Boolean): Boolean {
+        val v = movingTop ?: return false
+        when {
+            e.keyCode == KeyEvent.KEYCODE_BACK -> if (e.action == KeyEvent.ACTION_UP) endTopMove(false)
+            confirm -> if (e.action == KeyEvent.ACTION_UP) endTopMove(true)
+            e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> if (e.action == KeyEvent.ACTION_DOWN) {
+                val order = keys(TopBar.slide(keyList(topLive), keyList(shownTop(topLive)), TOP_KEYS.getValue(v.id),
+                    if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1))
+                if (order != topLive) {
+                    topLive = order
+                    applyTopBar(order) // the view leaves the bar and comes back: take focus again
+                    v.requestFocus()
+                }
+            }
+            e.keyCode == KeyEvent.KEYCODE_DPAD_UP || e.keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> {} // the icon stays in the bar
+            else -> return false
+        }
+        return true
+    }
 
     /** The TV's inputs under the Sources icon, as on any TV: the logo of what is plugged in, its name, no signal if none. */
     private fun showSources(anchor: View) {
