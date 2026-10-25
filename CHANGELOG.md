@@ -17,6 +17,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 ## Unreleased
 
 - **Edit the top bar.** Hold **OK** on an icon at the top of the home screen. Select **Move**, **Hide** or **Add icon**. In **Move**, press Left or Right to slide the icon. Press **OK** to place it. Press Back to cancel. **Add icon** shows the icons that you hid. **Plume settings** stays on the bar, so you can always bring the icons back.
+- **Power icon.** Hold **OK** on a top-bar icon and select **Add icon**, then **Power**. Select the icon to open the Android power menu. It needs the Home button turned on. If it is off, the icon offers to turn it on.
 
 ## 1.6
 

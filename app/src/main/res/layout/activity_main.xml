@@ -120,6 +120,18 @@
                 android:focusable="true"
                 android:padding="8dp"
                 android:src="@drawable/ic_tune" />
+
+            <!-- Hidden until it is added from the top bar's menu. -->
+            <ImageView
+                android:id="@+id/powerButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="@string/power"
+                android:focusable="true"
+                android:padding="8dp"
+                android:src="@drawable/ic_power"
+                android:visibility="gone" />
         </LinearLayout>
 
         <View
