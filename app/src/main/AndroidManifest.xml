@@ -33,7 +33,7 @@
     <application
         android:label="Plume"
         android:banner="@drawable/banner"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
