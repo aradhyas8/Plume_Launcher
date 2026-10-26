@@ -1388,11 +1388,11 @@ class MainActivity : Activity() {
             return
         }
         if (!force && RemoteBattery.fresh(prefs.getLong("rb_at", 0), System.currentTimeMillis())) return
-        RemoteBattery.read(this, prefs) { level ->
+        RemoteBattery.read(this) { readings ->
             if (isDestroyed) return@read
-            if (level != null) prefs.edit().putInt("rb_level", level).putLong("rb_at", System.currentTimeMillis()).apply()
+            RemoteBattery.lowest(readings)?.let { prefs.edit().putInt("rb_level", it).putLong("rb_at", System.currentTimeMillis()).apply() }
             updateBatteryIcon()
-            if (force) toast(if (level == null) getString(R.string.remote_not_found) else getString(R.string.remote_battery_value, level))
+            if (force) toast(if (readings.isEmpty()) getString(R.string.remote_not_found) else getString(R.string.remote_battery_value, RemoteBattery.describe(readings)))
         }
     }
 

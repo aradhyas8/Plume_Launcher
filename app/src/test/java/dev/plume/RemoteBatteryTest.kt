@@ -26,4 +26,11 @@ class RemoteBatteryTest {
         assertFalse(RemoteBattery.fresh(0, 5 * min)) // never read
         assertFalse(RemoteBattery.fresh(10 * min, 5 * min)) // the clock went back: read again
     }
+
+    @Test fun theWorstRemoteIsTheOneThatCounts() {
+        val r = listOf(RemoteBattery.Reading("Remote", 69), RemoteBattery.Reading("Pad", 31))
+        assertEquals(31, RemoteBattery.lowest(r))
+        assertEquals("Remote 69%, Pad 31%", RemoteBattery.describe(r))
+        assertEquals(null, RemoteBattery.lowest(emptyList()))
+    }
 }
