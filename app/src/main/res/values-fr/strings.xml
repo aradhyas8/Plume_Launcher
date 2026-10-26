@@ -260,4 +260,8 @@
     <string name="remote_battery">Pile de la télécommande</string>
     <string name="remote_battery_value">Pile de la télécommande : %1$s</string>
     <string name="remote_not_found">Aucune télécommande Bluetooth n\'a répondu</string>
+    <string name="remote_low_alert">Alerte de pile faible : %1$s</string>
+    <string name="remote_low_value">à %1$d%%</string>
+    <string name="remote_low_off">désactivée</string>
+    <string name="remote_low_warning">Pile de la télécommande faible : %1$d%%</string>
 </resources>

@@ -1372,8 +1372,14 @@ class MainActivity : Activity() {
 
     private fun remoteLevel() = prefs.getInt("rb_level", -1).takeIf { it >= 0 }
 
+    /** The low-battery alert: 20 % (the default), 15 %, or 0 for off. The icon turns red from there, and a message shows once a day. */
+    private fun lowAt() = prefs.getInt("rb_low", 20).takeIf { it in RemoteBattery.LOWS } ?: 20
+
+    private fun lowName(at: Int) = if (at == 0) getString(R.string.remote_low_off) else getString(R.string.remote_low_value, at)
+
     private fun updateBatteryIcon() {
-        findViewById<ImageView>(R.id.batteryButton).setImageDrawable(RemoteBatteryIcon(resources.displayMetrics.density, remoteLevel()))
+        val level = remoteLevel()
+        findViewById<ImageView>(R.id.batteryButton).setImageDrawable(RemoteBatteryIcon(resources.displayMetrics.density, level, RemoteBattery.isLow(level, lowAt())))
     }
 
     /**
@@ -1390,8 +1396,14 @@ class MainActivity : Activity() {
         if (!force && RemoteBattery.fresh(prefs.getLong("rb_at", 0), System.currentTimeMillis())) return
         RemoteBattery.read(this) { readings ->
             if (isDestroyed) return@read
-            RemoteBattery.lowest(readings)?.let { prefs.edit().putInt("rb_level", it).putLong("rb_at", System.currentTimeMillis()).apply() }
+            val lowest = RemoteBattery.lowest(readings)
+            lowest?.let { prefs.edit().putInt("rb_level", it).putLong("rb_at", System.currentTimeMillis()).apply() }
             updateBatteryIcon()
+            val today = java.time.LocalDate.now().toEpochDay()
+            if (!force && RemoteBattery.isLow(lowest, lowAt()) && prefs.getLong("rb_alert_day", 0) != today) { // once a day
+                prefs.edit().putLong("rb_alert_day", today).apply()
+                toast(getString(R.string.remote_low_warning, lowest), long = true)
+            }
             if (force) toast(if (readings.isEmpty()) getString(R.string.remote_not_found) else getString(R.string.remote_battery_value, RemoteBattery.describe(readings)))
         }
     }
@@ -3119,7 +3131,16 @@ class MainActivity : Activity() {
             getString(R.string.move) to { startTopMove(v) },
             if (v.id == R.id.launcherSettings) null else getString(R.string.hide) to { hideTop(v) },
             if (hidden.isEmpty()) null else getString(R.string.add_icon) to { addIconMenu(v) },
+            if (v.id != R.id.batteryButton) null else getString(R.string.remote_low_alert, lowName(lowAt())) to { cycleLowAlert() },
         ), below = true)
+    }
+
+    /** Hold menu of the battery icon: the alert goes 20 % -> 15 % -> off -> 20 %. */
+    private fun cycleLowAlert() {
+        val next = RemoteBattery.LOWS.step(lowAt(), 1)
+        prefs.edit().putInt("rb_low", next).remove("rb_alert_day").apply()
+        updateBatteryIcon()
+        toast(getString(R.string.remote_low_alert, lowName(next)))
     }
 
     private fun hideTop(v: View) {

@@ -12,11 +12,14 @@ class RemoteBatteryTest {
         assertEquals("–", RemoteBattery.label(null))
     }
 
-    @Test fun lowStartsAtTwentyAndNeedsAReading() {
-        assertTrue(RemoteBattery.isLow(20))
-        assertTrue(RemoteBattery.isLow(0))
-        assertFalse(RemoteBattery.isLow(21))
-        assertFalse(RemoteBattery.isLow(null)) // unknown is not low
+    @Test fun lowIsAtOrUnderTheChosenLevelAndNeedsAReading() {
+        assertTrue(RemoteBattery.isLow(20, 20))
+        assertTrue(RemoteBattery.isLow(15, 15))
+        assertFalse(RemoteBattery.isLow(16, 15))
+        assertTrue(RemoteBattery.isLow(0, 20))
+        assertFalse(RemoteBattery.isLow(5, 0)) // alert off
+        assertFalse(RemoteBattery.isLow(null, 20)) // unknown is not low
+        assertEquals(listOf(20, 15, 0), RemoteBattery.LOWS)
     }
 
     @Test fun aReadingStaysGoodForTenMinutes() {

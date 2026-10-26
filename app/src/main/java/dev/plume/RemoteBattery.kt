@@ -37,8 +37,8 @@ internal object RemoteBattery {
     private val BATTERY = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb")
     private val LEVEL = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb")
 
-    /** Below this the icon turns red. */
-    const val LOW = 20
+    /** The low-battery alerts to choose from, in the order the menu cycles through them: 20 %, 15 %, off (0). */
+    val LOWS = listOf(20, 15, 0)
 
     /** How long a reading stays good before the home screen asks again. */
     const val FRESH_MS = 10 * 60_000L
@@ -50,7 +50,8 @@ internal object RemoteBattery {
 
     fun label(level: Int?) = if (level == null) "–" else "$level%"
 
-    fun isLow(level: Int?) = level != null && level <= LOW
+    /** Whether [level] is at or under the alert [threshold]; a threshold of 0 is "off". */
+    fun isLow(level: Int?, threshold: Int) = threshold > 0 && level != null && level <= threshold
 
     fun allowed(c: Context) = c.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 
@@ -184,9 +185,9 @@ internal object RemoteBattery {
 
 /**
  * The top-bar glyph: a small battery filled to [level] with the number beside it (a dash when it is not known), red
- * from [RemoteBattery.LOW] down. It takes the bar's ink as a colour filter like the other icons.
+ * from the alert level down. It takes the bar's ink as a colour filter like the other icons.
  */
-internal class RemoteBatteryIcon(private val density: Float, private val level: Int?) : Drawable() {
+internal class RemoteBatteryIcon(private val density: Float, private val level: Int?, private val low: Boolean) : Drawable() {
     private val ink = Paint(Paint.ANTI_ALIAS_FLAG)
     private val red = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE53935.toInt() }
     private fun dp(v: Float) = v * density
@@ -209,7 +210,7 @@ internal class RemoteBatteryIcon(private val density: Float, private val level: 
         if (level != null && level > 0) {
             val inner = RectF(body.left + dp(2.5f), body.top + dp(2.5f), body.right - dp(2.5f), body.bottom - dp(2.5f))
             inner.right = inner.left + inner.width() * level.coerceIn(0, 100) / 100f
-            c.drawRoundRect(inner, dp(1f), dp(1f), if (RemoteBattery.isLow(level)) red else ink)
+            c.drawRoundRect(inner, dp(1f), dp(1f), if (low) red else ink)
         }
         ink.typeface = Typeface.DEFAULT_BOLD
         ink.textSize = dp(11f)
@@ -230,7 +231,7 @@ internal class RemoteBatteryIcon(private val density: Float, private val level: 
 
     // The "Add icon" menu draws its own copy, so tinting that one leaves the bar's alone.
     override fun getConstantState() = object : ConstantState() {
-        override fun newDrawable(): Drawable = RemoteBatteryIcon(density, level)
+        override fun newDrawable(): Drawable = RemoteBatteryIcon(density, level, low)
         override fun getChangingConfigurations() = 0
     }
 }

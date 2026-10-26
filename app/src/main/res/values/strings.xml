@@ -304,4 +304,8 @@
     <string name="remote_battery">Remote battery</string>
     <string name="remote_battery_value">Remote battery: %1$s</string>
     <string name="remote_not_found">No Bluetooth remote answered</string>
+    <string name="remote_low_alert">Low battery alert: %1$s</string>
+    <string name="remote_low_value">at %1$d%%</string>
+    <string name="remote_low_off">off</string>
+    <string name="remote_low_warning">Remote battery low: %1$d%%</string>
 </resources>
