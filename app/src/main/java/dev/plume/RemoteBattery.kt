@@ -44,7 +44,7 @@ internal object RemoteBattery {
     const val FRESH_MS = 10 * 60_000L
 
     private const val TIMEOUT_MS = 12_000L
-    private val main = Handler(Looper.getMainLooper())
+    private val main by lazy { Handler(Looper.getMainLooper()) } // lazy: the unit tests use the rules below with no Android
 
     @Volatile private var busy = false
 
