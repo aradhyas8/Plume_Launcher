@@ -48,6 +48,7 @@ Translations are welcome. Shipping every language costs very little: each langua
 - A translation pull request adds or edits **only** `app/src/main/res/values-<code>/strings.xml`, for example `values-it/strings.xml`. No code changes, no new features.
 - Translate every string in `app/src/main/res/values/strings.xml`. Keep placeholders such as `%1$s` and `%d` exactly as they are.
 - Keep text short. TV screens are read from across the room, and long labels get cut off.
+- Run `python3 tools/lang.py check` before you send it: it lists the keys your language lacks, the keys it has that English does not, and the texts whose `%s` or `%d` markers differ from English. If your pull request adds a string to `values/strings.xml`, run it too and say in the description which languages were not translated.
 - If you add a language, please say whether you're happy to be asked about new strings later. Languages that fall far behind may be removed.
 
 Some of Plume's text still lives in the Kotlin code instead of `strings.xml`. Please don't move strings into `strings.xml` inside a translation pull request; open an issue instead, so the move happens once for every language.
@@ -55,6 +56,12 @@ Some of Plume's text still lives in the Kotlin code instead of `strings.xml`. Pl
 ## Reporting bugs
 
 Use the [bug report form](../../issues/new/choose). The TV model, Android version and Plume version matter most, because many problems only happen on one manufacturer's TVs. A photo or video of the screen helps a lot.
+
+## Diagnostic tools
+
+The `tools/` directory contains helper scripts for testing:
+
+- `tools/plume-firetv-probe.sh`: collects Home button events and logs on Fire TV without changing settings. See [#87](../../issues/87).
 
 ## Building
 

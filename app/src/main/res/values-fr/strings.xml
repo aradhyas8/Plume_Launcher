@@ -47,6 +47,7 @@
     <string name="done">Terminé</string>
     <string name="edit_apps_row">Modifier la ligne d\'applis</string>
     <string name="theme">Thème</string>
+    <string name="app_animations">Animations des applis</string>
     <string name="fade_top">Fondu en haut</string>
     <string name="fade_bottom">Fondu en bas</string>
     <string name="glass">Verre dépoli</string>

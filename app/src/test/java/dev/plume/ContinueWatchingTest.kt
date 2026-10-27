@@ -51,6 +51,28 @@ class ContinueWatchingTest {
         assertEquals(listOf("wholphin/ncis", "netflix/next"), newestPerApp(rows, 3) { it.substringBefore('/') })
     }
 
+    @Test fun channelCardsNewestFirstNotInsertOrder() {
+        // Nuvio adds each new title at the end of its channel (A, then B, then C), with its last-watched time and
+        // a weight that is highest for the newest. Netflix's Watch Next row sits between B and C.
+        val nuvio = byWeight(listOf(
+            Triple(Int.MAX_VALUE - 2L, channelSortKey(1_000, 0), "nuvio/A"),
+            Triple(Int.MAX_VALUE - 1L, channelSortKey(2_000, 0), "nuvio/B"),
+            Triple(Int.MAX_VALUE - 0L, channelSortKey(3_000, 0), "nuvio/C"),
+        ))
+        val shown = newestPerApp(nuvio + (watchSortKey(0, 2_500) to "netflix/1"), 3) { it.substringBefore('/') }
+        assertEquals(listOf("nuvio/C", "netflix/1", "nuvio/B", "nuvio/A"), shown)
+    }
+
+    @Test fun channelCardsWithNoTimeFollowWeightThenAppOrder() {
+        // No last-watched time: every card gets the time the app was opened from Plume, so the weight decides.
+        val weighted = byWeight(listOf(Triple(1L, channelSortKey(0, 500), "a"), Triple(3L, channelSortKey(0, 500), "c"),
+            Triple(2L, channelSortKey(0, 500), "b")))
+        assertEquals(listOf("c", "b", "a"), newestPerApp(weighted, 3) { "app" })
+        // No weight either (Stremio, as far as we know): the app's own order, as before.
+        val plain = byWeight(listOf(Triple(0L, channelSortKey(0, 500), "x"), Triple(0L, channelSortKey(0, 500), "y")))
+        assertEquals(listOf("x", "y"), newestPerApp(plain, 3) { "app" })
+    }
+
     @Test fun continueWatchingChannelsStartOnOthersOff() {
         assertEquals(true, channelOn("Continue Watching", "stremio/Continue Watching", emptySet()))
         assertEquals(false, channelOn("On Deck", "plex/On Deck", emptySet()))
