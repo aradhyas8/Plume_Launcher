@@ -196,6 +196,8 @@ internal fun hdmiIcon(name: String, named: Boolean): String {
         "xbox" in n -> "xbox"
         "nintendo" in n || "switch" in n -> "nintendoswitch"
         "apple tv" in n || "appletv" in n -> "appletv"
+        "shield" in n -> "nvidia"
+        "chromecast" in n || "google tv" in n -> "chromecast"
         SET_TOP_WORDS.any { it in n } -> "settop"
         named -> "playback"
         else -> "hdmi"
@@ -307,6 +309,7 @@ class MainActivity : Activity() {
     private val net = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(n: Network, caps: NetworkCapabilities) {
             ui.post {
+                if (isDestroyed) return@post
                 showNet(caps)
                 // Online again (e.g. Wi-Fi coming up after boot): fetch any posters that failed meanwhile.
                 if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) retryPosters()
@@ -474,6 +477,7 @@ class MainActivity : Activity() {
         applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
         getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
         upload?.stop()
+        ui.removeCallbacksAndMessages(null) // the clocks and the posts still queued must not use the pools below
         io.shutdownNow()
         posterIo.shutdownNow()
         super.onDestroy()
@@ -1056,6 +1060,7 @@ class MainActivity : Activity() {
                 }
             }
             ui.post {
+                if (isDestroyed) return@post
                 glass.setBlur(blur)
                 glassSurfaces.forEach { it.get()?.setBlur(glass.blur) } // menus and cards that are open, and the panel
                 if (settingsScrim.visibility == View.VISIBLE) showPanelGlass() // a wallpaper picked from the panel itself
@@ -1352,6 +1357,7 @@ class MainActivity : Activity() {
             UploadServer((1000..9999).random().toString(), File(cacheDir, "upload.tmp")) { file ->
                 val saved = importWallpaper(file, dir) ?: return@UploadServer null
                 ui.post {
+                    if (isDestroyed) return@post
                     setWallpaper(forDark, "file:${saved.name}")
                     status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
                 }
@@ -2104,6 +2110,7 @@ class MainActivity : Activity() {
                 null
             }
             if (bmp != null) ui.post {
+                if (isDestroyed) return@post
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 setPadding(0, 0, 0, 0)
                 clearColorFilter()
@@ -2175,6 +2182,7 @@ class MainActivity : Activity() {
             }
             val inputs = hdmiInputs()
             ui.post {
+                if (isDestroyed) return@post
                 if (inputs.isNotEmpty() && !prefs.getBoolean("inputs_moved", false)) moveInputsToSources(inputs)
                 apps = list
                 APPS = list
@@ -3242,6 +3250,7 @@ class MainActivity : Activity() {
                 false
             }
             ui.post {
+                if (isDestroyed) return@post
                 downloading = false
                 if (ok) then() else toast(getString(R.string.paintings_failed), long = true)
                 if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.screensaver)
@@ -3283,6 +3292,7 @@ class MainActivity : Activity() {
             }
             if (latest != null) prefs.edit().putString("upd_ver", latest).putLong("upd_time", System.currentTimeMillis()).apply()
             ui.post {
+                if (isDestroyed) return@post
                 checking = false
                 val ver = availableUpdate()
                 if (ver != null && (force || prefs.getString("upd_told", null) != ver)) {
@@ -3399,6 +3409,7 @@ class MainActivity : Activity() {
                 false
             }
             ui.post {
+                if (isDestroyed) return@post
                 if (!ok) {
                     updating = false
                     toast(getString(R.string.update_download_failed), long = true)
@@ -3459,7 +3470,7 @@ class MainActivity : Activity() {
                     .putFloat("wx_temp", now.getDouble("temperature_2m").toFloat())
                     .putInt("wx_code", now.getInt("weather_code"))
                     .putLong("wx_time", System.currentTimeMillis()).apply()
-                ui.post { showWeather() }
+                ui.post { if (!isDestroyed) showWeather() }
             } catch (e: Exception) {
                 android.util.Log.w("TvHome", "weather failed ($e)") // keep the last reading; next tick retries
             }
@@ -3544,6 +3555,7 @@ class MainActivity : Activity() {
                 null
             }
             ui.post {
+                if (isDestroyed) return@post
                 // Only if the page is still open: Back may have left it while the search ran.
                 if (settingsScrim.visibility != View.VISIBLE || findViewById<TextView>(R.id.settingsTitle).text.toString() != getString(R.string.weather_location)) return@post
                 when {
@@ -3598,7 +3610,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
                 emptyList()
             }
-            ui.post { showWatchNext(list) }
+            ui.post { if (!isDestroyed) showWatchNext(list) }
         }
     }
 
@@ -3956,7 +3968,7 @@ class MainActivity : Activity() {
                 loading.remove(uri)
             } ?: return@execute
             posters.put(uri, bmp)
-            ui.post { if (v.tag == uri) v.setImageBitmap(bmp) }
+            ui.post { if (!isDestroyed && v.tag == uri) v.setImageBitmap(bmp) }
         }
     }
 
@@ -4253,6 +4265,8 @@ class MainActivity : Activity() {
             "xbox" to R.drawable.logo_xbox,
             "nintendoswitch" to R.drawable.logo_nintendoswitch,
             "appletv" to R.drawable.logo_appletv,
+            "nvidia" to R.drawable.logo_nvidia,
+            "chromecast" to R.drawable.logo_chromecast,
             "settop" to R.drawable.ic_settop,
             "playback" to R.drawable.ic_playback,
             "hdmi" to R.drawable.ic_hdmi,
