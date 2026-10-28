@@ -95,7 +95,9 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Calendar
 import java.util.Date
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 
 /** Light/dark from the launcher's theme setting; shared with the Gallery screensaver. */
@@ -252,9 +254,15 @@ class MainActivity : Activity() {
                        val group: String? = pkg)
 
     private val prefs by lazy { getSharedPreferences("home", MODE_PRIVATE) }
-    private val io = Executors.newSingleThreadExecutor()
+    private val io = pool(1)
     // Posters get their own threads: one slow image server must not hold up the rest (or the row data).
-    private val posterIo = Executors.newFixedThreadPool(3)
+    private val posterIo = pool(3)
+
+    /**
+     * [n] threads, like Executors.newFixedThreadPool. A task posted after onDestroy (a theme change recreates the screen)
+     * finds the pool shut down: it is dropped, not thrown at the main thread.
+     */
+    private fun pool(n: Int) = ThreadPoolExecutor(n, n, 0L, TimeUnit.MILLISECONDS, LinkedBlockingQueue(), ThreadPoolExecutor.DiscardPolicy())
     private val loading = java.util.Collections.synchronizedSet(HashSet<String>())
     private val ui = Handler(Looper.getMainLooper())
     private val posters = object : LruCache<String, Bitmap>(6 * 1024 * 1024) {
