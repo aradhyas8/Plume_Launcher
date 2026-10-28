@@ -108,6 +108,16 @@ Android 13 and newer grey out the Accessibility switch for apps installed outsid
 
 4. Accept the debugging prompt on the TV, then choose **Try again** in Plume. Plume turns its Home button service on by itself.
 
+### Fire TV
+
+Fire OS never gives the Home key to apps, and it keeps Amazon's home as the home screen. So on a Fire TV the Home button service watches for Amazon's home screen and covers it with Plume. This has limits:
+
+- **Plume shows about 5 seconds after you press Home** on Fire OS 7 (Android 9). Amazon's home shows first. Android holds back a start from an app for 5 seconds after Home, and Plume can't skip that wait. See [#153](../../issues/153).
+- **Amazon's Network status screen shows no highlighted button** while **Plume: Home button** is on, so you can't reach **Advanced** or **Run Speed Test**. Turn the Home button off in **Plume settings → Remote & Home button**, use the screen, and turn it on again. It happens when any accessibility service is on. One other Fire TV launcher reports the same.
+- **Remote keys can't be set.** Fire OS doesn't pass the keys to Plume.
+
+If Home doesn't reach Plume on your Fire TV, run [`tools/plume-firetv-probe.sh`](tools/plume-firetv-probe.sh) and post the result in [#153](../../issues/153).
+
 ## Using Plume
 
 | Action | How |
