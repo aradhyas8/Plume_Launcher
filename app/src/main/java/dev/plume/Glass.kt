@@ -251,6 +251,8 @@ internal class GlassBox @JvmOverloads constructor(context: Context, attrs: andro
     }
 
     override fun onDraw(c: Canvas) {
+        // Glass off: the view still draws for its plain background, and an unstyled glass would paint solid black on it.
+        if (willNotDraw()) return
         glass.setBounds(0, 0, width, height)
         glass.draw(c)
     }

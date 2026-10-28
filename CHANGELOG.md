@@ -16,7 +16,10 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
-- **Darkening.** In dark mode, Plume lays black over the Bing picture. Select **Plume settings → Appearance → Darkening**. Choose Auto, None, Light, Medium or Strong. Auto gives a bright picture more black and lifts a very dark one a little. **Medium** is what Plume did before.
+- In light mode with **Glass** off, the Plume settings panel is light again. Before, it was black.
+
+- **Shows wallpaper.** Select **Plume settings → Appearance → Light wallpaper** or **Dark wallpaper**, then **Shows from your apps**. The picture of a show that your apps publish becomes the wallpaper. It comes from Watch Next, or from the channels that you choose in **Wallpaper from**. It changes as often as a folder of photos does. Only wide pictures count. **Featured: …** shows under the weather. Plume fetches nothing until you select it.
+- **Darkening.** In dark mode, Plume lays black over the Bing picture and the Shows picture. Select **Plume settings → Appearance → Darkening**. Choose Auto, None, Light, Medium or Strong. Auto gives a bright picture more black and lifts a very dark one a little. **Medium** is what Plume did before.
 - **Edit the top bar.** Hold **OK** on an icon at the top of the home screen. Select **Move**, **Hide** or **Add icon**. In **Move**, press Left or Right to slide the icon. Press **OK** to place it. Press Back to cancel. **Add icon** shows the icons that you hid. **Plume settings** stays on the bar, so you can always bring the icons back.
 - Plume does not close when a theme change arrives while a picture or the apps list is loading, or when the screen saver ends.
 - **Rows of the shows row.** Select **Plume settings → Shows row → Rows**. **Mixed** puts the shows of every source in one row. It is the default. **By title** keeps one row: select its title and press Left or Right to change the source. **Per channel** gives each source its own row: press Down or Up on a card to change the row. The cards stay in place and change their picture, title and progress.

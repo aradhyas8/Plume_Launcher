@@ -250,7 +250,7 @@ class MainActivity : Activity() {
     }
     /** [group]: what shares the front places in Continue Watching, the app or, for an app channel, that channel. */
     private class Prog(val title: String, val sub: String, val progress: Int, val image: String?, val intent: String?, val pkg: String?,
-                       val group: String? = pkg)
+                       val group: String? = pkg, val wide: Boolean = true) // wide: the art can be a wallpaper (see ShowsWall.wide)
     /** One row of cards you can switch to: Watch Next, or one app channel that is on. */
     private class CardSource(val key: String, val title: String)
     /** What the shows row holds: the [sources] it is split in (none when mixed), the one on show and its cards. */
@@ -427,6 +427,7 @@ class MainActivity : Activity() {
         ui.postDelayed(themeTick, 60_000L)
         ui.removeCallbacks(wallpaperTick)
         ui.post(wallpaperTick)
+        updateFeatured()
         // Gallery chosen but its paintings missing (updated from a version that bundled them): fetch them.
         if (galleryOn() && photoScreensaver() == null && !paintingsReady(this)) downloadPaintings {}
         checkUpdate(force = false)
@@ -865,7 +866,7 @@ class MainActivity : Activity() {
         ground = if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
         allApps.setBackgroundColor(ground)
-        for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather)) {
+        for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
             findViewById<TextView>(id).setTextColor(fg)
         }
         iconInk = fg
@@ -886,7 +887,7 @@ class MainActivity : Activity() {
         .map { findViewById<ImageView>(it) }
 
     private fun fitInk() {
-        val top = listOf(R.id.clock, R.id.date, R.id.weather).map { findViewById<TextView>(it) }
+        val top = listOf(R.id.clock, R.id.date, R.id.weather, R.id.featured).map { findViewById<TextView>(it) }
         val topInk = inkBehind(top)
         for (v in top) ink(v, topInk, fade = true)
         val icons = topIcons()
@@ -956,6 +957,7 @@ class MainActivity : Activity() {
         listOf(plainWallpaper(forDark).let { wallpaperName(it) to it }) +
             BUNDLED_WALLPAPERS.keys.map { wallpaperName("res:$it") to "res:$it" } +
             (wallpaperName(Bing.CHOICE) to Bing.CHOICE) +
+            (wallpaperName(ShowsWall.CHOICE) to ShowsWall.CHOICE) +
             (wallpaperDir()?.listFiles { f -> f.extension.lowercase() in setOf("jpg", "jpeg", "png", "webp") }
                 ?.sortedBy { it.name }?.map { it.nameWithoutExtension to "file:${it.name}" } ?: emptyList()) +
             listOfNotNull(currentWallpaper(forDark).takeIf { it.startsWith("folder:") }?.let { wallpaperName(it) to it })
@@ -1033,6 +1035,7 @@ class MainActivity : Activity() {
 
     private fun wallpaperName(choice: String) = when {
         choice == Bing.CHOICE -> getString(R.string.bing_daily)
+        choice == ShowsWall.CHOICE -> getString(R.string.shows_wallpaper)
         choice.startsWith("folder:") -> getString(R.string.folder_name, choice.substringAfter(':').substringAfter(':'))
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
     }
@@ -1094,6 +1097,7 @@ class MainActivity : Activity() {
         // fitWallpaper's bitmap is mutable: the Bing dim is painted onto it.
         val bmp = when {
             choice == Bing.CHOICE -> fitWallpaper { Bing.file(this).inputStream() }
+            choice == ShowsWall.CHOICE -> fitWallpaper { ShowsWall.file(this).inputStream() }
             choice.startsWith("folder:") -> {
                 val uri = ContentUris.withAppendedId(PHOTOS, folderPhoto(choice) ?: return null)
                 fitWallpaper { contentResolver.openInputStream(uri) ?: throw IOException("gone: $uri") }
@@ -1103,8 +1107,8 @@ class MainActivity : Activity() {
                 fitWallpaper { file.inputStream() }
             }
         } ?: return null
-        // Bing's pictures are often bright daylight, which fights true black: dim them in dark mode.
-        if (dark && choice == Bing.CHOICE) tonePicture(bmp)
+        // Bing's pictures and the shows' are often bright, which fights true black: dim them in dark mode.
+        if (dark && (choice == Bing.CHOICE || choice == ShowsWall.CHOICE)) tonePicture(bmp)
         return bmp
     }
 
@@ -1112,7 +1116,7 @@ class MainActivity : Activity() {
     private fun wpDim() = prefs.getString("wp_dim", "auto")!!.takeIf { it in DIMS } ?: "auto"
 
     /**
-     * Brings a Bing picture to a pleasant brightness in dark mode. A fixed strength lays that much black over it.
+     * Brings a Bing or shows picture to a pleasant brightness in dark mode. A fixed strength lays that much black over it.
      * Auto looks at the picture: a bright one gets black, and a very dark one, which the fades would leave almost
      * invisible, is lifted a little (the shadows only: lights stay where they are).
      */
@@ -1202,10 +1206,147 @@ class MainActivity : Activity() {
             .remove(photoKey(forDark)).putLong(photoAtKey(forDark), System.currentTimeMillis()).apply()
         Bing.dropIfUnused(applicationContext, prefs) // choosing another wallpaper deletes the Bing picture at once
         if (choice == Bing.CHOICE) Bing.refresh(applicationContext, prefs, force = true)
+        dropShowsIfUnused()
+        if (choice == ShowsWall.CHOICE) {
+            prefs.edit().remove("wp_show_key").putLong("wp_show_at", 0).apply()
+            refreshShows()
+        }
+        updateFeatured()
         if (forDark == dark) loadWallpaper()
     }
 
     private val bingChanged: () -> Unit = { if (currentWallpaper() == Bing.CHOICE) loadWallpaper() }
+
+    // ---------- shows wallpaper (see ShowsWall) ----------
+
+    private fun showKey(p: Prog) = "${p.pkg}/${p.title}/${p.image}"
+
+    /** Watch Next, then every channel an app publishes: (key, channel id or null for Watch Next, name shown). */
+    private fun wpSourceList(): List<Triple<String, Long?, String>> {
+        val label = apps.associate { it.pkg to it.label }
+        fun app(p: String) = label[p] ?: try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString() } catch (e: PackageManager.NameNotFoundException) { p }
+        return listOf(Triple(WATCH_NEXT, null as Long?, getString(R.string.watch_next))) +
+            appChannels().distinctBy { (_, p, n) -> channelKey(p, n) }
+                .map { (id, p, n) -> Triple(channelKey(p, n), id as Long?, if (n == app(p) || app(p).isBlank()) n else "${app(p)} · $n") }.sortedBy { it.third.lowercase() }
+    }
+
+    /** Only Watch Next is on to start with; "wp_flip" holds the sources switched from there. */
+    private fun wpSourceOn(key: String) = (key in prefs.getStringSet("wp_flip", emptySet())!!) != (key == WATCH_NEXT)
+
+    private fun programsFor(s: Triple<String, Long?, String>): List<Prog> {
+        val hidden = prefs.getStringSet("hidden_watch", emptySet())!!
+        val id = s.second ?: return readPrograms(TvContract.WatchNextPrograms.CONTENT_URI, hidden).map { it.second }
+        return readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "wp$id").map { it.second }
+    }
+
+    private fun pickWpSources(focus: Int = 0) {
+        io.execute {
+            val sources = wpSourceList()
+            val counts = sources.map { s -> try { programsFor(s).let { l -> l.count { it.image != null && it.wide } to l.size } } catch (e: Exception) { 0 to 0 } }
+            ui.post {
+                if (isDestroyed) return@post
+                showPage(getString(R.string.wp_sources), sources.mapIndexed { i, s ->
+                    val state = getString(if (wpSourceOn(s.first)) R.string.on else R.string.off)
+                    page(s.third, "$state · ${getString(R.string.wp_usable, counts[i].first, counts[i].second)}") {
+                        val flip = prefs.getStringSet("wp_flip", emptySet())!!
+                        prefs.edit().putStringSet("wp_flip", if (s.first in flip) flip - s.first else flip + s.first).apply()
+                        pickWpSources(i)
+                    }
+                }, focus) {
+                    prefs.edit().remove("wp_show_key").putLong("wp_show_at", 0).apply()
+                    refreshShows()
+                    renderSettings(R.string.wp_sources)
+                }
+            }
+        }
+    }
+
+    /** Pictures that could not be used, until when they are left alone: a dead address or a picture that is not wide for hours, a failed network for minutes. */
+    private val showFailed = HashMap<String, Long>() // the io thread only
+
+    /**
+     * Takes the next show's picture from the sources that are on: the first one, after the last shown, that is wide
+     * enough and can be fetched. A picture that cannot is left alone for a while and the next one is tried, along the
+     * whole list (a run of shows without a picture must not hold the wallpaper). After three network failures in a row
+     * it stops until the next time: the network is probably down.
+     */
+    private fun refreshShows() {
+        if (checkSelfPermission(TV_LISTINGS) != PackageManager.PERMISSION_GRANTED) return
+        io.execute {
+            val list = try {
+                wpSourceList().filter { wpSourceOn(it.first) }.flatMap { programsFor(it) }.filter { it.image != null && it.wide }.distinctBy { showKey(it) }
+            } catch (e: Exception) {
+                emptyList()
+            }
+            val byKey = list.associateBy { showKey(it) }
+            val now = System.currentTimeMillis()
+            var chosen: Prog? = null
+            var network = 0
+            for (k in ShowsWall.order(byKey.keys.toList(), prefs.getString("wp_show_key", null))) {
+                if (ShowsWall.skipped(showFailed, k, now)) continue
+                val p = byKey[k] ?: continue
+                when (fetchShow(p)) {
+                    FETCH_OK -> { chosen = p; break }
+                    FETCH_DEAD -> showFailed[k] = now + ShowsWall.DEAD_MS
+                    else -> {
+                        showFailed[k] = now + ShowsWall.NETWORK_MS
+                        if (++network >= 3) break
+                    }
+                }
+            }
+            val edit = prefs.edit().putLong("wp_show_at", System.currentTimeMillis())
+            if (chosen != null) {
+                edit.putString("wp_show_key", showKey(chosen)).putString("wp_show_title", chosen.title)
+            }
+            edit.apply()
+            ui.post {
+                if (isDestroyed) return@post
+                if (chosen != null && currentWallpaper() == ShowsWall.CHOICE) loadWallpaper()
+                updateFeatured()
+            }
+        }
+    }
+
+    /** [FETCH_OK] when the picture is on disk now, [FETCH_DEAD] when it will never do (not found, not wide, too big), [FETCH_NETWORK] when it failed this time. */
+    private fun fetchShow(p: Prog): Int = try {
+        val bytes = openStream(p.image!!).use { input -> // stops just past SHOW_MAX: a bigger picture is not read into memory
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            while (out.size() <= SHOW_MAX) { val n = input.read(buf); if (n < 0) break; out.write(buf, 0, n) }
+            out.toByteArray()
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bytes.size > SHOW_MAX || !ShowsWall.fits(bounds.outWidth, bounds.outHeight)) {
+            FETCH_DEAD
+        } else {
+            val part = File(filesDir, "shows.part")
+            part.writeBytes(bytes)
+            if (part.renameTo(ShowsWall.file(this))) FETCH_OK else { part.delete(); FETCH_NETWORK }
+        }
+    } catch (e: java.io.FileNotFoundException) {
+        FETCH_DEAD
+    } catch (e: Exception) {
+        FETCH_NETWORK
+    }
+
+    /** No wallpaper uses the shows any more: the picture and what Plume remembers about it go, at once. */
+    private fun dropShowsIfUnused() {
+        if (currentWallpaper(false) == ShowsWall.CHOICE || currentWallpaper(true) == ShowsWall.CHOICE) return
+        ShowsWall.file(this).delete()
+        prefs.edit().remove("wp_show_key").remove("wp_show_at").remove("wp_show_title").apply()
+    }
+
+    /** The show on screen as the wallpaper, or null when another wallpaper is on or no picture was found yet. */
+    private fun featuredTitle() = prefs.getString("wp_show_title", null)?.takeIf { currentWallpaper() == ShowsWall.CHOICE && ShowsWall.file(this).exists() }
+
+    /** "Featured: …" under the weather: the show whose picture is the wallpaper. */
+    private fun updateFeatured() {
+        val title = featuredTitle()
+        val v = findViewById<TextView>(R.id.featured)
+        v.text = title?.let { getString(R.string.featured_now, it) }.orEmpty()
+        v.visibility = if (title == null) View.GONE else View.VISIBLE
+    }
 
     // ---------- folder wallpapers ----------
 
@@ -1301,9 +1442,10 @@ class MainActivity : Activity() {
     private val wallpaperTick = object : Runnable {
         override fun run() {
             val every = photoEvery() * 60_000L
-            if (!currentWallpaper().startsWith("folder:")) return
-            val wait = prefs.getLong(photoAtKey(), 0) + every - System.currentTimeMillis()
-            if (wait <= 0) nextPhoto()
+            val shows = currentWallpaper() == ShowsWall.CHOICE
+            if (!shows && !currentWallpaper().startsWith("folder:")) return
+            val wait = prefs.getLong(if (shows) "wp_show_at" else photoAtKey(), 0) + every - System.currentTimeMillis()
+            if (wait <= 0) { if (shows) refreshShows() else nextPhoto() }
             ui.postDelayed(this, if (wait <= 0) every else wait)
         }
     }
@@ -1584,6 +1726,8 @@ class MainActivity : Activity() {
             },
             R.string.wp_dim to Triple(getString(R.string.wp_dim), getString(DIMS.getValue(wpDim()))) { steps[R.string.wp_dim]!!(1) },
             R.string.folder_photo_changes to Triple(getString(R.string.folder_photo_changes), getString(PHOTO_EVERY[photoEvery()]!!)) { pickPhotoEvery() },
+            R.string.wp_sources to Triple(getString(R.string.wp_sources), // the count queries the channels: only when the Shows wallpaper is on, so the settings do not wait for it
+                if (ShowsWall.CHOICE in listOf(currentWallpaper(false), currentWallpaper(true))) getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) else "") { pickWpSources() },
             R.string.sort_apps to Triple(getString(R.string.sort_apps), if (sort == "manual") getString(R.string.manual) else getString(R.string.most_used)) {
                 prefs.edit().putString("sort", if (sort == "manual") "usage" else "manual").apply()
                 renderApps()
@@ -1673,13 +1817,14 @@ class MainActivity : Activity() {
         val walls = listOf(currentWallpaper(false), currentWallpaper(true))
         val photo = walls.any { !it.startsWith("res:") && !it.startsWith("plain:") }
         val folder = walls.any { it.startsWith("folder:") }
-        val dimmed = currentWallpaper(true) == Bing.CHOICE // the darkening is for the dark Bing picture only
+        val shows = walls.any { it == ShowsWall.CHOICE }
+        val dimmed = currentWallpaper(true).let { it == Bing.CHOICE || it == ShowsWall.CHOICE } // the darkening is for the dark Bing or shows picture only
         // In the order things sit on the home screen, top to bottom, then what isn't on it.
         val sections = listOf(
             Triple(R.string.section_appearance, "${rows[R.string.theme]!!.second} · ${wallpaperName(currentWallpaper(dark))}",
                 listOfNotNull(R.string.theme, R.string.light_wallpaper, R.string.dark_wallpaper, R.string.wp_dim.takeIf { dimmed }, R.string.fade_top.takeIf { photo },
                     R.string.fade_bottom.takeIf { photo }, R.string.glass, R.string.app_animations,
-                    R.string.folder_photo_changes.takeIf { folder })),
+                    R.string.folder_photo_changes.takeIf { folder || shows }, R.string.wp_sources.takeIf { shows })),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${rows[R.string.weather_location]!!.second}",
                 listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.section_app_row, "${rows[R.string.apps_in_row]!!.second} · ${rows[R.string.row_position]!!.second}",
@@ -3847,7 +3992,8 @@ class MainActivity : Activity() {
                 ).joinToString(" - ")
                 val progress = if (duration > 0 && position >= 1000) (position * 100 / duration).toInt().coerceIn(0, 100) else 0
                 val pkg = str("package_name")
-                val prog = Prog(title, sub, progress, str("thumbnail_uri") ?: str("poster_art_uri"), str("intent_uri"), pkg, group ?: pkg)
+                val wide = ShowsWall.wide(str("thumbnail_uri") != null, num("poster_art_aspect_ratio").toInt())
+                val prog = Prog(title, sub, progress, str("thumbnail_uri") ?: str("poster_art_uri"), str("intent_uri"), pkg, group ?: pkg, wide)
                 val engaged = num("last_engagement_time_utc_millis")
                 out += Triple(num("weight"),
                     if (group == null) watchSortKey(num("watch_next_type"), engaged) else channelSortKey(engaged, prefs.getLong("t_$pkg", 0)), prog)
@@ -4400,7 +4546,7 @@ class MainActivity : Activity() {
             R.string.apps_when_hidden to R.string.help_apps_when_hidden, R.string.row_name to R.string.help_row_name,
             R.string.show_icons to R.string.help_show_icons,
             R.string.cw_apps to R.string.help_from_apps, R.string.cw_channels to R.string.help_channels, R.string.cards_rows to R.string.help_cards_rows,
-            R.string.restore_hidden to R.string.help_hidden_shows, R.string.screensaver_timing to R.string.help_start_after,
+            R.string.wp_sources to R.string.help_wp_sources, R.string.restore_hidden to R.string.help_hidden_shows, R.string.screensaver_timing to R.string.help_start_after,
             R.string.home_button to R.string.help_home_button, R.string.smooth_volume to R.string.help_smooth_volume,
             R.string.default_launcher to R.string.help_default_launcher,
             R.string.setup_home to R.string.help_run_setup, R.string.section_keys to R.string.help_remote_keys,
@@ -4432,7 +4578,11 @@ class MainActivity : Activity() {
         const val SLIDER_DP = 96 // a slider's width
         const val SLIDER_VALUE_DP = 72 // width of the value beside a slider
         const val BANNER_DIM = 0.3f // black laid over a colour banner at rest, so the selected one stands out
-        /** "Darkening" of a Bing picture in dark mode: Auto, or a percentage of black. Medium is what Plume always did. */
+        const val FETCH_OK = 0
+        const val FETCH_DEAD = 1
+        const val FETCH_NETWORK = 2
+        const val SHOW_MAX = 12_000_000 // bytes: a bigger show picture is left out
+        /** "Darkening" of a Bing or shows picture in dark mode: Auto, or a percentage of black. Medium is what Plume always did for Bing. */
         val DIMS = linkedMapOf("auto" to R.string.dim_auto, "0" to R.string.dim_none, "20" to R.string.dim_light, "45" to R.string.dim_medium, "65" to R.string.dim_strong)
         const val PIN_TRIES = 5 // wrong PINs before a 30 s wait
         const val UNLOCKED_MS = 5 * 60_000L
