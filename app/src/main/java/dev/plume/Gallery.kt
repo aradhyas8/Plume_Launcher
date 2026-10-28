@@ -143,9 +143,9 @@ private class GalleryShow(private val context: Context) : SurfaceHolder.Callback
     }
 
     fun release() {
+        running = false // first: the render thread stops asking for the next painting before the pool is shut
         io.shutdownNow()
         synchronized(lock) {
-            running = false
             current?.bmp?.recycle()
             previous?.bmp?.recycle()
             current = null
