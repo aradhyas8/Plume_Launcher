@@ -1,0 +1,59 @@
+# Every pull request: the Plume rules, unit tests, lint, a release build, and its APK size against the base branch.
+# Results go in the job summary: a pull request from a fork gets a read-only token, so this can't comment.
+name: Pull request checks
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Plume rules
+        run: sh tools/pr-rules.sh "$BASE"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Unit tests, lint and release build
+        run: ./gradlew testDebugUnitTest lintDebug assembleRelease
+
+      - name: APK size against the base branch
+        run: |
+          now=$(stat -c %s app/build/outputs/apk/release/app-release.apk)
+          git worktree add -q ../base "$BASE"
+          (cd ../base && ./gradlew -q assembleRelease)
+          before=$(stat -c %s ../base/app/build/outputs/apk/release/app-release.apk)
+          diff=$((now - before))
+          echo "APK: $before -> $now bytes ($diff)"
+          echo "### APK size" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Release APK: %s → %s bytes (%+d)\n' "$before" "$now" "$diff" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$diff" -gt 10240 ]; then
+            echo "::warning::The release APK grows by $diff bytes. Say why in the pull request."
+          fi
+
+      - name: Lint report
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore

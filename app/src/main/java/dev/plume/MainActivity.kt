@@ -4,6 +4,7 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.accessibilityservice.AccessibilityService
 import android.app.Activity
+import android.app.ActivityOptions
 import android.app.Dialog
 import android.app.PendingIntent
 import android.app.role.RoleManager
@@ -77,6 +78,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.GridLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
@@ -84,6 +86,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
+import java.lang.ref.WeakReference
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -142,6 +145,19 @@ internal fun watchSortKey(type: Long, engaged: Long): Long {
     val millis = if (engaged in 1 until 100_000_000_000L) engaged * 1000 else engaged
     return (if (type == 0L) 1L shl 50 else 0L) + millis
 }
+
+/**
+ * Sort key of a card from an app's home-screen channel. Channels have no Watch Next type, so every card counts as
+ * "continue". The card's own last-watched time when the app sets one (Nuvio does), else the time the app was last
+ * opened from Plume.
+ */
+internal fun channelSortKey(engaged: Long, opened: Long) = watchSortKey(0, if (engaged > 0) engaged else opened)
+
+/**
+ * Rows as (weight, sort key, item) to (sort key, item), highest weight first. A channel's cards often share one sort
+ * key; the weight is the app's own order for them (Nuvio gives its newest the highest), and [newestPerApp] keeps it.
+ */
+internal fun <T> byWeight(rows: List<Triple<Long, Long, T>>) = rows.sortedByDescending { it.first }.map { it.second to it.third }
 
 /**
  * Newest first across apps (ties keep their order), each app's [perApp] newest ahead of the rest: one app's ten
@@ -384,6 +400,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
+        openedFrom = null
         ensureHomeService()
         homeSetupResumed()
         if (wantDark() != dark) {
@@ -436,6 +454,7 @@ class MainActivity : Activity() {
         ui.removeCallbacks(themeTick)
         ui.removeCallbacks(wallpaperTick)
         if (editing) endEdit()
+        if (movingTop != null) endTopMove(false) // Home or an app opened in the middle of a move: the bar goes back as it was
         super.onPause()
     }
 
@@ -803,6 +822,7 @@ class MainActivity : Activity() {
             return donePopup()
         }
         if (editing) endEdit()
+        if (movingTop != null) endTopMove(false)
         if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
         if (allApps.visibility == View.VISIBLE) closeAllApps()
         watchScroll.scrollTo(0, 0)
@@ -1509,6 +1529,10 @@ class MainActivity : Activity() {
             // Select steps up like Right, and past 100% starts again at 0%.
             R.string.fade_top to Triple(getString(R.string.fade_top), "$SLIDER${fade("fade_top")}") { steps[R.string.fade_top]!!(if (fade("fade_top") == 100) -100 / FADE_STEP else 1) },
             R.string.fade_bottom to Triple(getString(R.string.fade_bottom), "$SLIDER${fade("fade_bottom")}") { steps[R.string.fade_bottom]!!(if (fade("fade_bottom") == 100) -100 / FADE_STEP else 1) },
+            R.string.app_animations to Triple(getString(R.string.app_animations), toggle(animationsOn())) {
+                prefs.edit().putBoolean("app_anim", !animationsOn()).apply()
+                renderSettings(R.string.app_animations)
+            },
             R.string.folder_photo_changes to Triple(getString(R.string.folder_photo_changes), getString(PHOTO_EVERY[photoEvery()]!!)) { pickPhotoEvery() },
             R.string.sort_apps to Triple(getString(R.string.sort_apps), if (sort == "manual") getString(R.string.manual) else getString(R.string.most_used)) {
                 prefs.edit().putString("sort", if (sort == "manual") "usage" else "manual").apply()
@@ -1602,7 +1626,7 @@ class MainActivity : Activity() {
         val sections = listOf(
             Triple(R.string.section_appearance, "${rows[R.string.theme]!!.second} · ${wallpaperName(currentWallpaper(dark))}",
                 listOfNotNull(R.string.theme, R.string.light_wallpaper, R.string.dark_wallpaper, R.string.fade_top.takeIf { photo },
-                    R.string.fade_bottom.takeIf { photo }, R.string.glass,
+                    R.string.fade_bottom.takeIf { photo }, R.string.glass, R.string.app_animations,
                     R.string.folder_photo_changes.takeIf { folder })),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${rows[R.string.weather_location]!!.second}",
                 listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
@@ -2358,12 +2382,27 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.FIT_XY
             if (grey) { colorFilter = GREYSCALE; alpha = rest }
         }
+        // A colour banner has nothing else to tell the selected tile from the others: the rest are dimmed a little,
+        // and the selected one gets a ring in the text colour. Both fade over the same 160 ms as the lift.
+        val dim = View(this).apply { setBackgroundColor(Color.BLACK); alpha = if (grey) 0f else BANNER_DIM }
+        val ring = View(this).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setStroke(dp(3), fg)
+                setColor(Color.TRANSPARENT)
+            }
+            alpha = 0f
+        }
         val col = FrameLayout(this).apply {
             addView(pic, MATCH_PARENT, MATCH_PARENT)
+            addView(dim, MATCH_PARENT, MATCH_PARENT)
+            addView(ring, MATCH_PARENT, MATCH_PARENT)
             tag = a.pkg
             setOnClickListener { launch(a) }
         }
-        style(col, dp(8), card = false) { focused ->
+        style(col, dp(8), card = false, lift = 1.12f) { focused ->
+            ring.animate().alpha(if (focused) 1f else 0f).setDuration(160).start()
+            if (!grey) dim.animate().alpha(if (focused) 0f else BANNER_DIM).setDuration(160).start()
             if (!grey) return@style
             pic.colorFilter = if (focused) null else GREYSCALE
             pic.animate().alpha(if (focused) 1f else rest).setDuration(160).start()
@@ -2872,6 +2911,11 @@ class MainActivity : Activity() {
         topBefore = topOrder()
         topLive = keys(TopBar.addAfter(keyList(topBefore), TOP_KEYS.getValue(id), TOP_KEYS.getValue(after.id)))
         applyTopBar(topLive)
+        if (id !in shownTop(topLive)) { // Sources on a TV with no input: nothing on screen to move, so keep it where it goes
+            saveTopOrder(topLive)
+            after.requestFocus()
+            return
+        }
         beginTopMove(findViewById(id))
     }
 
@@ -3043,11 +3087,46 @@ class MainActivity : Activity() {
     private fun launch(a: App) {
         prefs.edit().putInt("n_" + a.pkg, prefs.getInt("n_" + a.pkg, 0) + 1).putLong("t_" + a.pkg, System.currentTimeMillis()).apply()
         if (prefs.getString("sort", "manual") == "usage") appsDirty = true
+        val from = currentFocus?.takeIf { it.tag == a.pkg } // the tile that was pressed, not one a remote key opened it from
         try {
-            if (a.pkg.startsWith(HDMI)) Remap.openInput(this, a.pkg.removePrefix(HDMI)) else startActivity(a.launch)
+            if (a.pkg.startsWith(HDMI)) Remap.openInput(this, a.pkg.removePrefix(HDMI)) else startApp(a.launch, from)
         } catch (e: Exception) {
-            packageManager.getLeanbackLaunchIntentForPackage(a.pkg)?.let { startActivity(it) }
+            packageManager.getLeanbackLaunchIntentForPackage(a.pkg)?.let { startApp(it, from) }
         }
+    }
+
+    private fun animationsOn() = prefs.getBoolean("app_anim", true)
+
+    private var openedFrom: WeakReference<View>? = null // the tile or card an app was opened from, until we come back
+
+    /** Starts an app. With [from] and the animations on, the app opens out of that tile and the row settles on return. */
+    private fun startApp(intent: Intent, from: View?) {
+        val source = from?.takeIf { animationsOn() && it.isAttachedToWindow && it.width > 0 }
+        val options = source?.let { ActivityOptions.makeScaleUpAnimation(it, 0, 0, it.width, it.height).toBundle() }
+        startActivity(intent, options)
+        openedFrom = source?.let { WeakReference(it) }
+    }
+
+    /**
+     * Back from an app: the row of the tile it came from settles in, a little larger and dimmer at first. It settles
+     * around that tile when it is on screen, and around the middle of the row's window when Home has moved the row.
+     */
+    private fun settleRow(tile: View) {
+        // A Continue watching card sits in a column of its own: the row is the one that holds the columns.
+        val row = (if (tile.getTag(R.id.watchRow) is Prog) watchRow else tile.parent) as? ViewGroup ?: return
+        row.animate().cancel()
+        val at = Rect(0, 0, tile.width, tile.height)
+        row.offsetDescendantRectToMyCoords(tile, at) // the tile's place in the row, whatever sits between them
+        var pivot = at.exactCenterX()
+        val scroll = generateSequence(row.parent) { it.parent }.firstOrNull { it is HorizontalScrollView } as? HorizontalScrollView
+        if (scroll != null && (at.left < scroll.scrollX || at.right > scroll.scrollX + scroll.width)) pivot = scroll.scrollX + scroll.width / 2f
+        row.pivotX = pivot
+        row.pivotY = at.exactCenterY()
+        row.scaleX = 1.12f
+        row.scaleY = 1.12f
+        row.alpha = 0.4f
+        // A moment late: the app's own window is still fading out over us for the first part.
+        row.animate().scaleX(1f).scaleY(1f).alpha(1f).setStartDelay(90).setDuration(420).setInterpolator(DECELERATE).start()
     }
 
     // ---------- all apps ----------
@@ -3543,8 +3622,8 @@ class MainActivity : Activity() {
      * 1. The system Watch Next list (Netflix etc.), newest engagement first.
      * 2. Apps' own home-screen channels the user switched on (see [channelOn]); ones named "Continue Watching"
      *    are on to start with. Stremio publishes one (with progress and an autoPlay resume link) instead of
-     *    using Watch Next, so signing in to Stremio on the TV is all it takes. Channel rows carry no timestamps,
-     *    so they use the time the app was last opened from Plume, keeping the app's own order among themselves.
+     *    using Watch Next, so signing in to Stremio on the TV is all it takes. Channel rows sort by their own
+     *    last-watched time when the app sets one, else by the time the app was last opened from Plume, see [channelSortKey].
      * Newest first across apps, each app's [PER_APP] newest ahead of the rest, so one app with ten shows can't bury the others.
      */
     private fun queryWatchNext(): List<Prog> {
@@ -3555,7 +3634,7 @@ class MainActivity : Activity() {
         autoRowName = if (watchNextOn) null
             else on.map { it.third }.distinct().singleOrNull()?.takeUnless { it.equals("Continue Watching", ignoreCase = true) }
         val channels = on.flatMap { (id) ->
-            readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "ch$id").map { (_, p) -> watchSortKey(0, prefs.getLong("t_${p.pkg}", 0)) to p }
+            readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "ch$id")
         }
         val all = watchNext + channels
         publishingPkgs = all.mapNotNull { it.second.pkg }.toSet()
@@ -3656,9 +3735,9 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Pairs of (sort key, item), see [watchSortKey]; channel rows have no time of their own and get the type "continue". */
+    /** Pairs of (sort key, item), see [watchSortKey]; a [group] is a channel, its rows sorted by [channelSortKey] and [byWeight]. */
     private fun readPrograms(uri: Uri, hidden: Set<String>, group: String? = null): List<Pair<Long, Prog>> {
-        val out = ArrayList<Pair<Long, Prog>>()
+        val out = ArrayList<Triple<Long, Long, Prog>>()
         contentResolver.query(uri, null, null, null, null)?.use { c ->
             fun str(col: String) = c.getColumnIndex(col).let { if (it < 0 || c.isNull(it)) null else c.getString(it) }
             fun num(col: String) = c.getColumnIndex(col).let { if (it < 0 || c.isNull(it)) 0L else c.getLong(it) }
@@ -3678,10 +3757,12 @@ class MainActivity : Activity() {
                 val progress = if (duration > 0 && position >= 1000) (position * 100 / duration).toInt().coerceIn(0, 100) else 0
                 val pkg = str("package_name")
                 val prog = Prog(title, sub, progress, str("thumbnail_uri") ?: str("poster_art_uri"), str("intent_uri"), pkg, group ?: pkg)
-                out += watchSortKey(num("watch_next_type"), num("last_engagement_time_utc_millis")) to prog
+                val engaged = num("last_engagement_time_utc_millis")
+                out += Triple(num("weight"),
+                    if (group == null) watchSortKey(num("watch_next_type"), engaged) else channelSortKey(engaged, prefs.getLong("t_$pkg", 0)), prog)
             }
         }
-        return out
+        return byWeight(out)
     }
 
     private fun hideKey(pkg: String?, title: String) = "$pkg/$title"
@@ -3867,10 +3948,11 @@ class MainActivity : Activity() {
 
     private fun open(p: Prog) {
         prefs.edit().putLong("t_${p.pkg}", System.currentTimeMillis()).apply()
+        val from = currentFocus?.takeIf { it.getTag(R.id.watchRow) is Prog }
         try {
-            startActivity(Intent.parseUri(p.intent, Intent.URI_INTENT_SCHEME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            startApp(Intent.parseUri(p.intent, Intent.URI_INTENT_SCHEME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), from)
         } catch (e: Exception) {
-            p.pkg?.let { packageManager.getLeanbackLaunchIntentForPackage(it) }?.let { startActivity(it) }
+            p.pkg?.let { packageManager.getLeanbackLaunchIntentForPackage(it) }?.let { startApp(it, from) }
         }
     }
 
@@ -4104,6 +4186,7 @@ class MainActivity : Activity() {
         const val FADE_STEP = 5 // percent per Left/Right on a fade slider
         const val SLIDER_DP = 96 // a slider's width
         const val SLIDER_VALUE_DP = 72 // width of the value beside a slider
+        const val BANNER_DIM = 0.3f // black laid over a colour banner at rest, so the selected one stands out
         const val DARK_DIM = 115 // alpha of the black laid over the Bing picture in dark mode (45%)
         const val PIN_TRIES = 5 // wrong PINs before a 30 s wait
         const val UNLOCKED_MS = 5 * 60_000L

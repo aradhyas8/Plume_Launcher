@@ -18,6 +18,9 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 - **Edit the top bar.** Hold **OK** on an icon at the top of the home screen. Select **Move**, **Hide** or **Add icon**. In **Move**, press Left or Right to slide the icon. Press **OK** to place it. Press Back to cancel. **Add icon** shows the icons that you hid. **Plume settings** stays on the bar, so you can always bring the icons back.
 - **Power icon.** Hold **OK** on a top-bar icon and select **Add icon**, then **Power**. Select the icon to open the Android power menu. It needs the Home button turned on. If it is off, the icon offers to turn it on.
+- Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
+- **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.
+- **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.
 
 ## 1.6
 
