@@ -17,7 +17,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 ## Unreleased
 
 - Plume does not close when a theme change arrives while a picture or the apps list is loading, or when the screen saver ends.
-- **Home returns to your app.** Press Home in an app. The home screen shows the tile of that app in focus, not the first tile. Press Home on the home screen to go back to the first tile.
+- **Home returns to your app.** Press Home in an app that you started from a tile or a card. The home screen shows that tile or card in focus, not the first tile. If you started the app in another way, or the tile is gone, Home shows the first tile.
 - Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
 - **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.
 - **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.
