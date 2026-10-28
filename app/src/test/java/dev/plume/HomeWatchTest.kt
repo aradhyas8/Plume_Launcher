@@ -44,4 +44,29 @@ class HomeWatchTest {
         w.opened("dev.plume", "dev.plume.MainActivity", 2_000)
         assertEquals(0L, w.opened(gtv, "com.google.android.apps.tv.launcherx.home.HomeActivity", 3_000))
     }
+
+    // Home pressed with Plume on screen: Fire OS sent more than one window event for the press, and the second one
+    // dropped the jump that waited for Settings, so Amazon's home stayed on screen (seen on a Fire TV, Fire OS 7.7.1.7).
+    @Test fun moreWindowsOfTheSamePressKeepTheWaitingJump() {
+        val w = HomeWatch()
+        w.opened("dev.plume", "dev.plume.MainActivity", 1_000)
+        assertEquals(HomeWatch.SETTINGS_WAIT_MS, w.opened(amazon, amazonHome, 2_000))
+        assertEquals(HomeWatch.KEEP, w.opened(amazon, amazonHome, 2_100))
+        assertEquals(HomeWatch.KEEP, w.opened(amazon, "com.amazon.tv.launcher.ui.OtherActivity", 2_200))
+        assertEquals(HomeWatch.KEEP, w.opened("dev.plume", "dev.plume.MainActivity", 2_300))
+    }
+
+    @Test fun anotherAppOpeningDropsTheWaitingJump() { // Settings on top of Amazon's home
+        val w = HomeWatch()
+        w.opened("dev.plume", "dev.plume.MainActivity", 1_000)
+        assertEquals(HomeWatch.SETTINGS_WAIT_MS, w.opened(amazon, amazonHome, 2_000))
+        assertNull(w.opened("com.amazon.tv.settings.v2", "Settings", 2_200))
+    }
+
+    @Test fun afterTheWaitEveryWindowCountsAgain() {
+        val w = HomeWatch()
+        w.opened("dev.plume", "dev.plume.MainActivity", 1_000)
+        assertEquals(HomeWatch.SETTINGS_WAIT_MS, w.opened(amazon, amazonHome, 2_000))
+        assertNull(w.opened(amazon, "com.amazon.tv.launcher.ui.OtherActivity", 2_000 + HomeWatch.SETTINGS_WAIT_MS))
+    }
 }

@@ -83,8 +83,10 @@ class HomeOverride : AccessibilityService() {
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = e.packageName?.toString() ?: return
+        val after = watch.opened(pkg, e.className?.toString(), SystemClock.uptimeMillis())
+        if (after == HomeWatch.KEEP) return // the same Home press again: the jump that waits stays
         handler.removeCallbacks(jump) // any other window opening means Home wasn't where we were going
-        watch.opened(pkg, e.className?.toString(), SystemClock.uptimeMillis())?.let { handler.postDelayed(jump, it) }
+        after?.let { handler.postDelayed(jump, it) }
     }
 
     // Marked as Home so the setup check can tell it from Plume being opened from the apps list.
