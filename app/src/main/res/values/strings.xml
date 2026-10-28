@@ -111,8 +111,8 @@
     <string name="icon_hidden">Hidden. To bring it back, hold OK on an icon and select Add icon.</string>
     <string name="shows_with_input">Shows when the TV has an input</string>
     <string name="top_bar_hint">Hold OK on a top-bar icon to move, hide or add icons.</string>
-    <string name="power">Power</string>
     <string name="power_needs_home">Turn on the Home button</string>
+    <string name="power_menu_failed">This TV does not open the power menu.</string>
     <string name="move">Move</string>
     <string name="remove_from_row">Remove from row</string>
     <string name="removed_from_row">Removed from the row. It\'s still in All apps.</string>

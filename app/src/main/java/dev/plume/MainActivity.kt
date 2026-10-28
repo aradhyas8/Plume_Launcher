@@ -2,7 +2,6 @@ package dev.plume
 
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
-import android.accessibilityservice.AccessibilityService
 import android.app.Activity
 import android.app.ActivityOptions
 import android.app.Dialog
@@ -2865,7 +2864,7 @@ class MainActivity : Activity() {
     private fun powerDialog() {
         val service = HomeOverride.running
             ?: return holdMenu(findViewById(R.id.powerButton), listOf(getString(R.string.power_needs_home) to { turnOnHomeButton() }), below = true)
-        service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_POWER_DIALOG)
+        Remap.powerMenu(service)
     }
 
     /** Hold OK on a top-bar icon: Move, Hide (not Plume settings, so the bar is never empty) and Add icon. */
