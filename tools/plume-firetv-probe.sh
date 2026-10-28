@@ -123,10 +123,20 @@ adb -s "$D" exec-out screencap -p >"$DIR/accessibility-page.png" 2>/dev/null && 
 tv input keyevent KEYCODE_BACK >/dev/null
 sleep 1
 devgrep "Bound services|Enabled services" dumpsys accessibility
-# Fire OS names a bound service by its label ("Plume: Home button"), not by its package: look for the name.
-if tv dumpsys accessibility | grep 'Bound services' | grep -qi plume; then PLUME_BOUND=yes; else PLUME_BOUND=no; fi
-note "Plume's Home button service is bound: $PLUME_BOUND"
-gist "Plume's Home button service bound: $PLUME_BOUND"
+ACC=$(tv dumpsys accessibility)
+case $(tv settings get secure enabled_accessibility_services) in *dev.plume/*) PLUME_SET=yes ;; *) PLUME_SET=no ;; esac
+if printf '%s\n' "$ACC" | grep -q 'Bound services'; then
+  # Fire OS names a bound service by its label ("Plume: Home button"), not by its package: look for the name.
+  if printf '%s\n' "$ACC" | grep 'Bound services' | grep -qi plume; then PLUME_BOUND=yes; else PLUME_BOUND=no; fi
+else
+  PLUME_BOUND=unknown # Fire OS 7.7.1.7 prints no "Bound services" line
+  note "--- This Android's dumpsys has no 'Bound services' line. First lines of what it prints instead:"
+  printf '%s\n' "$ACC" | head -40 | redact | tee -a "$OUT"
+fi
+# "On" is what the steps below act on: bound if the TV says so; else, when it does not say, switched on in settings.
+if [ "$PLUME_BOUND" = yes ] || { [ "$PLUME_BOUND" = unknown ] && [ "$PLUME_SET" = yes ]; }; then PLUME_ON=yes; else PLUME_ON=no; fi
+note "Plume's Home button service: switched on in Android's settings: $PLUME_SET; bound, as dumpsys says: $PLUME_BOUND"
+gist "Plume's Home button service: switched on in settings: $PLUME_SET; bound (dumpsys): $PLUME_BOUND"
 
 # --- 4. Home role ---------------------------------------------------------------------------------
 section "4. Who handles Home, and what limits launching an app after Home"
@@ -158,7 +168,7 @@ sleep 1
 
 watch() { # $1 = label, $2 = samples (default 24); samples the foreground activity on the TV, 4 times a second
   printf '\n--- %s: focused window every 0.25 s (uptime seconds, activity)\n' "$1" >>"$OUT"
-  printf 'MARK %s %s\n' "$1" "$(tv date '+%m-%d %H:%M:%S')" >>"$TMP/marks.txt"
+  printf 'MARK %s %s\n' "$1" "$(tv date +%H:%M:%S)" >>"$TMP/marks.txt"
   adb -s "$D" shell 'i=0; while [ $i -lt '"${2:-24}"' ]; do echo "$(cut -d" " -f1 /proc/uptime) $(dumpsys window 2>/dev/null | grep -m1 mCurrentFocus | sed "s/^ *//")"; i=$((i+1)); sleep 0.25; done' 2>&1 \
     | tr -d '\r' | awk '{ line=$0; sub(/^[^ ]+ /,"",line); if (line!=prev) print; prev=line }' | redact | tee -a "$OUT"
 }
@@ -179,11 +189,12 @@ step() { # $1 = label, $2 = instruction, $3 = samples (default 24, so 5 seconds 
   gist "$1: ${FROM:-unknown} -> ${TO:-unknown}"
 }
 
-step "HOME short press" "Get ready to press HOME on the REMOTE (short press, one time). Press Enter, then press the button."
+step "HOME short press" "Get ready to press HOME on the REMOTE (short press, one time). Press Enter, then press the button." 40
 step "HOME long press"  "Get ready to LONG-press HOME on the remote (hold about 2 seconds). Press Enter, then do it."
-step "HOME double press" "Get ready to press HOME TWICE quickly. Press Enter, then do it."
-if [ "$PLUME_BOUND" = yes ]; then
-  note "(Skipping HOME on Amazon's own home: with Plume's Home button on, Amazon's home never stays on screen.)"
+step "HOME double press" "Get ready to press HOME TWICE quickly. Press Enter, then do it." 40
+if [ "$PLUME_ON" = yes ]; then
+  # Plume's own home is in front now: the common case, and one where Plume's jump may not happen (see HomeWatch).
+  step "HOME from Plume's home" "Plume is on screen. Get ready to press HOME once, then wait 10 seconds without touching anything. Press Enter, then do it." 44
 else
   step "HOME again on Amazon's home" "Get ready to press HOME, wait 2 seconds on Amazon's own home screen without opening anything, then press HOME again. Press Enter, then do it."
 fi
@@ -206,30 +217,39 @@ cat "$TMP/marks.txt" 2>/dev/null | tee -a "$OUT"
 grep -E 'cat=\[android\.intent\.category\.HOME\]|HomeActivity|HudActivity|quicksettings|KeyPolicy|handleShortPressOnHome|handleLongPressOnHome|KeyEventDispatcher|AccessibilityManagerService|Background activity start|callingUidHasAnyVisibleWindow|A11yAuthorizer|am_new_intent|resumed_activity|resume_activity|app-switch|Displayed .*(launcher|tahoe|plume)' "$TMP/log.txt" \
   | head -400 | redact | tee -a "$OUT"
 
-# For each Home step: when Android started the Home launch, when Amazon's home came to the front, when Plume did.
-lag() { # $1 = HH:MM:SS the step started at (on the TV's clock)
-  awk -v s="$1" '
+# For each Home step: when Android started the Home launch, when Amazon's home came to the front, when Plume asked
+# for its home, and when Plume came to the front. Android holds a launch back for about 5 s after Home.
+lag() { # $1 = HH:MM:SS the step started at (on the TV's clock), $2 = HH:MM:SS the next step started at (or empty)
+  awk -v s="$1" -v e="$2" '
     function ms(t,  a) { split(t, a, /[:.]/); return ((a[1] * 60 + a[2]) * 60 + a[3]) * 1000 + a[4] }
-    BEGIN { lo = ms(s ".000"); hi = lo + 9000 }
+    BEGIN { lo = ms(s ".000"); hi = lo + 25000; if (e != "" && ms(e ".000") < hi) hi = ms(e ".000") }
     { t = ms($2); if (t < lo || t > hi) next }
-    h == "" && /cat=\[android\.intent\.category\.HOME\]/ { h = t }
+    h == "" && /cat=\[android\.intent\.category\.HOME\]/ && !/cmp=dev\.plume/ { h = t }
     h != "" && a == "" && /(resumed_activity|resume_activity).*(amazon\.tv\.launcher|firehomestarter|firelauncher)/ { a = t }
+    h != "" && q == "" && /START u0 .*cmp=dev\.plume.*from uid/ { q = t }
     h != "" && p == "" && /(resumed_activity|resume_activity).*dev\.plume/ { p = t }
     END {
       if (h == "") { print "no Home launch in the log"; exit }
       r = "Home launch seen"
       if (a != "") r = r "; Amazon home in front " (a - h) " ms later"
+      if (q != "") r = r "; Plume asked to start " (q - h) " ms after Home"; else r = r "; Plume never asked to start"
       if (p != "") r = r "; Plume in front " (p - h) " ms after Home" (a != "" ? " (Amazon home visible about " (p - a) " ms)" : "")
       else r = r "; Plume did not come to the front"
       print r
     }' "$TMP/log.txt"
 }
+report_lag() { # $1 = a line of marks.txt, $2 = the time of the next mark (or empty)
+  l=${1#MARK }; t=${l##* }; l=${l% *}
+  case $l in HOME*) r=$(lag "$t" "$2"); note "$l: $r"; gist "$l: $r" ;; esac
+}
 section "7b. Timing, from the log (milliseconds on the TV's clock)"
 if [ -s "$TMP/marks.txt" ]; then
+  prev=
   while IFS= read -r m; do
-    l=${m#MARK }; t=${l##* }; l=${l% *}; l=${l% *}
-    case $l in HOME*) r=$(lag "$t"); note "$l: $r"; gist "$l: $r" ;; esac
+    [ -n "$prev" ] && report_lag "$prev" "${m##* }"
+    prev=$m
   done <"$TMP/marks.txt"
+  [ -n "$prev" ] && report_lag "$prev" ""
 fi
 
 # --- 8. Plume, if present -------------------------------------------------------------------------
@@ -244,7 +264,7 @@ if tv pm list packages dev.plume | grep -q "package:dev.plume"; then
 fi
 
 # --- 9. one check by eye ----------------------------------------------------------------------------
-if [ "$PLUME_BOUND" = yes ] && [ $NOPROMPT -eq 0 ]; then
+if [ "$PLUME_ON" = yes ] && [ $NOPROMPT -eq 0 ]; then
   section "9. One check on Amazon's Network status screen"
   note "Another Fire TV launcher (dumbtv) reported that on Fire OS 8, while an accessibility service is on, Amazon's"
   note "Network status screen shows no highlighted button, so Advanced and Run Speed Test can't be reached."
