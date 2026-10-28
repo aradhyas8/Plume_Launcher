@@ -238,4 +238,11 @@
     <string name="bottom_row">Rangée du bas</string>
     <string name="automatic">Automatique</string>
     <string name="fire_os_no_input">Fire TV n\'a pas laissé Plume changer d\'entrée. Maintenez Accueil et choisissez Entrées.</string>
+    <string name="wp_dim">Assombrissement</string>
+    <string name="dim_auto">Auto</string>
+    <string name="dim_none">Aucun</string>
+    <string name="dim_light">Léger</string>
+    <string name="dim_medium">Moyen</string>
+    <string name="dim_strong">Fort</string>
+    <string name="help_wp_dim">Le noir posé sur l\'image Bing en mode sombre, pour que l\'heure, les icônes et les cartes restent lisibles. Auto regarde chaque image : une image claire reçoit plus de noir, une image très sombre est un peu éclaircie.</string>
 </resources>
