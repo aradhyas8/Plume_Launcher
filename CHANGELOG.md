@@ -17,6 +17,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 ## Unreleased
 
 - **Darkening.** In dark mode, Plume lays black over the Bing picture. Select **Plume settings → Appearance → Darkening**. Choose Auto, None, Light, Medium or Strong. Auto gives a bright picture more black and lifts a very dark one a little. **Medium** is what Plume did before.
+- **Edit the top bar.** Hold **OK** on an icon at the top of the home screen. Select **Move**, **Hide** or **Add icon**. In **Move**, press Left or Right to slide the icon. Press **OK** to place it. Press Back to cancel. **Add icon** shows the icons that you hid. **Plume settings** stays on the bar, so you can always bring the icons back.
 - Plume does not close when a theme change arrives while a picture or the apps list is loading, or when the screen saver ends.
 - Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
 - **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.

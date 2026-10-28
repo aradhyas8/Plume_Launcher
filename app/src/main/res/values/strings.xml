@@ -106,6 +106,11 @@
     <string name="pin_forgot">Forgot it? Android Settings → Apps → Plume → Clear data removes the lock, along with your layout and settings.</string>
     <string name="tip_move">Tip: hold OK on an app to rearrange the row</string>
     <string name="open">Open</string>
+    <string name="hide">Hide</string>
+    <string name="add_icon">Add icon</string>
+    <string name="icon_hidden">Hidden. To bring it back, hold OK on an icon and select Add icon.</string>
+    <string name="shows_with_input">Shows when the TV has an input</string>
+    <string name="top_bar_hint">Hold OK on a top-bar icon to move, hide or add icons.</string>
     <string name="move">Move</string>
     <string name="remove_from_row">Remove from row</string>
     <string name="removed_from_row">Removed from the row. It\'s still in All apps.</string>

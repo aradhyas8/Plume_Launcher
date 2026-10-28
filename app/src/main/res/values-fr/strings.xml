@@ -95,6 +95,11 @@
     <string name="pin_forgot">Oublié ? Paramètres Android → Applis → Plume → Effacer les données supprime le verrou, ainsi que votre disposition et vos paramètres.</string>
     <string name="tip_move">Astuce : maintenez OK sur une appli pour réorganiser la ligne</string>
     <string name="open">Ouvrir</string>
+    <string name="hide">Masquer</string>
+    <string name="add_icon">Ajouter une icône</string>
+    <string name="icon_hidden">Masquée. Pour la remettre, maintenez OK sur une icône et choisissez Ajouter une icône.</string>
+    <string name="shows_with_input">S\'affiche quand la TV a une entrée</string>
+    <string name="top_bar_hint">Maintenez OK sur une icône de la barre du haut pour la déplacer, la masquer ou en ajouter.</string>
     <string name="move">Déplacer</string>
     <string name="remove_from_row">Retirer de la ligne</string>
     <string name="removed_from_row">Retirée de la ligne. Elle reste dans Toutes les applis.</string>
