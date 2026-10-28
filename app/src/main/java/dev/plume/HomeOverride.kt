@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -77,7 +78,9 @@ class HomeOverride : AccessibilityService() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val watch = HomeWatch()
+    private val watch = HomeWatch { pkg, cls -> stockHome(pkg, cls) }
+    private var stock = emptySet<Pair<String, String>>()
+    private var stockAt = -STOCK_TTL_MS
     private val jump = Runnable { goHome() }
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
@@ -85,6 +88,20 @@ class HomeOverride : AccessibilityService() {
         val pkg = e.packageName?.toString() ?: return
         handler.removeCallbacks(jump) // any other window opening means Home wasn't where we were going
         watch.opened(pkg, e.className?.toString(), SystemClock.uptimeMillis())?.let { handler.postDelayed(jump, it) }
+    }
+
+    /** The system launcher's home screens, asked of the system at most every few seconds: Android sends no notice when they change. */
+    private fun stockHome(pkg: String, cls: String): Boolean {
+        val now = SystemClock.uptimeMillis()
+        if (now - stockAt >= STOCK_TTL_MS) {
+            stockAt = now
+            val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            stock = stockHomes(packageManager.queryIntentActivities(home, 0).map {
+                val a = it.activityInfo
+                HomeEntry(a.packageName, a.name, a.targetActivity, a.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0, it.priority)
+            }, packageName)
+        }
+        return (pkg to cls) in stock
     }
 
     // Marked as Home so the setup check can tell it from Plume being opened from the apps list.
@@ -97,6 +114,7 @@ class HomeOverride : AccessibilityService() {
         var running: HomeOverride? = null
             private set
         private const val LONG_PRESS_MS = 500L
+        private const val STOCK_TTL_MS = 5_000L
 
         /** Fire OS keeps Amazon's home and ignores the home role; Plume can only cover it (see [HomeWatch]). */
         fun fireTv(c: Context) = c.packageManager.hasSystemFeature("amazon.hardware.fire_tv")
