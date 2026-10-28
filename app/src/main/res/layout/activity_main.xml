@@ -69,6 +69,20 @@
                     android:maxLines="1"
                     android:textSize="15sp"
                     android:visibility="gone" />
+
+                <!-- "Featured: a show". Only with the Shows wallpaper: the show whose picture is on screen. -->
+                <TextView
+                    android:id="@+id/featured"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:alpha="0.7"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif"
+                    android:maxLines="1"
+                    android:maxWidth="560dp"
+                    android:textSize="15sp"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <ImageView
