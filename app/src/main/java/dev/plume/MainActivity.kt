@@ -1300,10 +1300,15 @@ class MainActivity : Activity() {
 
     /** [FETCH_OK] when the picture is on disk now, [FETCH_DEAD] when it will never do (not found, not wide, too big), [FETCH_NETWORK] when it failed this time. */
     private fun fetchShow(p: Prog): Int = try {
-        val bytes = openStream(p.image!!).use { it.readBytes() }
+        val bytes = openStream(p.image!!).use { input -> // stops just past SHOW_MAX: a bigger picture is not read into memory
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            while (out.size() <= SHOW_MAX) { val n = input.read(buf); if (n < 0) break; out.write(buf, 0, n) }
+            out.toByteArray()
+        }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        if (bytes.size > 12_000_000 || !ShowsWall.fits(bounds.outWidth, bounds.outHeight)) {
+        if (bytes.size > SHOW_MAX || !ShowsWall.fits(bounds.outWidth, bounds.outHeight)) {
             FETCH_DEAD
         } else {
             val part = File(filesDir, "shows.part")
@@ -1706,7 +1711,8 @@ class MainActivity : Activity() {
             },
             R.string.wp_dim to Triple(getString(R.string.wp_dim), getString(DIMS.getValue(wpDim()))) { steps[R.string.wp_dim]!!(1) },
             R.string.folder_photo_changes to Triple(getString(R.string.folder_photo_changes), getString(PHOTO_EVERY[photoEvery()]!!)) { pickPhotoEvery() },
-            R.string.wp_sources to Triple(getString(R.string.wp_sources), getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) })) { pickWpSources() },
+            R.string.wp_sources to Triple(getString(R.string.wp_sources), // the count queries the channels: only when the Shows wallpaper is on, so the settings do not wait for it
+                if (ShowsWall.CHOICE in listOf(currentWallpaper(false), currentWallpaper(true))) getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) else "") { pickWpSources() },
             R.string.sort_apps to Triple(getString(R.string.sort_apps), if (sort == "manual") getString(R.string.manual) else getString(R.string.most_used)) {
                 prefs.edit().putString("sort", if (sort == "manual") "usage" else "manual").apply()
                 renderApps()
@@ -1796,7 +1802,7 @@ class MainActivity : Activity() {
         val photo = walls.any { !it.startsWith("res:") && !it.startsWith("plain:") }
         val folder = walls.any { it.startsWith("folder:") }
         val shows = walls.any { it == ShowsWall.CHOICE }
-        val dimmed = shows || walls.any { it == Bing.CHOICE } // the darkening is for Bing's pictures and the shows'
+        val dimmed = currentWallpaper(true).let { it == Bing.CHOICE || it == ShowsWall.CHOICE } // the darkening is for the dark Bing or shows picture only
         // In the order things sit on the home screen, top to bottom, then what isn't on it.
         val sections = listOf(
             Triple(R.string.section_appearance, "${rows[R.string.theme]!!.second} · ${wallpaperName(currentWallpaper(dark))}",
@@ -4359,6 +4365,7 @@ class MainActivity : Activity() {
         const val FETCH_OK = 0
         const val FETCH_DEAD = 1
         const val FETCH_NETWORK = 2
+        const val SHOW_MAX = 12_000_000 // bytes: a bigger show picture is left out
         /** "Darkening" of a Bing or shows picture in dark mode: Auto, or a percentage of black. Medium is what Plume always did for Bing. */
         val DIMS = linkedMapOf("auto" to R.string.dim_auto, "0" to R.string.dim_none, "20" to R.string.dim_light, "45" to R.string.dim_medium, "65" to R.string.dim_strong)
         const val PIN_TRIES = 5 // wrong PINs before a 30 s wait

@@ -291,7 +291,7 @@
     <string name="wp_sources">Wallpaper from</string>
     <string name="wp_usable">%1$d/%2$d</string>
     <string name="featured_now">Featured: %1$s</string>
-    <string name="help_wp_sources">The sources whose pictures become the wallpaper: Android TV Watch Next, or a channel of an app. Only wide pictures count (posters and squares are left out), and one that cannot be fetched is passed over. The wallpaper changes as often as a folder of photos does.</string>
+    <string name="help_wp_sources">The sources whose pictures become the wallpaper: Android TV Watch Next, or a channel of an app. Plume uses only wide pictures. It skips posters, squares and pictures that it cannot get. The wallpaper changes as often as a folder of photos does.</string>
     <string name="wp_dim">Darkening</string>
     <string name="dim_auto">Auto</string>
     <string name="dim_none">None</string>
