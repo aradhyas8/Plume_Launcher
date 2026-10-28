@@ -102,6 +102,7 @@ internal class GlassLayer(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val matrix = Matrix()
     private val visible = Rect()
+    private val row = Rect()
     private val rect = RectF()
     private val at = IntArray(2)
     private var shader: BitmapShader? = null
@@ -152,6 +153,10 @@ internal class GlassLayer(context: Context) : View(context) {
         for (t in tiles) {
             val v = t.view.get() ?: continue
             if (!v.isShown || !v.getGlobalVisibleRect(visible)) continue
+            // A row scroller doesn't clip its children (room for the focus lift), so the visible rect runs past
+            // its edge: cut it there, or the next tile's frost shows as a grey stub at the screen edge.
+            val scroller = generateSequence(v.parent) { it.parent }.firstOrNull { it is SnapScrollView } as? View
+            if (scroller != null && (!scroller.getGlobalVisibleRect(row) || !visible.intersect(row))) continue
             v.getLocationInWindow(at)
             // Where the tile is drawn, lift included; what a scroll view cuts off of it stays cut off.
             rect.set(at[0] - ox.toFloat(), at[1] - oy.toFloat(), at[0] - ox + v.width * v.scaleX, at[1] - oy + v.height * v.scaleY)

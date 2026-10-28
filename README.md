@@ -123,6 +123,7 @@ Android 13 and newer grey out the Accessibility switch for apps installed outsid
 | Update Plume | **Plume settings → Updates** |
 | Change what a remote key does | **Plume settings → Remote & Home button → Remote keys** |
 | Lock the layout with a PIN | **Plume settings → Lock layout** |
+| Move, hide or add a top-bar icon | Hold **OK** on an icon at the top of the home screen, then select **Move**, **Hide** or **Add icon** |
 | Open the Google TV dashboard | Hold the **Home** button |
 
 ### Remote keys
