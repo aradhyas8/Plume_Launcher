@@ -122,15 +122,17 @@ devgrep "mCurrentFocus|mFocusedApp" dumpsys window
 adb -s "$D" exec-out screencap -p >"$DIR/accessibility-page.png" 2>/dev/null && note "screenshot: $DIR/accessibility-page.png (look at it before you share it; it can show your account name)"
 tv input keyevent KEYCODE_BACK >/dev/null
 sleep 1
-devgrep "Bound services|Enabled services" dumpsys accessibility
+devgrep "Bound services|Enabled services|^ *services:\{" dumpsys accessibility
 ACC=$(tv dumpsys accessibility)
 case $(tv settings get secure enabled_accessibility_services) in *dev.plume/*) PLUME_SET=yes ;; *) PLUME_SET=no ;; esac
-if printf '%s\n' "$ACC" | grep -q 'Bound services'; then
+# The bound services are on a line that starts "Bound services:{" (Android 10 and later) or "services:{" (Fire OS 7, Android 9).
+BOUNDLINE='Bound services|^ *services:\{'
+if printf '%s\n' "$ACC" | grep -qE "$BOUNDLINE"; then
   # Fire OS names a bound service by its label ("Plume: Home button"), not by its package: look for the name.
-  if printf '%s\n' "$ACC" | grep 'Bound services' | grep -qi plume; then PLUME_BOUND=yes; else PLUME_BOUND=no; fi
+  if printf '%s\n' "$ACC" | grep -E "$BOUNDLINE" | grep -qi plume; then PLUME_BOUND=yes; else PLUME_BOUND=no; fi
 else
-  PLUME_BOUND=unknown # Fire OS 7.7.1.7 prints no "Bound services" line
-  note "--- This Android's dumpsys has no 'Bound services' line. First lines of what it prints instead:"
+  PLUME_BOUND=unknown # this Android's dumpsys has no line of bound services
+  note "--- This Android's dumpsys has no line of bound services. First lines of what it prints instead:"
   printf '%s\n' "$ACC" | head -40 | redact | tee -a "$OUT"
 fi
 # "On" is what the steps below act on: bound if the TV says so; else, when it does not say, switched on in settings.
@@ -257,7 +259,7 @@ if tv pm list packages dev.plume | grep -q "package:dev.plume"; then
   section "8. Plume on this TV"
   devgrep "versionName|installerPackageName|packageSource|WRITE_SECURE_SETTINGS" dumpsys package dev.plume
   devrun appops get dev.plume ACCESS_RESTRICTED_SETTINGS
-  devgrep "Bound services|Enabled services" dumpsys accessibility
+  devgrep "Bound services|Enabled services|^ *services:\{" dumpsys accessibility
   note "--- Is Plume exempt from Doze? (a line with Plume = yes)"
   devgrep "plume" dumpsys deviceidle whitelist
   gist "Plume $(tv dumpsys package dev.plume | grep -m1 versionName | sed 's/^ *//') installed"
