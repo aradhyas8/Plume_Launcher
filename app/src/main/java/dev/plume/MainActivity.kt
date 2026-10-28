@@ -836,8 +836,8 @@ class MainActivity : Activity() {
         appRow.getChildAt(0)?.requestFocus()
     }
 
-    /** Whether [v] is a tile of the apps row or a Continue watching card that is on screen. */
-    private fun inHomeRows(v: View?) = v != null && v.isAttachedToWindow && v.isShown &&
+    /** Whether [v] is a tile of the apps row or a Continue watching card. Not isShown(): a stopped screen is hidden, and Home runs while it is. */
+    private fun inHomeRows(v: View?) = v != null && v.isAttachedToWindow &&
         generateSequence(v as View?) { it.parent as? View }.any { it === appRow || it === watchRow }
 
     @Deprecated("Home screen: Back only closes overlays")
