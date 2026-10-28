@@ -191,6 +191,11 @@
     <string name="install_update">Installer %1$s</string>
     <string name="row_position">Position de la ligne d\'applis</string>
     <string name="show_row">Afficher la ligne</string>
+    <string name="cards_rows">Rangées</string>
+    <string name="cards_mixed">Mélangées</string>
+    <string name="cards_title">Par titre</string>
+    <string name="cards_each">Par chaîne</string>
+    <string name="help_cards_rows">Mélangées met les séries de toutes les sources dans une rangée. Par titre garde une rangée : sélectionnez son titre et appuyez sur Gauche ou Droite pour changer de source. Par chaîne donne à chaque source sa propre rangée : Bas ou Haut sur une carte change de rangée.</string>
     <string name="on_down">Avec Bas</string>
     <string name="apps_when_hidden">Ligne d\'applis si masquée</string>
     <string name="stays_put">Ne bouge pas</string>

@@ -115,6 +115,10 @@ internal class GlassLayer(context: Context) : View(context) {
         if (tiles.none { it.view.get() === v }) tiles += Tile(WeakReference(v), radius)
     }
 
+    fun remove(v: View) {
+        tiles.removeAll { it.view.get().let { w -> w == null || w === v } }
+    }
+
     /** The blurred wallpaper, or null for none (a plain background has nothing to blur). */
     fun setBlur(px: IntArray?) {
         blur = px?.let { Bitmap.createBitmap(it, GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
