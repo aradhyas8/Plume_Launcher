@@ -176,7 +176,8 @@ watch() { # $1 = label, $2 = samples (default 24); samples the foreground activi
 }
 
 # The app in front, as package/activity ("com.amazon.tv.launcher/.ui.HomeActivity_vNext"); empty when the TV can't say.
-front() { tv dumpsys activity activities | grep -m1 -E 'mResumedActivity|topResumedActivity' | sed -n 's/.* \([A-Za-z0-9_.]*\/[A-Za-z0-9_.$]*\)[ }].*/\1/p'; }
+front1() { tv dumpsys activity activities | grep -m1 -E 'mResumedActivity|topResumedActivity' | sed -n 's/.* \([A-Za-z0-9_.]*\/[A-Za-z0-9_.$]*\)[ }].*/\1/p'; }
+front() { f=$(front1); [ -n "$f" ] || { sleep 1; f=$(front1); }; printf '%s\n' "$f"; } # empty while the TV changes screen: ask again once
 
 step() { # $1 = label, $2 = instruction, $3 = samples (default 24, so 5 seconds to press)
   wait_step "$2"
@@ -217,7 +218,7 @@ cat "$TMP/marks.txt" 2>/dev/null | tee -a "$OUT"
 # Also kept: the activity-resume events (their time stamps tell how long Home took), a launch Android refused
 # ("Background activity start ... callingUidHasAnyVisibleWindow"), and a service Fire OS refused to bind (A11yAuthorizer).
 grep -E 'cat=\[android\.intent\.category\.HOME\]|HomeActivity|HudActivity|quicksettings|KeyPolicy|handleShortPressOnHome|handleLongPressOnHome|KeyEventDispatcher|AccessibilityManagerService|Background activity start|callingUidHasAnyVisibleWindow|A11yAuthorizer|am_new_intent|resumed_activity|resume_activity|app-switch|Displayed .*(launcher|tahoe|plume)' "$TMP/log.txt" \
-  | head -400 | redact | tee -a "$OUT"
+  | grep -v ' I/Vlog' | head -400 | redact | tee -a "$OUT"
 
 # For each Home step: when Android started the Home launch, when Amazon's home came to the front, when Plume asked
 # for its home, and when Plume came to the front. Android holds a launch back for about 5 s after Home.
@@ -262,20 +263,22 @@ if tv pm list packages dev.plume | grep -q "package:dev.plume"; then
   devgrep "Bound services|Enabled services|^ *services:\{" dumpsys accessibility
   note "--- Is Plume exempt from Doze? (a line with Plume = yes)"
   devgrep "plume" dumpsys deviceidle whitelist
-  gist "Plume $(tv dumpsys package dev.plume | grep -m1 versionName | sed 's/^ *//') installed"
+  for _try in 1 2; do PLV=$(tv dumpsys package dev.plume | grep -m1 versionName | sed 's/^ *//'); [ -n "$PLV" ] && break; sleep 1; done
+  gist "Plume ${PLV:-version not read} installed"
 fi
 
 # --- 9. one check by eye ----------------------------------------------------------------------------
-if [ "$PLUME_ON" = yes ] && [ $NOPROMPT -eq 0 ]; then
+if [ $NOPROMPT -eq 0 ]; then
   section "9. One check on Amazon's Network status screen"
+  note "(Asked in every run, so that the answers with Plume's Home button on and off can be compared. It is on: $PLUME_ON.)"
   note "Another Fire TV launcher (dumbtv) reported that on Fire OS 8, while an accessibility service is on, Amazon's"
   note "Network status screen shows no highlighted button, so Advanced and Run Speed Test can't be reached."
   note "On the TV: Settings > Network > your network > Network status. Is one button highlighted?"
   printf '    y = yes, n = no, anything else = skip: '
   read -r ans </dev/tty || ans=
   case $ans in
-    y|Y) note "Network status: a button is highlighted."; gist "Network status screen: a button is highlighted" ;;
-    n|N) note "Network status: NO button is highlighted."; gist "Network status screen: NO button highlighted" ;;
+    y|Y) note "Network status: a button is highlighted."; gist "Network status screen: a button is highlighted (Plume's service on: $PLUME_ON)" ;;
+    n|N) note "Network status: NO button is highlighted."; gist "Network status screen: NO button highlighted (Plume's service on: $PLUME_ON)" ;;
     *)   note "Network status: not checked." ;;
   esac
 fi
