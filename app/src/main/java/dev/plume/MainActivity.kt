@@ -292,6 +292,7 @@ class MainActivity : Activity() {
     private lateinit var glass: GlassLayer // paints the blurred wallpaper under glass tiles
 
     private var resumed = false
+    private var hidden = false // another app covered Plume: set when it stops, cleared when it is back in front
     private val refreshIfDirty = Runnable { if (appsDirty && !editing) refreshApps() } // not while a tile is being moved: onResume catches up
 
     private val packageReceiver = object : BroadcastReceiver() {
@@ -399,6 +400,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        hidden = false
         openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
         openedFrom = null
         ensureHomeService()
@@ -457,6 +459,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        hidden = true
         unlockedUntil = 0L // leaving the home screen locks it again (onPause would also fire for permission dialogs)
         Remap.learn = null // never keep swallowing keys for a page that's no longer on screen
         if (homeTest != 0) leftDuringTest = true
@@ -819,12 +822,23 @@ class MainActivity : Activity() {
             homeTest = 0
             return donePopup()
         }
+        val cameBack = hidden // an app covered Plume: this Home press leaves that app
+        val overlay = editing || settingsScrim.visibility == View.VISIBLE || allApps.visibility == View.VISIBLE
         if (editing) endEdit()
         if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
         if (allApps.visibility == View.VISIBLE) closeAllApps()
+        // Home from an app comes back to the tile or card it was opened from: focus stayed there, so leave it and the scroll alone.
+        // Opened from All apps, Settings or edit mode, the overlay is closed and the row starts again. A tile that was uninstalled
+        // meanwhile is dropped when the row is rebuilt in onResume, and focus moves to the first tile then. Home on Plume itself
+        // (it was not covered) always starts again at the first tile.
+        if (cameBack && !overlay && inHomeRows(currentFocus)) return
         watchScroll.scrollTo(0, 0)
         appRow.getChildAt(0)?.requestFocus()
     }
+
+    /** Whether [v] is a tile of the apps row or a Continue watching card that is on screen. */
+    private fun inHomeRows(v: View?) = v != null && v.isAttachedToWindow && v.isShown &&
+        generateSequence(v as View?) { it.parent as? View }.any { it === appRow || it === watchRow }
 
     @Deprecated("Home screen: Back only closes overlays")
     override fun onBackPressed() {
