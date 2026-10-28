@@ -24,6 +24,18 @@
     </issue>
 
     <issue
+        id="GestureBackNavigation"
+        message="If intercepting back events, this should be handled through the registration of callbacks; see https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture"
+        errorLine1="            e.keyCode == KeyEvent.KEYCODE_BACK -&gt; if (e.action == KeyEvent.ACTION_UP) endTopMove(false)"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/plume/MainActivity.kt"
+            line="2934"
+            column="26"/>
+    </issue>
+
+
+    <issue
         id="ApplySharedPref"
         message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
         errorLine1="                prefs.edit().putBoolean(&quot;smooth_volume&quot;, !prefs.getBoolean(&quot;smooth_volume&quot;, false)).commit()"
