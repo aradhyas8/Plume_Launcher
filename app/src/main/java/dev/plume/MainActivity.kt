@@ -3741,16 +3741,24 @@ class MainActivity : Activity() {
                 it.setSpan(ForegroundColorSpan(Color.TRANSPARENT), it.length - 1, it.length, 0)
             }
         }
+        ui.removeCallbacks(swapTitle)
         watchTitle.animate().cancel()
         if (!fade || watchTitle.text.toString() == text.toString()) {
             watchTitle.text = text
             return
         }
-        val shown = if (watchTitle.isFocused) 1f else titleAlpha
-        watchTitle.animate().alpha(0f).setDuration(SWAP_OUT_MS).withEndAction {
-            watchTitle.text = text
-            watchTitle.animate().alpha(shown).setDuration(SWAP_IN_MS).start()
-        }.start()
+        // Not withEndAction: another animation on the title (the row being placed, the focus) cancels it, and then the text never changed.
+        titleNext = text
+        watchTitle.animate().alpha(0f).setDuration(SWAP_OUT_MS).start()
+        ui.postDelayed(swapTitle, SWAP_OUT_MS)
+    }
+
+    private var titleNext: CharSequence = ""
+
+    private val swapTitle = Runnable {
+        watchTitle.animate().cancel()
+        watchTitle.text = titleNext
+        watchTitle.animate().alpha(if (watchTitle.isFocused) 1f else titleAlpha).setDuration(SWAP_IN_MS).start()
     }
 
     private fun hideKey(pkg: String?, title: String) = "$pkg/$title"
