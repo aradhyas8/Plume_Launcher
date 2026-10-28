@@ -196,6 +196,8 @@ internal fun hdmiIcon(name: String, named: Boolean): String {
         "xbox" in n -> "xbox"
         "nintendo" in n || "switch" in n -> "nintendoswitch"
         "apple tv" in n || "appletv" in n -> "appletv"
+        "shield" in n -> "nvidia"
+        "chromecast" in n || "google tv" in n -> "chromecast"
         SET_TOP_WORDS.any { it in n } -> "settop"
         named -> "playback"
         else -> "hdmi"
@@ -307,6 +309,7 @@ class MainActivity : Activity() {
     private val net = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(n: Network, caps: NetworkCapabilities) {
             ui.post {
+                if (isDestroyed) return@post
                 showNet(caps)
                 // Online again (e.g. Wi-Fi coming up after boot): fetch any posters that failed meanwhile.
                 if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) retryPosters()
@@ -475,6 +478,7 @@ class MainActivity : Activity() {
         applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
         getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
         upload?.stop()
+        ui.removeCallbacksAndMessages(null) // the clocks and the posts still queued must not use the pools below
         io.shutdownNow()
         posterIo.shutdownNow()
         super.onDestroy()
@@ -1057,6 +1061,7 @@ class MainActivity : Activity() {
                 }
             }
             ui.post {
+                if (isDestroyed) return@post
                 glass.setBlur(blur)
                 glassSurfaces.forEach { it.get()?.setBlur(glass.blur) } // menus and cards that are open, and the panel
                 if (settingsScrim.visibility == View.VISIBLE) showPanelGlass() // a wallpaper picked from the panel itself
@@ -1091,8 +1096,33 @@ class MainActivity : Activity() {
             }
         } ?: return null
         // Bing's pictures are often bright daylight, which fights true black: dim them in dark mode.
-        if (dark && choice == Bing.CHOICE) Canvas(bmp).drawColor(Color.argb(DARK_DIM, 0, 0, 0))
+        if (dark && choice == Bing.CHOICE) tonePicture(bmp)
         return bmp
+    }
+
+    /** "wp_dim": "auto" or the percentage of black laid over a picture in dark mode. */
+    private fun wpDim() = prefs.getString("wp_dim", "auto")!!.takeIf { it in DIMS } ?: "auto"
+
+    /**
+     * Brings a Bing picture to a pleasant brightness in dark mode. A fixed strength lays that much black over it.
+     * Auto looks at the picture: a bright one gets black, and a very dark one, which the fades would leave almost
+     * invisible, is lifted a little (the shadows only: lights stay where they are).
+     */
+    private fun tonePicture(bmp: Bitmap) {
+        val d = wpDim()
+        if (d != "auto") {
+            val alpha = d.toInt() * 255 / 100
+            if (alpha > 0) Canvas(bmp).drawColor(Color.argb(alpha, 0, 0, 0))
+            return
+        }
+        val small = Bitmap.createScaledBitmap(bmp, 48, 27, true)
+        val px = IntArray(48 * 27).also { small.getPixels(it, 0, 48, 0, 0, 48, 27) }
+        small.recycle()
+        val mean = Dimming.meanLuma(px)
+        val black = Dimming.autoDim(mean)
+        val lift = Dimming.autoLift(mean)
+        if (black > 0) Canvas(bmp).drawColor(Color.argb(black, 0, 0, 0))
+        if (lift > 0) Canvas(bmp).drawColor(Color.rgb(lift, lift, lift), PorterDuff.Mode.SCREEN)
     }
 
     // ---------- fades over your own photos ----------
@@ -1353,6 +1383,7 @@ class MainActivity : Activity() {
             UploadServer((1000..9999).random().toString(), File(cacheDir, "upload.tmp")) { file ->
                 val saved = importWallpaper(file, dir) ?: return@UploadServer null
                 ui.post {
+                    if (isDestroyed) return@post
                     setWallpaper(forDark, "file:${saved.name}")
                     status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
                 }
@@ -1497,6 +1528,11 @@ class MainActivity : Activity() {
                 renderApps()
                 renderSettings(R.string.app_names)
             },
+            R.string.wp_dim to { d ->
+                prefs.edit().putString("wp_dim", DIMS.keys.toList().step(wpDim(), d)).apply()
+                loadWallpaper()
+                renderSettings(R.string.wp_dim)
+            },
             R.string.show_row to { d ->
                 prefs.edit().putString("row_show", ROW_SHOW.keys.toList().step(rowShow(), d)).apply()
                 placeRow(animate = false)
@@ -1532,6 +1568,7 @@ class MainActivity : Activity() {
                 prefs.edit().putBoolean("app_anim", !animationsOn()).apply()
                 renderSettings(R.string.app_animations)
             },
+            R.string.wp_dim to Triple(getString(R.string.wp_dim), getString(DIMS.getValue(wpDim()))) { steps[R.string.wp_dim]!!(1) },
             R.string.folder_photo_changes to Triple(getString(R.string.folder_photo_changes), getString(PHOTO_EVERY[photoEvery()]!!)) { pickPhotoEvery() },
             R.string.sort_apps to Triple(getString(R.string.sort_apps), if (sort == "manual") getString(R.string.manual) else getString(R.string.most_used)) {
                 prefs.edit().putString("sort", if (sort == "manual") "usage" else "manual").apply()
@@ -1621,10 +1658,11 @@ class MainActivity : Activity() {
         val walls = listOf(currentWallpaper(false), currentWallpaper(true))
         val photo = walls.any { !it.startsWith("res:") && !it.startsWith("plain:") }
         val folder = walls.any { it.startsWith("folder:") }
+        val dimmed = currentWallpaper(true) == Bing.CHOICE // the darkening is for the dark Bing picture only
         // In the order things sit on the home screen, top to bottom, then what isn't on it.
         val sections = listOf(
             Triple(R.string.section_appearance, "${rows[R.string.theme]!!.second} · ${wallpaperName(currentWallpaper(dark))}",
-                listOfNotNull(R.string.theme, R.string.light_wallpaper, R.string.dark_wallpaper, R.string.fade_top.takeIf { photo },
+                listOfNotNull(R.string.theme, R.string.light_wallpaper, R.string.dark_wallpaper, R.string.wp_dim.takeIf { dimmed }, R.string.fade_top.takeIf { photo },
                     R.string.fade_bottom.takeIf { photo }, R.string.glass, R.string.app_animations,
                     R.string.folder_photo_changes.takeIf { folder })),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${rows[R.string.weather_location]!!.second}",
@@ -2105,6 +2143,7 @@ class MainActivity : Activity() {
                 null
             }
             if (bmp != null) ui.post {
+                if (isDestroyed) return@post
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 setPadding(0, 0, 0, 0)
                 clearColorFilter()
@@ -2176,6 +2215,7 @@ class MainActivity : Activity() {
             }
             val inputs = hdmiInputs()
             ui.post {
+                if (isDestroyed) return@post
                 if (inputs.isNotEmpty() && !prefs.getBoolean("inputs_moved", false)) moveInputsToSources(inputs)
                 apps = list
                 APPS = list
@@ -3256,6 +3296,7 @@ class MainActivity : Activity() {
                 false
             }
             ui.post {
+                if (isDestroyed) return@post
                 downloading = false
                 if (ok) then() else toast(getString(R.string.paintings_failed), long = true)
                 if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.screensaver)
@@ -3297,6 +3338,7 @@ class MainActivity : Activity() {
             }
             if (latest != null) prefs.edit().putString("upd_ver", latest).putLong("upd_time", System.currentTimeMillis()).apply()
             ui.post {
+                if (isDestroyed) return@post
                 checking = false
                 val ver = availableUpdate()
                 if (ver != null && (force || prefs.getString("upd_told", null) != ver)) {
@@ -3413,6 +3455,7 @@ class MainActivity : Activity() {
                 false
             }
             ui.post {
+                if (isDestroyed) return@post
                 if (!ok) {
                     updating = false
                     toast(getString(R.string.update_download_failed), long = true)
@@ -3473,7 +3516,7 @@ class MainActivity : Activity() {
                     .putFloat("wx_temp", now.getDouble("temperature_2m").toFloat())
                     .putInt("wx_code", now.getInt("weather_code"))
                     .putLong("wx_time", System.currentTimeMillis()).apply()
-                ui.post { showWeather() }
+                ui.post { if (!isDestroyed) showWeather() }
             } catch (e: Exception) {
                 android.util.Log.w("TvHome", "weather failed ($e)") // keep the last reading; next tick retries
             }
@@ -3558,6 +3601,7 @@ class MainActivity : Activity() {
                 null
             }
             ui.post {
+                if (isDestroyed) return@post
                 // Only if the page is still open: Back may have left it while the search ran.
                 if (settingsScrim.visibility != View.VISIBLE || findViewById<TextView>(R.id.settingsTitle).text.toString() != getString(R.string.weather_location)) return@post
                 when {
@@ -3612,7 +3656,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
                 emptyList()
             }
-            ui.post { showWatchNext(list) }
+            ui.post { if (!isDestroyed) showWatchNext(list) }
         }
     }
 
@@ -3970,7 +4014,7 @@ class MainActivity : Activity() {
                 loading.remove(uri)
             } ?: return@execute
             posters.put(uri, bmp)
-            ui.post { if (v.tag == uri) v.setImageBitmap(bmp) }
+            ui.post { if (!isDestroyed && v.tag == uri) v.setImageBitmap(bmp) }
         }
     }
 
@@ -4149,7 +4193,7 @@ class MainActivity : Activity() {
             R.string.section_app_row to R.string.help_apps_row, R.string.bottom_row to R.string.help_shows_row,
             R.string.section_screensaver to R.string.help_screensaver, R.string.section_remote_home to R.string.help_remote_home,
             R.string.section_lock to R.string.help_lock,
-            R.string.fade_top to R.string.help_fade_top, R.string.fade_bottom to R.string.help_fade_bottom, R.string.weather_location to R.string.help_location,
+            R.string.wp_dim to R.string.help_wp_dim, R.string.fade_top to R.string.help_fade_top, R.string.fade_bottom to R.string.help_fade_bottom, R.string.weather_location to R.string.help_location,
             R.string.edit_apps_row to R.string.help_rearrange, R.string.apps_in_row to R.string.help_choose_apps,
             R.string.sort_apps to R.string.help_order, R.string.icon_style to R.string.help_icon_style,
             R.string.apps_when_hidden to R.string.help_apps_when_hidden, R.string.row_name to R.string.help_row_name,
@@ -4186,7 +4230,8 @@ class MainActivity : Activity() {
         const val SLIDER_DP = 96 // a slider's width
         const val SLIDER_VALUE_DP = 72 // width of the value beside a slider
         const val BANNER_DIM = 0.3f // black laid over a colour banner at rest, so the selected one stands out
-        const val DARK_DIM = 115 // alpha of the black laid over the Bing picture in dark mode (45%)
+        /** "Darkening" of a Bing picture in dark mode: Auto, or a percentage of black. Medium is what Plume always did. */
+        val DIMS = linkedMapOf("auto" to R.string.dim_auto, "0" to R.string.dim_none, "20" to R.string.dim_light, "45" to R.string.dim_medium, "65" to R.string.dim_strong)
         const val PIN_TRIES = 5 // wrong PINs before a 30 s wait
         const val UNLOCKED_MS = 5 * 60_000L
         const val MEDIA_REQUEST = 3
@@ -4267,6 +4312,8 @@ class MainActivity : Activity() {
             "xbox" to R.drawable.logo_xbox,
             "nintendoswitch" to R.drawable.logo_nintendoswitch,
             "appletv" to R.drawable.logo_appletv,
+            "nvidia" to R.drawable.logo_nvidia,
+            "chromecast" to R.drawable.logo_chromecast,
             "settop" to R.drawable.ic_settop,
             "playback" to R.drawable.ic_playback,
             "hdmi" to R.drawable.ic_hdmi,
