@@ -16,6 +16,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Rows of the shows row.** Select **Plume settings → Shows row → Rows**. **Mixed** puts the shows of every source in one row. It is the default. **By title** keeps one row: select its title and press Left or Right to change the source. **Per channel** gives each source its own row: press Down or Up on a card to change the row. The cards stay in place and change their picture, title and progress.
 - Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
 - **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.
 - **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.

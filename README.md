@@ -116,6 +116,7 @@ Android 13 and newer grey out the Accessibility switch for apps installed outsid
 | Hide a Continue Watching item | Hold **OK** on its card, then **Remove from Continue Watching** |
 | Remove an app from the row | Hold **OK** on it, then **Remove from row** (it stays in *All apps*) |
 | Choose which apps feed Continue Watching | **Plume settings → Shows row → From apps** |
+| Show each source of the shows row on its own | **Plume settings → Shows row → Rows** (see [Rows of the shows row](#rows-of-the-shows-row)) |
 | Pin an app from *All apps* to the front | Open **All apps**, hold **OK** on the app (this also unhides it) |
 | Hide apps from the row | **Plume settings → Apps row → Choose apps** |
 | Show app names always, on focus or never | **Plume settings → Apps row → App names** |
@@ -124,6 +125,12 @@ Android 13 and newer grey out the Accessibility switch for apps installed outsid
 | Change what a remote key does | **Plume settings → Remote & Home button → Remote keys** |
 | Lock the layout with a PIN | **Plume settings → Lock layout** |
 | Open the Google TV dashboard | Hold the **Home** button |
+
+### Rows of the shows row
+
+**Plume settings → Shows row → Rows** has three choices. **Mixed** (the default) puts every source in one row. **By title** keeps one row: push **Down** from the apps to the row's title, then **Left** or **Right** to show another source. **Per channel** gives each source its own row: push **Down** or **Up** on a card to change the row.
+
+The sources are Android TV's Watch Next and every channel that is on in **Plume settings → Shows row → Channels**. In **By title** and **Per channel**, Watch Next comes first, then the channels named "Continue Watching", then the others. A source with nothing in it is left out. The cards stay where they are when the source changes: only their poster, title and progress change.
 
 ### Remote keys
 
