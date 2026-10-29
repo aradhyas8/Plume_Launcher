@@ -20,6 +20,7 @@ class HomeOverride : AccessibilityService() {
     override fun onServiceConnected() {
         running = this
         applyKeyFilter()
+        HomeAlarm.engage(this)
     }
 
     /**
@@ -39,6 +40,7 @@ class HomeOverride : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         running = null
         handler.removeCallbacks(jump)
+        HomeAlarm.release(this)
         getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("home_off", true).apply()
         return super.onUnbind(intent)
     }
@@ -88,7 +90,10 @@ class HomeOverride : AccessibilityService() {
     }
 
     // Marked as Home so the setup check can tell it from Plume being opened from the apps list.
-    private fun goHome() = startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    private fun goHome() {
+        val home = Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (!HomeAlarm.start(this, home)) startActivity(home) // Fire TV: the alarm skips Android's 5 s hold after Home
+    }
 
     override fun onInterrupt() {}
 
