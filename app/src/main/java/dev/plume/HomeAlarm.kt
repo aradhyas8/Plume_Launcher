@@ -42,7 +42,8 @@ object HomeAlarm {
         prefs.edit().remove(SET).remove(WAS).apply()
     }
 
-    /** False: no alarm, and the caller starts the activity itself as before. */
+    /** False: no alarm, and the caller starts the activity itself as before. Exact alarms need no permission before Android 12. */
+    @Suppress("MissingPermission")
     fun start(c: Context, intent: Intent): Boolean {
         if (!possible(c) || value(Settings.Global.getString(c.contentResolver, SETTING), KEY) != "0") return false
         return try {
