@@ -7,6 +7,7 @@ import android.app.ActivityOptions
 import android.app.Dialog
 import android.app.PendingIntent
 import android.app.role.RoleManager
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.ContentResolver
@@ -230,7 +231,20 @@ internal fun iconStyleOf(stored: String?, oldColour: Boolean) =
 /** Allowed to start an activity from the background because the Home button service is bound. */
 class Updated : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
+        File(c.cacheDir, ApkProvider.NAME).delete() // the downloaded update (see installUpdate)
         c.startActivity(Intent(c, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        dropSessions(c)
+    }
+}
+
+/** Sessions the TV's own installer left waiting for the confirm box (see MainActivity.openApk). */
+internal fun dropSessions(c: Context) {
+    val installer = c.packageManager.packageInstaller
+    installer.mySessions.forEach {
+        try {
+            installer.abandonSession(it.sessionId)
+        } catch (_: Exception) { // already gone
+        }
     }
 }
 
@@ -441,8 +455,9 @@ class MainActivity : Activity() {
         else toast(getString(R.string.photos_permission), long = true)
     }
 
-    @Deprecated("Only used for the default-home role request")
+    @Deprecated("Only used for the default-home role request and the TV's own installer")
     override fun onActivityResult(code: Int, result: Int, data: Intent?) {
+        if (code == INSTALL_REQUEST) installerClosed()
         if (code == ROLE_REQUEST && settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.default_launcher)
         if (code == ROLE_REQUEST && setupStep == 1) {
             setupStep = 0
@@ -3472,7 +3487,9 @@ class MainActivity : Activity() {
 
     // ---------- updates (GitHub releases) ----------
     // Checked once a day from the home screen; a new version is announced once, then waits in settings.
-    // The APK streams straight into an install session, so there's no temporary file to clean up.
+    // The APK goes to a file in the cache, then into an install session. TVs without the confirm box open that file in
+    // their own installer (see ApkProvider). The file is deleted when an update fails or is cancelled, and by the new
+    // version when it starts (see Updated).
 
     @Volatile private var checking = false
     @Volatile private var updating = false
@@ -3582,8 +3599,13 @@ class MainActivity : Activity() {
         updating = true
         renderSettings(R.string.updates)
         val installer = packageManager.packageInstaller
+        val apk = File(cacheDir, ApkProvider.NAME)
         io.execute {
             val ok = try {
+                apk.delete()
+                openStream("https://github.com/$REPO/releases/download/v$ver/Plume.apk").use { input ->
+                    apk.outputStream().use { input.copyTo(it) }
+                }
                 val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
                 params.setAppPackageName(packageName)
                 // Android 12+ can skip the confirm box when we're the app's installer; otherwise Android asks.
@@ -3591,8 +3613,8 @@ class MainActivity : Activity() {
                 val id = installer.createSession(params)
                 installer.openSession(id).use { session ->
                     try {
-                        openStream("https://github.com/$REPO/releases/download/v$ver/Plume.apk").use { input ->
-                            session.openWrite("Plume.apk", 0, -1).use { out ->
+                        apk.inputStream().use { input ->
+                            session.openWrite("Plume.apk", 0, apk.length()).use { out ->
                                 input.copyTo(out)
                                 session.fsync(out)
                             }
@@ -3609,6 +3631,7 @@ class MainActivity : Activity() {
                 true
             } catch (e: Exception) {
                 android.util.Log.w("Plume", "update download failed ($e)")
+                apk.delete()
                 false
             }
             ui.post {
@@ -3622,16 +3645,22 @@ class MainActivity : Activity() {
         }
     }
 
-    /** The install session reports back here: show Android's confirm box, or say why it failed. */
+    /** The install session reports back here: show Android's confirm box (or the TV's own installer), or say why it failed. */
     private fun installStatus(intent: Intent) {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)?.let { startActivity(it) }
-            return
+            try {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)?.let { startActivity(it) }
+                return
+            } catch (_: ActivityNotFoundException) {
+                // Some TVs (Xiaomi HyperOS) have no confirm box: their own installer takes the file instead.
+                return openApk()
+            }
         }
         updating = false
         if (status != PackageInstaller.STATUS_SUCCESS) {
+            File(cacheDir, ApkProvider.NAME).delete()
             val why = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
             android.util.Log.w("Plume", "update install failed: $status $why")
             if (status != PackageInstaller.STATUS_FAILURE_ABORTED) {
@@ -3639,6 +3668,29 @@ class MainActivity : Activity() {
             }
         }
         if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.updates)
+    }
+
+    /** Opens the file in the TV's own installer, for a TV without the confirm box. */
+    private fun openApk() {
+        updating = false
+        try {
+            startActivityForResult(Intent(Intent.ACTION_VIEW)
+                .setDataAndType(ApkProvider.uri(this), "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), INSTALL_REQUEST)
+        } catch (_: Exception) {
+            installerClosed()
+            toast(getString(R.string.update_install_failed), long = true)
+        }
+        if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.updates)
+    }
+
+    /**
+     * Only now drops the waiting session: dropping it sends its result back to this activity, which would bring Plume
+     * back over the installer. After a successful update Plume restarts instead, and Updated drops it.
+     */
+    private fun installerClosed() {
+        dropSessions(this)
+        File(cacheDir, ApkProvider.NAME).delete()
     }
 
     // ---------- weather (under the date) ----------
@@ -4326,6 +4378,7 @@ class MainActivity : Activity() {
         const val TV_LISTINGS = "android.permission.READ_TV_LISTINGS"
         const val WRITE_SECURE = "android.permission.WRITE_SECURE_SETTINGS"
         const val ROLE_REQUEST = 2
+        const val INSTALL_REQUEST = 4
         val ROW_ALIGN = linkedMapOf( // setting -> its name, and the row's gravity in the scroller
             "left" to (R.string.align_left to Gravity.START),
             "centre" to (R.string.align_centre to Gravity.CENTER_HORIZONTAL),
