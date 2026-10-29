@@ -29,6 +29,13 @@
             <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
         </intent>
         <package android:name="com.google.android.apps.tv.launcherx" />
+        <!-- The TV's own wallpaper screens, for the TV wallpaper (TvWallpaper.picker) -->
+        <intent>
+            <action android:name="android.service.wallpaper.LIVE_WALLPAPER_CHOOSER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SET_WALLPAPER" />
+        </intent>
         <!-- Fire OS's input switch, for the HDMI tiles (Remap.openInput) -->
         <package android:name="com.amazon.tv.inputpreference.service" />
     </queries>

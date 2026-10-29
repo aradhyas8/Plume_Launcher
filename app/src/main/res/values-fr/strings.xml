@@ -255,4 +255,6 @@
     <string name="dim_medium">Moyen</string>
     <string name="dim_strong">Fort</string>
     <string name="help_wp_dim">Le noir posé sur une image Bing ou Séries en mode sombre, pour que l\'heure, les icônes et les cartes restent lisibles. Auto regarde chaque image : une image claire reçoit plus de noir, une image très sombre est un peu éclaircie.</string>
+    <string name="tv_wallpaper">Fond d\'écran de la TV</string>
+    <string name="tv_wallpaper_set">Choisir le fond d\'écran de la TV…</string>
 </resources>

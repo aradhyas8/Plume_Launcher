@@ -278,4 +278,6 @@
         <item quantity="one">%d botón</item>
         <item quantity="other">%d botones</item>
     </plurals>
+    <string name="tv_wallpaper">Fondo de la TV</string>
+    <string name="tv_wallpaper_set">Elegir el fondo de la TV…</string>
 </resources>
