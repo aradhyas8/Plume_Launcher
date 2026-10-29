@@ -210,10 +210,12 @@ Google TV hides third-party screensavers from its own settings, so Plume needs t
 ```sh
 git clone https://github.com/aradhyas8/Plume_Launcher.git
 cd Plume_Launcher
-./gradlew assembleRelease
+./gradlew assembleGithubRelease
 ```
 
-The APK is written to `app/build/outputs/apk/release/`. Without a `keystore.properties` file, release builds are signed with your local debug key, which is fine for installing your own build.
+The APK is written to `app/build/outputs/apk/github/release/`. Without a `keystore.properties` file, release builds are signed with your local debug key, which is fine for installing your own build.
+
+There are two builds. **github** is the APK on the Releases page, which updates itself. **play** is the Google Play build (`./gradlew bundlePlayRelease`): Google Play updates it, so it has no self-updater and no install permission, and it explains the Home button service before sending you to turn it on.
 
 ## Contributing
 
