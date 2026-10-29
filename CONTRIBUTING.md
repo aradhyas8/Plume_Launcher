@@ -17,7 +17,7 @@ These will be declined, however well they're built:
 
 - Ads, analytics, crash reporting services, or accounts
 - New third-party libraries or SDKs (AndroidX included)
-- Services, workers or alarms that run while Plume isn't on screen
+- Services, workers or alarms that run while Plume isn't on screen. One exception: on a Fire TV, the Home button service sets a single alarm for "now" after each Home press, to skip Android's 5-second hold on app starts (see `HomeAlarm`). It fires once, and nothing repeats or waits in the background
 - Online metadata services that need an API key, such as TMDB
 - Rows, widgets or sections that copy the scrolling layouts of other launchers
 
