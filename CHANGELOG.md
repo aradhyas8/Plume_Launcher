@@ -26,6 +26,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
 - **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.
 - **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.
+- On Fire TV, Plume comes back when you press **Home** on the Plume home screen or in the Plume settings. Before, Amazon's home stayed on the screen.
 
 ## 1.6
 
