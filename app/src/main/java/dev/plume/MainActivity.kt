@@ -401,6 +401,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        returnTo = null // back by another way than Home: the next Home starts again at the first tile
         openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
         openedFrom = null
         ensureHomeService()
@@ -824,10 +825,15 @@ class MainActivity : Activity() {
             homeTest = 0
             return donePopup()
         }
+        val back = returnTo // set when Plume started the app that Home leaves
+        returnTo = null
         if (editing) endEdit()
         if (movingTop != null) endTopMove(false)
         if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
         if (allApps.visibility == View.VISIBLE) closeAllApps()
+        // Home from an app goes back to the tile or card it was started from, wherever focus is now. If Plume did not start the app,
+        // or the tile or card is gone, Home starts again at the first tile.
+        if (back?.let { homeViewFor(it) }?.requestFocus() == true) return
         watchScroll.scrollTo(0, 0)
         appRow.getChildAt(0)?.requestFocus()
     }
@@ -3259,7 +3265,10 @@ class MainActivity : Activity() {
         if (prefs.getString("sort", "manual") == "usage") appsDirty = true
         val from = currentFocus?.takeIf { it.tag == a.pkg } // the tile that was pressed, not one a remote key opened it from
         try {
-            if (a.pkg.startsWith(HDMI)) Remap.openInput(this, a.pkg.removePrefix(HDMI)) else startApp(a.launch, from)
+            if (a.pkg.startsWith(HDMI)) {
+                Remap.openInput(this, a.pkg.removePrefix(HDMI))
+                returnTo = focusKey(from)
+            } else startApp(a.launch, from)
         } catch (e: Exception) {
             packageManager.getLeanbackLaunchIntentForPackage(a.pkg)?.let { startApp(it, from) }
         }
@@ -3275,6 +3284,23 @@ class MainActivity : Activity() {
         val options = source?.let { ActivityOptions.makeScaleUpAnimation(it, 0, 0, it.width, it.height).toBundle() }
         startActivity(intent, options)
         openedFrom = source?.let { WeakReference(it) }
+        returnTo = focusKey(from)
+    }
+
+    /** What Home goes back to: the pressed tile's package or the pressed card's [cardKey], and null for an app that Plume did not start. */
+    private var returnTo: String? = null
+
+    private fun cardKey(p: Prog) = "card|${p.title}|${p.pkg}|${p.intent}"
+
+    private fun focusKey(v: View?): String? = (v?.getTag(R.id.watchRow) as? Prog)?.let { cardKey(it) } ?: v?.tag as? String
+
+    /** The tile or card that [key] names, with the cards built up to it; null when it left the rows (uninstalled, hidden, off the list). */
+    private fun homeViewFor(key: String): View? {
+        (0 until appRow.childCount).map { appRow.getChildAt(it) }.firstOrNull { it.tag == key }?.let { return it }
+        val at = watchList.indexOfFirst { cardKey(it) == key }
+        if (at < 0) return null
+        addCardsTo(at)
+        return (watchRow.getChildAt(at) as? ViewGroup)?.getChildAt(0)
     }
 
     /**
@@ -3977,6 +4003,7 @@ class MainActivity : Activity() {
         watchKey = key
         watchList = list
         val focusedAt = watchRow.indexOfChild(currentFocus?.parent as? View)
+        val focusedKey = (currentFocus?.getTag(R.id.watchRow) as? Prog)?.let { cardKey(it) } // the same show, whatever place it has now
         watchRow.removeAllViews()
         watchTitle.text = rowName()
         placeRow(animate = false)
@@ -3985,8 +4012,9 @@ class MainActivity : Activity() {
         watchRow.post { fitInk() }
         ui.post { if (watchKey == key) addCardsTo(CARDS_AHEAD - 1) } // unless a newer list replaced this one
         if (focusedAt >= 0) {
-            ((watchRow.getChildAt(focusedAt.coerceAtMost(watchRow.childCount - 1)) as? LinearLayout)?.getChildAt(0)
-                ?: appRow.getChildAt(0))?.requestFocus()
+            val at = watchList.indexOfFirst { cardKey(it) == focusedKey }.takeIf { it >= 0 } ?: focusedAt.coerceAtMost(watchList.size - 1)
+            addCardsTo(at) // the card may be past the first ones that are built
+            ((watchRow.getChildAt(at) as? LinearLayout)?.getChildAt(0) ?: appRow.getChildAt(0))?.requestFocus()
         }
     }
 
