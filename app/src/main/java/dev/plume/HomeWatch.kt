@@ -1,45 +1,56 @@
 package dev.plume
 
 /** One activity that answers the Home intent, as the system lists it. */
-class HomeEntry(val pkg: String, val cls: String, val target: String?, val system: Boolean, val priority: Int)
+class HomeEntry(val pkg: String, val cls: String, val target: String?)
 
 /**
- * The (package, class) pairs of the TV's own home screens: the activities of system apps that answer the Home
- * intent, except Plume and the fallback home that Android shows while it starts (its priority is below 0). An app
- * the user installed doesn't count, because the user opens it on purpose. An alias is listed under its own name
- * but its window carries the real class, so both count.
+ * The classes that the Google TV launcher declares for the Home intent: its home screens. The launcher draws
+ * other windows too (notices, sign-in, the dashboard). An alias is listed under its own name but its window
+ * carries the real class, so both count.
  */
-fun stockHomes(found: List<HomeEntry>, self: String): Set<Pair<String, String>> =
-    found.filter { it.system && it.pkg != self && it.priority >= 0 }
-        .flatMap { listOfNotNull(it.pkg to it.cls, it.target?.let { t -> it.pkg to t }) }.toSet()
+fun googleTvHomes(found: List<HomeEntry>): Set<String> =
+    found.filter { it.pkg == HomeWatch.GOOGLE_TV }.flatMap { listOfNotNull(it.cls, it.target) }.toSet()
 
 /**
  * Decides, for each window that opens, whether Plume should cover the TV's own home screen. Fire OS never
  * hands the Home key to an accessibility service, so there this is the only way Home reaches Plume.
- * [isStockHome] says whether a window is one of the system launcher's home screens (see [stockHomes]). Its other
- * windows, such as a notice or a sign-in screen, are not. Kept free of Android classes so it can be tested off the TV.
+ * [googleHomes] gives the home screens of the Google TV launcher (see [googleTvHomes]); while it is empty the
+ * launcher's windows all count, except the dashboard. Kept free of Android classes so it can be tested off the TV.
  */
-class HomeWatch(private val isStockHome: (pkg: String, cls: String) -> Boolean) {
+class HomeWatch(private val fire: Boolean, private val googleHomes: () -> Set<String>) {
     private var settingsMayFollow = false
     private var lastJump = -JUMP_GAP_MS
 
-    /** Null: leave it (and drop any jump still waiting). Otherwise: go home after this many ms. */
+    /**
+     * Null: leave it (and drop any jump still waiting). [KEEP]: a window of the same Home press, so any jump
+     * still waiting stays. Otherwise: go home after this many ms.
+     */
     fun opened(pkg: String, cls: String?, now: Long): Long? {
-        if (cls == null || !isStockHome(pkg, cls)) {
+        if (!isHome(pkg, cls)) {
             // Fire OS shows its home on the way into (and out of) Amazon Settings, then Settings on top.
             settingsMayFollow = pkg == PLUME || pkg.startsWith(AMAZON_SETTINGS)
             return null
         }
-        if (now - lastJump < JUMP_GAP_MS) return null // one Home press sends several of these
+        if (now - lastJump < JUMP_GAP_MS) return KEEP // one Home press sends several of these
         lastJump = now
-        return if (settingsMayFollow && pkg != GOOGLE_TV) SETTINGS_WAIT_MS else 0
+        return if (settingsMayFollow && fire) SETTINGS_WAIT_MS else 0
+    }
+
+    private fun isHome(pkg: String, cls: String?): Boolean = cls != null && when (pkg) {
+        GOOGLE_TV -> googleHomes().let { homes -> if (homes.isEmpty()) !cls.contains("dashboard", ignoreCase = true) else cls in homes } // holding Home opens the dashboard
+        AMAZON -> cls.startsWith("$AMAZON.ui.HomeActivity") // HomeActivity_vNext on current builds
+        OLD_AMAZON -> cls == "$OLD_AMAZON.Launcher"
+        else -> false
     }
 
     companion object {
         private const val PLUME = "dev.plume"
         const val GOOGLE_TV = "com.google.android.apps.tv.launcherx"
+        private const val AMAZON = "com.amazon.tv.launcher"
+        private const val OLD_AMAZON = "com.amazon.firelauncher"
         private const val AMAZON_SETTINGS = "com.amazon.tv.settings"
         private const val JUMP_GAP_MS = 600L
         const val SETTINGS_WAIT_MS = 550L
+        const val KEEP = -1L
     }
 }
