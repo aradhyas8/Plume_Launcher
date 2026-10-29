@@ -93,6 +93,18 @@ This lets Plume:
 
 Everything else works without it.
 
+### Set up over adb with one command
+
+[`tools/plume-install.sh`](tools/plume-install.sh) does the adb steps for you. Turn on ADB debugging on the TV, then run it from a computer on the same network:
+
+```sh
+./plume-install.sh 192.168.1.20      # your TV's address; add -a plume.apk to install Plume first
+```
+
+It finds out what the TV is (Fire TV and its Fire OS version, Google TV, or Android TV), tells you what it found and what it is going to change, and asks before it changes anything. Then it gives Plume the `WRITE_SECURE_SETTINGS` grant, switches on the Home button service and waits until the TV says the service is running. On a Fire TV with Android 9 to 11 it also checks that Plume has set the alarm timing that removes the 5-second wait (see [Fire TV](#fire-tv)). `-n` only shows the plan.
+
+`./plume-install.sh --undo` turns the Home button service off, waits until Plume has put its alarm setting back, and takes the grant back if the script gave it. The script never turns off the TV's own launcher unless you add `--disable-stock-launcher`, which works on a Fire TV only (it can stop other TVs from starting). `--undo` turns that launcher on again.
+
 ### Home button on Android 13 and newer
 
 Android 13 and newer grey out the Accessibility switch for apps installed outside the Play Store, and most Google TV builds hide the **Allow restricted settings** menu that would unlock it. If Plume's setup reaches the ADB step, unlock it once from a computer (or a phone ADB app) on the same network:

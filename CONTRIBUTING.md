@@ -61,6 +61,7 @@ Use the [bug report form](../../issues/new/choose). The TV model, Android versio
 
 The `tools/` directory contains helper scripts for testing:
 
+- `tools/plume-install.sh`: sets Plume up over adb for the kind of TV it finds (Fire TV, Google TV, Android TV), asks before it changes anything, and puts everything back with `--undo`. See the README, "Set up over adb".
 - `tools/plume-firetv-probe.sh`: collects Home button events and logs on Fire TV without changing settings. See [#87](../../issues/87).
 
 ## Building
