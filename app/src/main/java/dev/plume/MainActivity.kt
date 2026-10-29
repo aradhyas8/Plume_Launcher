@@ -419,6 +419,7 @@ class MainActivity : Activity() {
         ui.postDelayed(themeTick, 60_000L)
         ui.removeCallbacks(wallpaperTick)
         ui.post(wallpaperTick)
+        if (currentWallpaper() == TvWallpaper.CHOICE) loadWallpaper() // it may have changed in the TV's settings meanwhile
         updateFeatured()
         // Gallery chosen but its paintings missing (updated from a version that bundled them): fetch them.
         if (galleryOn() && photoScreensaver() == null && !paintingsReady(this)) downloadPaintings {}
@@ -955,6 +956,7 @@ class MainActivity : Activity() {
             BUNDLED_WALLPAPERS.keys.map { wallpaperName("res:$it") to "res:$it" } +
             (wallpaperName(Bing.CHOICE) to Bing.CHOICE) +
             (wallpaperName(ShowsWall.CHOICE) to ShowsWall.CHOICE) +
+            (wallpaperName(TvWallpaper.CHOICE) to TvWallpaper.CHOICE) +
             (wallpaperDir()?.listFiles { f -> f.extension.lowercase() in setOf("jpg", "jpeg", "png", "webp") }
                 ?.sortedBy { it.name }?.map { it.nameWithoutExtension to "file:${it.name}" } ?: emptyList()) +
             listOfNotNull(currentWallpaper(forDark).takeIf { it.startsWith("folder:") }?.let { wallpaperName(it) to it })
@@ -970,8 +972,8 @@ class MainActivity : Activity() {
     /** Glass: the tiles are see-through over a blur of the wallpaper (a setting, on by default since 1.6). */
     private fun glassOn() = prefs.getBoolean("glass", true)
 
-    /** Glass needs a picture to blur: with a plain background the tiles stay as they are. */
-    private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:")
+    /** Glass needs a picture to blur: with a plain background or the TV's wallpaper the tiles stay as they are. */
+    private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:") && currentWallpaper() != TvWallpaper.CHOICE
 
     /** The menus, the cards and the settings panel are glass too when Glass is on. */
     private fun frosted() = glassActive()
@@ -1033,6 +1035,7 @@ class MainActivity : Activity() {
     private fun wallpaperName(choice: String) = when {
         choice == Bing.CHOICE -> getString(R.string.bing_daily)
         choice == ShowsWall.CHOICE -> getString(R.string.shows_wallpaper)
+        choice == TvWallpaper.CHOICE -> getString(R.string.tv_wallpaper)
         choice.startsWith("folder:") -> getString(R.string.folder_name, choice.substringAfter(':').substringAfter(':'))
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
     }
@@ -1040,6 +1043,17 @@ class MainActivity : Activity() {
     private fun loadWallpaper() {
         val view = findViewById<ImageView>(R.id.wallpaper)
         val choice = currentWallpaper()
+        val system = choice == TvWallpaper.CHOICE
+        TvWallpaper.show(this, system)
+        findViewById<View>(R.id.root).setBackgroundColor(if (system) Color.TRANSPARENT else ground)
+        if (system) { // Android draws it behind the window: the fades keep the text readable, its colour picks the ink
+            view.setImageDrawable(null)
+            glass.setBlur(null)
+            wpRaw = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).apply { eraseColor(TvWallpaper.color(this@MainActivity, ground)) }
+            fadesOn = true
+            refreshFades()
+            return
+        }
         if (choice.startsWith("plain:")) { // the root's ground colour shows through
             view.setImageDrawable(null)
             glass.setBlur(null)
@@ -1190,11 +1204,23 @@ class MainActivity : Activity() {
         val choices = wallpaperChoices(forDark)
         val own = choices.filter { it.second.startsWith("file:") }
         val current = currentWallpaper(forDark)
+        val picker = TvWallpaper.picker(this)
         val rows = listOf(page(getString(R.string.add_from_phone)) { uploadWallpaper(forDark) }, page(getString(R.string.choose_from_tv)) { pickFolder(forDark) }) +
+            listOfNotNull(picker?.let { i -> page(getString(R.string.tv_wallpaper_set)) { setTvWallpaper(forDark, i) } }) +
             choices.map { (name, choice) -> page(name, if (choice == current) CHOSEN else "") { setWallpaper(forDark, choice); renderSettings(row) } } +
             if (own.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_photo_row)) { removeWallpaper(own, forDark) })
-        showPage(if (forDark) getString(R.string.dark_wallpaper) else getString(R.string.light_wallpaper), rows, 2 + choices.indexOfFirst { it.second == current }) {
+        showPage(if (forDark) getString(R.string.dark_wallpaper) else getString(R.string.light_wallpaper), rows, rows.size - choices.size - (if (own.isEmpty()) 0 else 1) + choices.indexOfFirst { it.second == current }) {
             renderSettings(row)
+        }
+    }
+
+    /** Opens the TV's own wallpaper screen and shows what is picked there: the home screen comes back to it. */
+    private fun setTvWallpaper(forDark: Boolean, picker: Intent) {
+        setWallpaper(forDark, TvWallpaper.CHOICE)
+        try {
+            startActivity(picker)
+        } catch (e: Exception) {
+            renderSettings(if (forDark) R.string.dark_wallpaper else R.string.light_wallpaper)
         }
     }
 

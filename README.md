@@ -164,6 +164,10 @@ A gentle fade is added automatically so the rows stay readable (**Plume settings
 
 Choose **Choose a folder on this TV…** in the wallpaper list to use a whole folder of photos, from the TV's storage or a USB drive. Plume asks for access to your photos the first time. The photos take turns in shuffled order; **Plume settings → Wallpaper & theme → Change photo every** sets how often, from every minute to once a day. The screensaver can show a folder too: **Plume settings → Screensaver → Screensaver → Your photos**.
 
+### TV wallpaper
+
+Choose **TV wallpaper** in the wallpaper list to show the wallpaper that is set on the TV itself, a still picture or a live one from a live wallpaper app. Android draws it, so it costs Plume nothing, and it stops while an app is open. If the TV has a screen for choosing wallpapers, **Set the TV wallpaper…** at the top of the list opens it. Many Android TV and Google TV devices have no such screen: then set the wallpaper from the live wallpaper app itself, if it offers that. Plume can't see the picture, so Glass tiles stay plain with it, and the photo fades keep the text readable.
+
 ### Lock layout
 
 **Plume settings → Lock layout** sets a 4-digit PIN. While it's on, Plume settings and anything that changes the home screen (moving, removing or pinning apps, hiding shows) ask for the PIN first; opening apps works as usual. One PIN unlocks changes for five minutes, until you leave the home screen. Use the arrows or the remote's number keys to enter it.
