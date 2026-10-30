@@ -132,8 +132,9 @@ devgrep "Bound services|Enabled services|^ *services:\{" dumpsys accessibility
 ACC=$R
 case $ENABLED in *dev.plume/*) PLUME_SET=yes ;; *) PLUME_SET=no ;; esac
 # The list of bound services starts on a line "Bound services:{" (Android 10 and later) or "services:{" (Fire OS 7,
-# Android 9) and can go on over the next lines, up to the next list ("Enabled services:{", "installed services:{"...).
-BOUNDLIST=$(printf '%s\n' "$ACC" | awk '/Bound services|^ *services:\{/ { on = 1; print; next } on && /^ *[A-Za-z][A-Za-z ]*:[{[]/ { on = 0 } on')
+# Android 9) and can go on over the next lines. It ends at the line that closes it ("}" or "}]"), at the next list
+# ("Enabled services:{"...), or after 20 lines, so that a word further down the dump is never taken for a service.
+BOUNDLIST=$(printf '%s\n' "$ACC" | awk '/Bound services|^ *services:\{/ { on = 1; n = 0 } on && n > 0 && /^ *[A-Za-z][A-Za-z ]*:[{[]/ { on = 0 } on { print; n++; if (/\}\]?[ \t]*$/ || n >= 20) on = 0 }')
 if [ -n "$BOUNDLIST" ]; then
   # Fire OS names a bound service by its label ("Plume: Home button"), not by its package: look for the name.
   if printf '%s\n' "$BOUNDLIST" | grep -qi plume; then PLUME_BOUND=yes; else PLUME_BOUND=no; fi
@@ -271,8 +272,10 @@ lag() { # $1 = HH:MM:SS the step started at (on the TV's clock), $2 = HH:MM:SS t
     function rel(t) { return ((ms(t) - lo) % 86400000 + 86400000) % 86400000 }
     BEGIN { lo = ms(s ".000"); hi = 25000; if (e != "") { n = rel(e ".000"); if (n < hi) hi = n } }
     { t = rel($2); if (t > hi) next }
-    # The system starts Home from uid 1000. A start of Plume from an app uid is Plume asking for its home.
-    { own = /cmp=dev\.plume/ && !/from uid 1000([^0-9]|$)/ }
+    # The system starts Home from a uid below 10000 (1000, or 0 on Android 10 and later). A start of Plume from an
+    # app uid (10000 and above) is Plume asking for its home.
+    function uid(l) { if (match(l, /from uid [0-9]+/)) return substr(l, RSTART + 9, RLENGTH - 9) + 0; return -1 }
+    { own = /cmp=dev\.plume/ && uid($0) >= 10000 }
     h == "" && /cat=\[android\.intent\.category\.HOME\]/ && !own { h = t; hp = /cmp=dev\.plume/ }
     h != "" && a == "" && /(resumed_activity|resume_activity).*(amazon\.tv\.launcher|firehomestarter|firelauncher)/ { a = t }
     h != "" && q == "" && own && /START u0 .*from uid/ { q = t }
