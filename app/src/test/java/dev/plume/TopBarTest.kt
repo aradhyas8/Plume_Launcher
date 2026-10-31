@@ -39,4 +39,10 @@ class TopBarTest {
         assertEquals(listOf("wifi", "apps", "plume", "system"), TopBar.addAfter(order, "system", "plume"))
         assertEquals(listOf("wifi", "apps", "plume", "system"), TopBar.addAfter(order, "system", "missing"))
     }
+
+    @Test fun aDefaultCanLeaveAnIconOut() { // Power is not on the bar until someone adds it
+        val all = known + "power"
+        assertEquals(known, TopBar.parse(null, all, all - "power", "plume"))
+        assertEquals(known + "power", TopBar.parse("wifi,sources,apps,system,plume,power", all, all - "power", "plume"))
+    }
 }

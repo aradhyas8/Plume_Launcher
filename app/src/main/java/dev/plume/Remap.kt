@@ -129,6 +129,11 @@ object Remap {
         if (!started) Toast.makeText(c, R.string.fire_os_no_input, Toast.LENGTH_LONG).show()
     }
 
+    /** The system's power dialog, for the top-bar icon and for a remote key. Some systems (Fire OS, say) refuse it: say so. */
+    fun powerMenu(s: AccessibilityService) {
+        if (!s.performGlobalAction(AccessibilityService.GLOBAL_ACTION_POWER_DIALOG)) Toast.makeText(s, R.string.power_menu_failed, Toast.LENGTH_LONG).show()
+    }
+
     fun run(s: AccessibilityService, action: String) {
         val arg = action.substringAfter(':', "")
         try {
@@ -141,7 +146,9 @@ object Remap {
                     audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
                     audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
                 }
-                "sys" -> SYS[arg]?.let { (code, _) -> s.performGlobalAction(code) }
+                "sys" -> SYS[arg]?.let { (code, _) ->
+                    if (code == AccessibilityService.GLOBAL_ACTION_POWER_DIALOG) powerMenu(s) else s.performGlobalAction(code)
+                }
                 "open" -> OPEN[arg]?.let { (action, _) -> s.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }
         } catch (e: Exception) {
