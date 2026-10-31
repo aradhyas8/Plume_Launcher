@@ -2,8 +2,10 @@ package dev.plume
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -20,6 +22,16 @@ class HomeOverride : AccessibilityService() {
     override fun onServiceConnected() {
         running = this
         applyKeyFilter()
+        loadHomes()
+        if (!listening) {
+            listening = true
+            registerReceiver(packageReceiver, IntentFilter().apply {
+                addAction(Intent.ACTION_PACKAGE_ADDED)
+                addAction(Intent.ACTION_PACKAGE_REMOVED)
+                addAction(Intent.ACTION_PACKAGE_CHANGED)
+                addDataScheme("package")
+            })
+        }
     }
 
     /**
@@ -39,6 +51,10 @@ class HomeOverride : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         running = null
         handler.removeCallbacks(jump)
+        if (listening) {
+            listening = false
+            unregisterReceiver(packageReceiver)
+        }
         getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("home_off", true).apply()
         return super.onUnbind(intent)
     }
@@ -77,7 +93,12 @@ class HomeOverride : AccessibilityService() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val watch = HomeWatch()
+    private val watch by lazy { HomeWatch(fireTv(this)) { googleHomes } }
+    private var googleHomes = emptySet<String>()
+    private var listening = false
+    private val packageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) = loadHomes()
+    }
     private val jump = Runnable { watch.jumped(); goHome() }
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
@@ -87,6 +108,15 @@ class HomeOverride : AccessibilityService() {
         if (after == HomeWatch.KEEP) return // the waiting jump stays
         handler.removeCallbacks(jump) // any other window opening means Home wasn't where we were going
         after?.let { handler.postDelayed(jump, it) }
+    }
+
+    /** The Google TV launcher's home screens, asked of the system when the service starts and when a package changes. */
+    private fun loadHomes() {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        googleHomes = googleTvHomes(packageManager.queryIntentActivities(home, 0).map {
+            val a = it.activityInfo
+            HomeEntry(a.packageName, a.name, a.targetActivity)
+        })
     }
 
     // Marked as Home so the setup check can tell it from Plume being opened from the apps list.
