@@ -354,6 +354,7 @@ class MainActivity : Activity() {
             R.id.allAppsButton to { openAllApps() },
             R.id.systemSettings to { unlock { openSettings(Settings.ACTION_SETTINGS) } },
             R.id.launcherSettings to { unlock { openLauncherSettings() } },
+            R.id.powerButton to { powerDialog() },
         )) findViewById<ImageView>(id).apply {
             setColorFilter(fg)
             val ring = GradientDrawable().apply { shape = GradientDrawable.OVAL }
@@ -3006,15 +3007,18 @@ class MainActivity : Activity() {
 
     /** The bar's icons in their default order, with the key each is saved under. */
     private val TOP_KEYS = linkedMapOf(R.id.wifi to "wifi", R.id.sourcesButton to "sources", R.id.allAppsButton to "apps",
-        R.id.systemSettings to "system", R.id.launcherSettings to "plume")
+        R.id.systemSettings to "system", R.id.launcherSettings to "plume", R.id.powerButton to "power")
 
     private var movingTop: View? = null // the icon being moved, while Left and Right slide it
     private var topLive: List<Int> = emptyList() // the order while moving; saved when OK places the icon
     private var topBefore: List<Int> = emptyList() // the order when the move started, for Back
 
     /** The icons the bar shows, in order: the saved list, or all of them. Plume settings is always on it. */
-    private fun topOrder(): List<Int> =
-        TopBar.parse(prefs.getString("top_bar", null), TOP_KEYS.values.toList(), TOP_KEYS.values.toList(), "plume").map { key -> TOP_KEYS.entries.first { it.value == key }.key }
+    private fun topOrder(): List<Int> {
+        val all = TOP_KEYS.values.toList()
+        // Power is not on the bar until someone adds it.
+        return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - "power", "plume"))
+    }
 
     /** What is really on screen: Sources stays out while the TV has no input. */
     private fun shownTop(order: List<Int> = topOrder()) = order.filter { it != R.id.sourcesButton || sources.isNotEmpty() }
@@ -3043,6 +3047,16 @@ class MainActivity : Activity() {
     private fun keyList(ids: List<Int>) = ids.map { TOP_KEYS.getValue(it) }
 
     private fun keys(list: List<String>) = list.map { key -> TOP_KEYS.entries.first { it.value == key }.key }
+
+    /**
+     * The system's own power dialog (power off, restart; Cancel leaves everything as it was). Only the Home button service can
+     * ask for it, so without the service the icon offers to turn that on.
+     */
+    private fun powerDialog() {
+        val service = HomeOverride.running
+            ?: return holdMenu(findViewById(R.id.powerButton), listOf(getString(R.string.power_needs_home) to { turnOnHomeButton() }), below = true)
+        Remap.powerMenu(service)
+    }
 
     /** Hold OK on a top-bar icon: Move, Hide (not Plume settings, so the bar is never empty) and Add icon. */
     private fun topMenu(v: View) {
