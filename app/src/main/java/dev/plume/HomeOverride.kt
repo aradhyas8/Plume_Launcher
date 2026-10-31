@@ -78,13 +78,13 @@ class HomeOverride : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
     private val watch = HomeWatch()
-    private val jump = Runnable { goHome() }
+    private val jump = Runnable { watch.jumped(); goHome() }
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = e.packageName?.toString() ?: return
         val after = watch.opened(pkg, e.className?.toString(), SystemClock.uptimeMillis())
-        if (after == HomeWatch.KEEP) return // the same Home press again: the jump that waits stays
+        if (after == HomeWatch.KEEP) return // the waiting jump stays
         handler.removeCallbacks(jump) // any other window opening means Home wasn't where we were going
         after?.let { handler.postDelayed(jump, it) }
     }

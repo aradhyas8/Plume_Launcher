@@ -8,17 +8,17 @@ package dev.plume
 class HomeWatch {
     private var settingsMayFollow = false
     private var lastJump = -JUMP_GAP_MS
-    private var waitingPkg = ""
-    private var waitingUntil = 0L
+    private var waitingPkg: String? = null
 
     /**
      * [KEEP]: a jump is waiting and this window doesn't change it. Null: leave it (and drop any jump still waiting).
      * Otherwise: go home after this many ms.
      */
     fun opened(pkg: String, cls: String?, now: Long): Long? {
-        // While a jump waits for Settings, more windows of the home app or of Plume itself are the same Home press.
-        if (now < waitingUntil && (pkg == waitingPkg || pkg == PLUME)) return KEEP
-        waitingUntil = 0L
+        // System UI events do not show that the user left Home; a different launcher screen does.
+        if (waitingPkg != null && ((pkg == waitingPkg && isHome(pkg, cls)) ||
+                pkg == PLUME || pkg == "android" || pkg == "com.android.systemui")) return KEEP
+        waitingPkg = null
         if (!isHome(pkg, cls)) {
             // Fire OS shows its home on the way into (and out of) Amazon Settings, then Settings on top.
             settingsMayFollow = pkg == PLUME || pkg.startsWith(AMAZON_SETTINGS)
@@ -28,9 +28,10 @@ class HomeWatch {
         lastJump = now
         if (!settingsMayFollow || pkg == GOOGLE_TV) return 0
         waitingPkg = pkg
-        waitingUntil = now + SETTINGS_WAIT_MS
         return SETTINGS_WAIT_MS
     }
+
+    fun jumped() { waitingPkg = null }
 
     private fun isHome(pkg: String, cls: String?) = when (pkg) {
         GOOGLE_TV -> cls?.contains("dashboard", ignoreCase = true) != true // holding Home opens the dashboard
