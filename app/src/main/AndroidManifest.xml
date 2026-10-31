@@ -77,6 +77,13 @@
             </intent-filter>
         </receiver>
 
+        <!-- Update file for the TV's own installer: see ApkProvider. -->
+        <provider
+            android:name=".ApkProvider"
+            android:authorities="${applicationId}.apk"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <!-- Gallery screensaver; switched on and off from launcher settings. -->
         <service
             android:name=".GalleryDream"
