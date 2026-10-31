@@ -101,9 +101,13 @@ Everything else works without it.
 ./plume-install.sh 192.168.1.20      # your TV's address; add -a plume.apk to install Plume first
 ```
 
-It finds out what the TV is (Fire TV and its Fire OS version, Google TV, or Android TV), tells you what it found and what it is going to change, and asks before it changes anything. Then it gives Plume the `WRITE_SECURE_SETTINGS` grant, switches on the Home button service and waits until the TV says the service is running. On a Fire TV with Android 9 to 11 it also checks that Plume has set the alarm timing that removes the 5-second wait (see [Fire TV](#fire-tv)). `-n` only shows the plan.
+It finds out what the TV is (Fire TV and its Fire OS version, Google TV, or Android TV), tells you what it found and what it is going to change, and asks before it changes anything. Then it gives Plume the `WRITE_SECURE_SETTINGS` grant, switches on the Home button service and waits until the TV says the service is running. It checks each change on the TV after it makes it, and it stops with a message when one did not work. On a Fire TV with Android 9 to 11 it also looks whether Plume has set the alarm timing that removes the 5-second wait (see [Fire TV](#fire-tv)). A Plume without the alarm change leaves it, and Home then takes about 5 seconds. `-n` only shows the plan.
 
-`./plume-install.sh --undo` turns the Home button service off, waits until Plume has put its alarm setting back, and takes the grant back if the script gave it. The script never turns off the TV's own launcher unless you add `--disable-stock-launcher`, which works on a Fire TV only (it can stop other TVs from starting). `--undo` turns that launcher on again.
+Before each change, the script writes a line about it in a recovery record on the TV (`/data/local/tmp/plume-install.state`), and it does not make the change if it cannot write and read back that line. `./plume-install.sh --undo` puts back what the record lists and nothing else: it turns the Home button service off only if the script turned it on, waits until Plume has put its alarm setting back, and takes the grant back only if the script gave it. A service that was on already stays on. `--undo` does not uninstall Plume, also when `-a` installed it: remove it in **Settings → Apps**.
+
+The script never turns off the TV's own launcher unless you add `--disable-stock-launcher`, which works on a Fire TV only (it can stop other TVs from starting). It turns the launcher off last, after the recovery record is written and Plume's service runs. Then it opens Settings and presses Home to see that Plume answers. If the service does not run or Home does not open Plume, it turns the launcher on again. `--undo` also turns that launcher on again.
+
+The script is tested against a fake `adb`, with no TV: `sh tools/plume-install-test/run.sh`. It covers the TVs it knows (Fire OS 7, 8 and 14, Google TV), a service that was on already, commands that fail, a recovery record that cannot be written, and the stock launcher with its recovery.
 
 ### Home button on Android 13 and newer
 
