@@ -20,12 +20,16 @@ fun googleTvHomes(found: List<HomeEntry>): Set<String> =
 class HomeWatch(private val fire: Boolean, private val googleHomes: () -> Set<String>) {
     private var settingsMayFollow = false
     private var lastJump = -JUMP_GAP_MS
+    private var waitingPkg: String? = null
 
     /**
-     * Null: leave it (and drop any jump still waiting). [KEEP]: a window of the same Home press, so any jump
-     * still waiting stays. Otherwise: go home after this many ms.
+     * [KEEP]: leave any jump still waiting. Null: drop it. Otherwise: go home after this many ms.
      */
     fun opened(pkg: String, cls: String?, now: Long): Long? {
+        // System UI events do not show that the user left Home; a different launcher screen does.
+        if (waitingPkg != null && ((pkg == waitingPkg && isHome(pkg, cls)) ||
+                pkg == PLUME || pkg == "android" || pkg == "com.android.systemui")) return KEEP
+        waitingPkg = null
         if (!isHome(pkg, cls)) {
             // Fire OS shows its home on the way into (and out of) Amazon Settings, then Settings on top.
             settingsMayFollow = pkg == PLUME || pkg.startsWith(AMAZON_SETTINGS)
@@ -33,8 +37,12 @@ class HomeWatch(private val fire: Boolean, private val googleHomes: () -> Set<St
         }
         if (now - lastJump < JUMP_GAP_MS) return KEEP // one Home press sends several of these
         lastJump = now
-        return if (settingsMayFollow && fire) SETTINGS_WAIT_MS else 0
+        if (!settingsMayFollow || !fire) return 0
+        waitingPkg = pkg
+        return SETTINGS_WAIT_MS
     }
+
+    fun jumped() { waitingPkg = null }
 
     private fun isHome(pkg: String, cls: String?): Boolean = cls != null && when (pkg) {
         GOOGLE_TV -> googleHomes().let { homes -> if (homes.isEmpty()) !cls.contains("dashboard", ignoreCase = true) else cls in homes } // holding Home opens the dashboard
