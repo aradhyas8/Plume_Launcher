@@ -492,6 +492,7 @@ class MainActivity : Activity() {
      */
     private fun ensureHomeService() {
         if (homeServiceOn()) return prefs.edit().remove("home_off").apply() // what Android says wins
+        HomeAlarm.release(this) // the service died without telling us: its alarm setting must not stay
         if (prefs.getBoolean("home_off", false) || checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED) return
         val me = ComponentName(this, HomeOverride::class.java).flattenToString()
         val on = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
