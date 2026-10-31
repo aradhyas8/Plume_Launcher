@@ -27,6 +27,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
 - **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.
 - **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.
+- On Google TV, Plume covers the app that you watch only when the Google TV home screen opens. Before, a notice or a sign-in screen from the Google TV launcher also brought Plume to the front.
 - On Xiaomi TVs, **Plume settings → Updates → Install** opens the TV's installer. Before, Plume closed.
 
 ## 1.6

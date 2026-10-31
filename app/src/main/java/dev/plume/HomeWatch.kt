@@ -1,29 +1,44 @@
 package dev.plume
 
+/** One activity that answers the Home intent, as the system lists it. */
+class HomeEntry(val pkg: String, val cls: String, val target: String?)
+
+/**
+ * The classes that the Google TV launcher declares for the Home intent: its home screens. The launcher draws
+ * other windows too (notices, sign-in, the dashboard). An alias is listed under its own name but its window
+ * carries the real class, so both count.
+ */
+fun googleTvHomes(found: List<HomeEntry>): Set<String> =
+    found.filter { it.pkg == HomeWatch.GOOGLE_TV }.flatMap { listOfNotNull(it.cls, it.target) }.toSet()
+
 /**
  * Decides, for each window that opens, whether Plume should cover the TV's own home screen. Fire OS never
  * hands the Home key to an accessibility service, so there this is the only way Home reaches Plume.
- * Kept free of Android classes so it can be tested off the TV.
+ * [googleHomes] gives the home screens of the Google TV launcher (see [googleTvHomes]); while it is empty the
+ * launcher's windows all count, except the dashboard. Kept free of Android classes so it can be tested off the TV.
  */
-class HomeWatch {
+class HomeWatch(private val fire: Boolean, private val googleHomes: () -> Set<String>) {
     private var settingsMayFollow = false
     private var lastJump = -JUMP_GAP_MS
 
-    /** Null: leave it (and drop any jump still waiting). Otherwise: go home after this many ms. */
+    /**
+     * Null: leave it (and drop any jump still waiting). [KEEP]: a window of the same Home press, so any jump
+     * still waiting stays. Otherwise: go home after this many ms.
+     */
     fun opened(pkg: String, cls: String?, now: Long): Long? {
         if (!isHome(pkg, cls)) {
             // Fire OS shows its home on the way into (and out of) Amazon Settings, then Settings on top.
             settingsMayFollow = pkg == PLUME || pkg.startsWith(AMAZON_SETTINGS)
             return null
         }
-        if (now - lastJump < JUMP_GAP_MS) return null // one Home press sends several of these
+        if (now - lastJump < JUMP_GAP_MS) return KEEP // one Home press sends several of these
         lastJump = now
-        return if (settingsMayFollow && pkg != GOOGLE_TV) SETTINGS_WAIT_MS else 0
+        return if (settingsMayFollow && fire) SETTINGS_WAIT_MS else 0
     }
 
-    private fun isHome(pkg: String, cls: String?) = when (pkg) {
-        GOOGLE_TV -> cls?.contains("dashboard", ignoreCase = true) != true // holding Home opens the dashboard
-        AMAZON -> cls?.startsWith("$AMAZON.ui.HomeActivity") == true // HomeActivity_vNext on current builds
+    private fun isHome(pkg: String, cls: String?): Boolean = cls != null && when (pkg) {
+        GOOGLE_TV -> googleHomes().let { homes -> if (homes.isEmpty()) !cls.contains("dashboard", ignoreCase = true) else cls in homes } // holding Home opens the dashboard
+        AMAZON -> cls.startsWith("$AMAZON.ui.HomeActivity") // HomeActivity_vNext on current builds
         OLD_AMAZON -> cls == "$OLD_AMAZON.Launcher"
         else -> false
     }
@@ -36,5 +51,6 @@ class HomeWatch {
         private const val AMAZON_SETTINGS = "com.amazon.tv.settings"
         private const val JUMP_GAP_MS = 600L
         const val SETTINGS_WAIT_MS = 550L
+        const val KEEP = -1L
     }
 }
