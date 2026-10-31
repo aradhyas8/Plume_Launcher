@@ -1046,19 +1046,15 @@ class MainActivity : Activity() {
         val system = choice == TvWallpaper.CHOICE
         TvWallpaper.show(this, system)
         findViewById<View>(R.id.root).setBackgroundColor(if (system) Color.TRANSPARENT else ground)
-        if (system) { // Android draws it behind the window: the fades keep the text readable, its colour picks the ink
+        if (system || choice.startsWith("plain:")) {
             view.setImageDrawable(null)
             glass.setBlur(null)
-            wpRaw = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).apply { eraseColor(TvWallpaper.color(this@MainActivity, ground)) }
-            fadesOn = true
-            refreshFades()
-            return
-        }
-        if (choice.startsWith("plain:")) { // the root's ground colour shows through
-            view.setImageDrawable(null)
-            glass.setBlur(null)
-            wpRaw = null
-            fadesOn = false
+            glassSurfaces.forEach { it.get()?.setBlur(null) }
+            if (settingsScrim.visibility == View.VISIBLE) showPanelGlass()
+            val metrics = resources.displayMetrics
+            wpRaw = if (system) Bitmap.createBitmap(64, maxOf(1, 64 * metrics.heightPixels / metrics.widthPixels), Bitmap.Config.ARGB_8888)
+                .apply { eraseColor(TvWallpaper.color(this@MainActivity, ground)) } else null
+            fadesOn = system
             refreshFades()
             return
         }
