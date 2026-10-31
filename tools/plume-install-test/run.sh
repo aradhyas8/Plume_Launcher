@@ -185,5 +185,14 @@ new google
 run --disable-stock-launcher
 check "Google TV refuses to turn its launcher off" '[ $RC != 0 ] && has "$OUT" "Fire TV only" && [ -z "$(st enabled)" ]'
 
+# ---- the questions the script asks -------------------------------------------------------------------------------
+new fire7 '{"installed": false}'
+run
+check "Plume not installed and no -a: the script stops and changes nothing" '[ $RC != 0 ] && has "$OUT" "not installed" && [ -z "$(st enabled)" ]'
+
+new fire7
+OUT=$(printf 'n\n' | sh "$SCRIPT" 10.0.0.2 2>&1); RC=$?
+check "answering n changes nothing" '[ $RC = 0 ] && has "$OUT" "Nothing changed" && [ -z "$(st enabled)" ] && [ "$(st granted)" = False ]'
+
 echo "$N checks, $BAD failed"
 [ $BAD = 0 ]
