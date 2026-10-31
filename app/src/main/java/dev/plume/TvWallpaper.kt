@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.WallpaperManager
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.view.WindowManager
 
@@ -21,7 +22,7 @@ internal object TvWallpaper {
     fun show(a: Activity, on: Boolean) {
         if (on) {
             a.window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-            a.window.setBackgroundDrawable(null)
+            a.window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         } else {
             a.window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
         }
