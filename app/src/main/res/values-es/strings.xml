@@ -54,6 +54,11 @@
     <string name="glass_frosted">Esmerilado</string>
     <string name="glass_clear">Transparente</string>
     <string name="sort_apps">Orden</string>
+    <string name="row_size">Tamaño</string>
+    <string name="size_standard">Estándar</string>
+    <string name="size_large">Grande</string>
+    <string name="size_largest">Muy grande</string>
+    <string name="help_row_size">Hace más grandes las apps de la fila. Caben menos apps a lo ancho. Pulsa ‹ › para probar cada tamaño.</string>
     <string name="manual">Manual</string>
     <string name="most_used">Más usadas</string>
     <string name="apps_in_row">Elegir apps</string>
