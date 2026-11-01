@@ -2107,7 +2107,7 @@ class MainActivity : Activity() {
                 }
                 renderApps()
                 watchKey = null
-                showWatchNext(watchList)
+                showWatchNext(Cards(cardSources, cardCurrent, watchList))
                 showPanelGlass()
                 renderSettings(R.string.glass)
             },
