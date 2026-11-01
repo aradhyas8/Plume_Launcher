@@ -1193,7 +1193,7 @@ class MainActivity : Activity() {
         val fallback = defaultWallpaper(dark)
         io.execute {
             val own = try {
-                decodeWallpaper(if (video) fallback else choice)
+                if (video) videoPoster(File(wallpaperDir(), choice.removePrefix("video:"))) else decodeWallpaper(choice)
             } catch (e: Exception) {
                 null
             } catch (e: OutOfMemoryError) { // a picture on a TV short of memory: show the default instead of crashing
@@ -1286,6 +1286,34 @@ class MainActivity : Activity() {
         }
         ui.removeCallbacks(folderRetryTask)
         ui.postDelayed(folderRetryTask, delay)
+    }
+
+    /**
+     * The first frame of a video wallpaper, shown until the video plays: the player takes a second to start (longer
+     * after a theme change recreates the screen), and the default picture in that second looked like a wrong
+     * wallpaper. The video starts at this same frame, so the switch does not show. Read once, then kept as a JPEG.
+     */
+    private fun videoPoster(video: File): Bitmap? {
+        val cache = File(cacheDir, "poster-${video.name}-${video.length()}-${video.lastModified()}.jpg")
+        if (cache.isFile) BitmapFactory.decodeFile(cache.path)?.let { return it }
+        val r = android.media.MediaMetadataRetriever()
+        return try {
+            r.setDataSource(video.path)
+            val at = android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            val frame = if (Build.VERSION.SDK_INT >= 27) r.getScaledFrameAtTime(0, at, resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
+                else r.getFrameAtTime(0, at)?.let { f -> // Android 8.0 has no scaled read: a 4K frame is 33 MB, shrink it
+                    val w = resources.displayMetrics.widthPixels
+                    if (f.width <= w) f else Bitmap.createScaledBitmap(f, w, maxOf(1, f.height * w / f.width), true).also { f.recycle() }
+                }
+            frame?.also { f ->
+                cacheDir.listFiles { f2 -> f2.name.startsWith("poster-") }?.forEach { it.delete() } // only the shown video's
+                cache.outputStream().use { f.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            }
+        } catch (e: Exception) {
+            null
+        } finally {
+            r.release()
+        }
     }
 
     private fun decodeWallpaper(choice: String): Bitmap? {
