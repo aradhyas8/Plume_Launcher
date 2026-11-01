@@ -150,6 +150,8 @@ Back, OK, the arrows, Home, Power and the volume keys can't be changed, so the r
 
 ### Custom wallpapers
 
+For moving wallpaper, open **Video wallpapers** under Light wallpaper or Dark wallpaper. Choose a NASA Earth scene to download and preview it, then select **Use this video**. The first catalog uses four [NASA Scientific Visualization Studio Earth videos](https://svs.gsfc.nasa.gov/4019). Credit: NASA Goddard Space Flight Center Scientific Visualization Studio and Earth Observatory. You can also choose **Add your video from phone…** and upload an H.264 MP4 file up to 1080p and 120 MB. Plume mutes and loops the video on the home screen and stops playback when you leave it. Downloads and uploads need free space on the TV. Each theme has its own wallpaper choice.
+
 Open **Plume settings → Wallpaper & theme → Light wallpaper** or **Dark wallpaper** and choose **Add from phone…**. Scan the QR code with your phone (it must be on the same Wi-Fi as the TV), pick a photo and upload it. It becomes the wallpaper straight away. The TV turns it upright, crops it to the screen around its centre and saves a small copy. The upload page only works while that screen is open. **Remove a photo…** in the same list deletes one.
 
 You can also copy `.jpg`, `.png` or `.webp` files to `Android/data/dev.plume/files/wallpapers/` yourself:
@@ -181,9 +183,11 @@ Plume has no analytics, no ads and no account. It only connects to the internet 
 - check this repository's GitHub releases for a new version, once a day, and download it when you choose to update
 - download the Gallery paintings from this repository, **only if you choose that screensaver**
 - get the Bing picture of the day (about 300 KB), **only if you choose it as your wallpaper**. Plume sends a request to [bing.com](https://www.bing.com) when the home screen opens: once a day, or once an hour until the picture has changed that day, because Bing changes it at a set time for each country. Bing sees the TV's IP address and its language and country, which Plume sends to get the picture for your country. Plume keeps one picture and deletes it when you choose another wallpaper.
+- download one NASA Earth video from [svs.gsfc.nasa.gov](https://svs.gsfc.nasa.gov/4019), **only when you select that scene**. NASA sees the TV's IP address. Plume stores the video on the TV.
 - fetch the weather, **only if you turn it on**. It looks up your approximate location from your IP address via [ipwho.is](https://ipwho.is), then gets the forecast from [Open-Meteo](https://open-meteo.com). The Auto theme uses the same location to work out sunrise and sunset on the TV, with no extra request. Plume keeps the location on the TV after you turn the weather off, so Auto still follows the sun; clearing Plume's data removes it.
 
 **Add from phone…** runs a small upload page on the TV itself, reachable only on your home network and only while that screen is open. Photos go straight from your phone to the TV and nowhere else.
+**Add your video from phone…** uses the same local upload page. Videos stay on the TV.
 
 ## Troubleshooting
 
