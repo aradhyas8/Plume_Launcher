@@ -415,7 +415,11 @@ class MainActivity : Activity() {
             background = ring
             setOnFocusChangeListener { v, focused ->
                 if (focused) lastTop = v
-                ring.setColor(if (!focused) 0 else if (dark) DARK_CARD_LIT[0] else Color.WHITE)
+                // With glass a lit icon sits on a glass disc: the frost, its light and the wallpaper's tint.
+                val disc = glassActive()
+                ring.setColor(if (!focused) 0 else if (disc) glassLook().tile(lit = true) else if (dark) DARK_CARD_LIT[0] else Color.WHITE)
+                if (focused && disc) glass.add(v, v.width / 2f) else glass.remove(v)
+                if (disc) glass.kick(260) // the disc grows with the icon
                 setColorFilter(if (focused) fg else iconInk)
                 animate().scaleX(if (focused) 1.15f else 1f).scaleY(if (focused) 1.15f else 1f)
                     .setDuration(160).setInterpolator(DECELERATE).start()
@@ -932,9 +936,11 @@ class MainActivity : Activity() {
         // Without glass the cards are nearly solid, so Off looks clearly different from glass: dark ones are rimCard()s
         // at 90%, light ones grey at 94%, and focus lifts them to 95% and 100%.
         // Over a blur the light tiles need less colour of their own (43% at rest, 75% selected; Clear is lighter).
-        val glassy = glassLook().active
-        cardRest = if (dark) DARK_CARD else glassy?.tileRest ?: intArrayOf(0xF0E2E5E9.toInt(), 0xF0D8DCE1.toInt())
-        cardLit = if (dark) DARK_CARD_LIT else glassy?.tileLit ?: intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
+        val look = glassLook()
+        val glassy = look.active
+        // Glass tints with the wallpaper's own colour, and focus brightens a tile without filling it white.
+        cardRest = if (dark) DARK_CARD else if (glassy != null) IntArray(2) { look.tile(lit = false) } else intArrayOf(0xF0E2E5E9.toInt(), 0xF0D8DCE1.toInt())
+        cardLit = if (dark) DARK_CARD_LIT else if (glassy != null) IntArray(2) { look.tile(lit = true) } else intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         // Must match the colour each wallpaper fades into, or the bottom edge shows a seam.
         ground = if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
@@ -1055,7 +1061,7 @@ class MainActivity : Activity() {
      * The style, the theme and what is behind the home screen: all that glass depends on. A video is never captured
      * to blur (that fails on TVs that play video on a hardware overlay, and redrawing costs frames): it gets a tint.
      */
-    private fun glassLook() = GlassLook(glassStyle(), dark, Backdrop.of(currentWallpaper()))
+    private fun glassLook() = GlassLook(glassStyle(), dark, Backdrop.of(currentWallpaper()), prefs.getInt("glass_hue", GLASS_GREY))
 
     /** Glass needs something behind it: with a plain background the tiles stay as they are. */
     private fun glassActive() = glassLook().active != null
@@ -1074,19 +1080,17 @@ class MainActivity : Activity() {
     private fun glassSurface(round: Float, flatRight: Boolean = false): GlassBox = GlassBox(this).also { styleGlass(it.glass, round, flatRight) }
 
     private fun styleGlass(g: GlassDrawable, round: Float, flatRight: Boolean = false) {
-        val style = glassStyle() ?: GlassStyle.FROSTED
         g.round = round
         g.flatRight = flatRight
         g.ref = findViewById(R.id.root) // the wallpaper the blur shows, also for a menu in its own window
-        g.wash = if (dark) style.washDark else style.washLight
-        g.rim = if (dark) 0x33FFFFFF else 0x1F000000
+        g.wash = glassLook().wash()
         g.highlight = if (dark) 0x14FFFFFF else 0x66FFFFFF
         g.setBlur(surfaceBlur)
         glassSurfaces.removeAll { it.get() == null }
         if (glassSurfaces.none { it.get() === g }) glassSurfaces.add(java.lang.ref.WeakReference(g)) // the panel is styled again and again
     }
 
-    /** The shown picture as [glassScreen] pixels, not blurred; null for a plain background or a video. */
+    /** The shown picture (a video's first frame) as [glassScreen] pixels, not blurred; null for a plain background. */
     private var glassPixels: IntArray? = null
 
     /**
@@ -1106,12 +1110,13 @@ class MainActivity : Activity() {
         val look = glassLook()
         val px = glassPixels
         val was = glassShown
+        // The layer's own values first: cheap, and a new screen (a theme change) has none yet even when the look
+        // matches what its tiles were built for.
+        glass.lens = look.lens
+        glass.grain = look.active?.grain == true
         if (was != null && was.first == look && was.second === px) return
         glassShown = look to px
-        glass.tint = look.tint
-        glass.lens = look.lens
-        glass.rim = look.rim
-        val shown = px?.takeIf { look.blurs }
+        val shown = px?.takeIf { look.active != null }
         glass.setBlur(shown?.let { glassBlur(it, look.active!!.radius, look.dark) })
         val frost = GlassStyle.FROSTED.radius
         surfaceBlur = if (look.active?.radius == frost) glass.blur
@@ -1218,7 +1223,8 @@ class MainActivity : Activity() {
             // a bright, unfaded rectangle through the dark fade.
             val fades = own != null && !choice.startsWith("res:")
             // Kept even with glass off, so turning it on needs no second decode.
-            val screen = if (bmp != null && !video) glassScreen(bmp, ground, if (fades) ::paintFades else null) else null
+            // A video is frosted from its first frame (own); never from the default picture shown when that failed.
+            val screen = if (bmp != null && (!video || own != null)) glassScreen(bmp, ground, if (fades) ::paintFades else null) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
             // Nothing reads the pixels from here on: keep the picture in graphics memory only, not once more in the process.
             val shown = bmp?.let { b ->
@@ -1231,6 +1237,8 @@ class MainActivity : Activity() {
             ui.post {
                 if (isDestroyed || load != wallpaperLoad) return@post
                 wpRaw = thumb
+                // The glass is tinted with the wallpaper's mean colour; kept, so the next start has it before the picture.
+                thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
                 fadesOn = video || own != null && !choice.startsWith("res:")
                 refreshFades()
                 val old = view.drawable
@@ -2325,6 +2333,9 @@ class MainActivity : Activity() {
             val noteText = when {
                 section.first == R.string.section_lock -> getString(R.string.lock_note)
                 section.first == R.string.section_appearance && theme == "auto" -> autoNote()
+                // Clear needs a still picture (see GlassLook.active): say so where the choice is made.
+                section.first == R.string.section_appearance && glassStyle() == GlassStyle.CLEAR && currentWallpaper().startsWith("video:") ->
+                    getString(R.string.glass_clear_video)
                 else -> null
             }
             val note = if (noteText == null) null else label(noteText, 15f).apply {
@@ -4809,14 +4820,16 @@ class MainActivity : Activity() {
         val style = if (frosted) glassLook().active ?: GlassStyle.FROSTED else null
         val glass = (if (lit) DARK_CARD_LIT else DARK_CARD).let { c ->
             if (solid) IntArray(c.size) { c[it] or 0xFF000000.toInt() }
-            else if (style != null) IntArray(c.size) { c[it] and 0xFFFFFF or ((if (lit) style.darkTileLit else style.darkTileRest) shl 24) }
+            else if (style != null) IntArray(c.size) { glassLook().tile(lit) }
             else c
         }
         val body = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, glass).apply {
             cornerRadius = radius.toFloat()
-            setStroke(1, if (lit) RIM_SIDE_LIT else RIM_SIDE) // 1px, not 1dp: a hairline stays crisp
+            if (style == null) setStroke(1, if (lit) RIM_SIDE_LIT else RIM_SIDE) // 1px, not 1dp: a hairline stays crisp
             setDither(true) // near black the gradient has ~8 steps; dithered, they don't show as bands
         }
+        // Glass has no outline (its sheen and shadow give its shape, see GlassLayer); a solid card keeps its rim.
+        if (style != null) return Baked("rim $radius $lit $solid $frosted", body)
         return Baked("rim $radius $lit $solid $frosted", LayerDrawable(arrayOf(body, ColorDrawable(if (lit) RIM_TOP_LIT else RIM_TOP))).apply {
             setLayerGravity(1, Gravity.TOP or Gravity.FILL_HORIZONTAL)
             setLayerHeight(1, 1)

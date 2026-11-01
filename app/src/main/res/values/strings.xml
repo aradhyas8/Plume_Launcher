@@ -188,6 +188,7 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_auto">Auto</string>
+    <string name="glass_clear_video">Clear glass needs a still wallpaper. With a video, Plume uses Frosted.</string>
     <string name="auto_note_sun">Auto is light from sunrise to sunset in %1$s. Today: %2$s to %3$s.</string>
     <string name="auto_note_up">Auto stays light today: the sun does not set in %1$s.</string>
     <string name="auto_note_down">Auto stays dark today: the sun does not rise in %1$s.</string>

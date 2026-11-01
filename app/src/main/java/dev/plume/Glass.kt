@@ -54,40 +54,66 @@ internal fun boxBlur(px: IntArray, w: Int, h: Int, radius: Int, passes: Int = 2)
     return src
 }
 
-/** The glass keeps the wallpaper's colours: dark mode as they are, light mode a fifth of the way to white. */
+/**
+ * The frost keeps the wallpaper's colours, a little richer (15% more saturation), as glass makes what is behind it
+ * look; light mode lifts them a tenth of the way to white. The tint on top ([glassHue]) gives the light or dark side.
+ */
 internal fun glassTone(px: IntArray, dark: Boolean): IntArray = IntArray(px.size) {
     val p = px[it]
     val c = IntArray(3) { k -> p shr (16 - 8 * k) and 0xFF }
-    for (k in 0..2) c[k] = if (dark) c[k] else c[k] + (255 - c[k]) / 5
+    val grey = (c[0] * 299 + c[1] * 587 + c[2] * 114) / 1000
+    for (k in 0..2) {
+        c[k] = (grey + (c[k] - grey) * 115 / 100).coerceIn(0, 255)
+        if (!dark) c[k] += (255 - c[k]) / 10
+    }
     (0xFF shl 24) or (c[0] shl 16) or (c[1] shl 8) or c[2]
 }
 
+/** The mean colour of [px] (opaque ARGB), opaque: what the glass is tinted with. */
+internal fun meanColour(px: IntArray): Int {
+    if (px.isEmpty()) return GLASS_GREY
+    var r = 0L
+    var g = 0L
+    var b = 0L
+    for (p in px) {
+        r += p shr 16 and 0xFF
+        g += p shr 8 and 0xFF
+        b += p and 0xFF
+    }
+    val n = px.size
+    return (0xFF shl 24) or ((r / n).toInt() shl 16) or ((g / n).toInt() shl 8) or (b / n).toInt()
+}
+
+/** The tint before a wallpaper's colour is known. */
+internal const val GLASS_GREY = 0xFF808080.toInt()
+
 /**
- * The look of glass. [FROSTED] is the original; [CLEAR] uses lighter tints so more of the wallpaper shows through.
- * Both share the one blur, so a style change needs no decode, no second bitmap and no extra memory.
- * [tileRest] and [tileLit] are the light-mode card colours, [darkTileRest] and [darkTileLit] the dark-mode alphas;
- * [dim] and [scrim] are the settings overlays; [radius] is the blur's, so Clear shows more of the wallpaper's shapes.
- * [lens] magnifies the picture under a tile around its centre, so its edges look bent like a lens; [rim] is the alpha
- * of the 1 dp light on a tile's top edge (with a faint 1 dp edge all round), the recipe Alder's glass uses.
+ * The glass's tint: the wallpaper's own colour [hue], taken most of the way to black ([dark]) or to white, so text on
+ * it reads, at [alpha]. A green photo gives green-black or mint glass, not grey.
+ */
+internal fun glassHue(hue: Int, dark: Boolean, alpha: Int): Int {
+    val c = IntArray(3) { k -> hue shr (16 - 8 * k) and 0xFF }
+    for (k in 0..2) c[k] = if (dark) c[k] * 30 / 100 else c[k] + (255 - c[k]) * 75 / 100
+    return (alpha shl 24) or (c[0] shl 16) or (c[1] shl 8) or c[2]
+}
+
+/**
+ * The look of glass. [FROSTED]: a heavy blur that keeps the wallpaper's colours, a tint and a fine grain. [CLEAR]: the
+ * wallpaper nearly sharp, magnified a little ([lens]), almost no tint. [tintRest] and [tintLit] are the tiles' tint
+ * alphas ([glassHue]); [dim] and [scrim] are the settings overlays; [radius] is the blur's.
  */
 internal enum class GlassStyle(
     val key: String,
-    val washDark: Int,
-    val washLight: Int,
-    val tileRest: IntArray,
-    val tileLit: IntArray,
-    val darkTileRest: Int,
-    val darkTileLit: Int,
+    val tintRest: Int,
+    val tintLit: Int,
     val dim: Float,
     val scrim: Int,
     val radius: Int,
     val lens: Float,
-    val rim: Int,
+    val grain: Boolean,
 ) {
-    FROSTED("frosted", 0x8C000000.toInt(), 0xA8FFFFFF.toInt(),
-        intArrayOf(0x6EE2E5E9, 0x6ED8DCE1), intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()), 0x40, 0x66, 0.35f, 0x55, 5, 1f, 0),
-    CLEAR("clear", 0x4D000000.toInt(), 0x66FFFFFF.toInt(),
-        intArrayOf(0x29E2E5E9, 0x29D8DCE1), intArrayOf(0x73FFFFFF, 0x73FFFFFF), 0x1A, 0x40, 0.25f, 0x40, 2, 1.04f, 0x4D);
+    FROSTED("frosted", 0x38, 0x6B, 0.35f, 0x55, 5, 1f, true),
+    CLEAR("clear", 0x0D, 0x40, 0.25f, 0x40, 2, 1.04f, false);
 
     companion object {
         /** The style a stored choice means; null is off. Before the choice, Glass was a switch ([oldOn]). */
@@ -99,7 +125,7 @@ internal enum class GlassStyle(
     }
 }
 
-/** What is behind the home screen, as far as glass cares: a plain colour, a picture to blur or a video to tint over. */
+/** What is behind the home screen, as far as glass cares: a plain colour, a picture, or a video (blurred from its first frame). */
 internal enum class Backdrop {
     PLAIN, PICTURE, VIDEO;
 
@@ -113,26 +139,28 @@ internal enum class Backdrop {
 }
 
 /**
- * Everything glass paints follows from these three, so two equal looks need no redraw. [style] is the stored choice
- * (null for off); a plain background has nothing behind it, so there glass stays off ([active] is null).
+ * Everything glass paints follows from these, so two equal looks need no redraw. [style] is the stored choice (null
+ * for off); [hue] is the wallpaper's mean colour, which tints the glass.
  */
-internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val backdrop: Backdrop) {
-    val active: GlassStyle? get() = style?.takeIf { backdrop != Backdrop.PLAIN }
-
-    /** A picture is blurred under the tiles. */
-    val blurs: Boolean get() = active != null && backdrop == Backdrop.PICTURE
-
+internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val backdrop: Backdrop, val hue: Int = GLASS_GREY) {
     /**
-     * A video moves, so a blur of it is always out of date: the tiles sit on a flat tint of the wash instead. Half
-     * the wash's alpha: the tile adds its own, and the sum must stay clearly lighter than Off's tiles (90%, 94%).
+     * The style that shows: none on a plain background, which has nothing behind it. Clear needs a still picture: a
+     * video moves, so the sharp still under a tile would not match it; there it is Frosted, whose heavy blur of the
+     * video's first frame is soft enough not to show that it does not move.
      */
-    val tint: Int get() = active?.takeIf { backdrop == Backdrop.VIDEO }
-        ?.let { (if (dark) it.washDark else it.washLight).let { w -> w and 0xFFFFFF or ((w ushr 25) shl 24) } } ?: 0
+    val active: GlassStyle? get() = when {
+        backdrop == Backdrop.PLAIN -> null
+        backdrop == Backdrop.VIDEO && style == GlassStyle.CLEAR -> GlassStyle.FROSTED
+        else -> style
+    }
 
-    /** A lens needs a picture under the tile; a flat tint looks the same however it is scaled. */
-    val lens: Float get() = if (blurs) active!!.lens else 1f
+    val lens: Float get() = active?.lens ?: 1f
 
-    val rim: Int get() = active?.rim ?: 0
+    /** A tile's tint, at rest or [lit]: 0 with glass off. */
+    fun tile(lit: Boolean): Int = active?.let { glassHue(hue, dark, if (lit) it.tintLit else it.tintRest) } ?: 0
+
+    /** The panel's and menus' tint: as strong in both styles, as they carry text. */
+    fun wash(): Int = glassHue(hue, dark, 0xA6)
 }
 
 /**
@@ -169,7 +197,18 @@ internal fun glassScreen(wallpaper: Bitmap, ground: Int, fades: ((Canvas, Float,
 }
 
 /** The frost for [glassScreen] pixels: about a millisecond, so it is redone on the UI thread when the look changes. */
-internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius), dark)
+internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius, passes = 3), dark)
+
+/**
+ * The fine grain of frosted glass: a 64 px tile of soft light and dark specks, repeated. Made once; about 6% strong,
+ * so it shows as texture, not as noise.
+ */
+internal fun grainShader(): BitmapShader {
+    val n = 64
+    val r = java.util.Random(7) // the same grain every time
+    val px = IntArray(n * n) { if (r.nextBoolean()) (r.nextInt(0x10) shl 24) or 0xFFFFFF else r.nextInt(0x10) shl 24 }
+    return BitmapShader(Bitmap.createBitmap(px, n, n, Bitmap.Config.ARGB_8888), Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+}
 
 /**
  * Sits between the wallpaper and the home screen and paints the blurred wallpaper under each glass tile, at the
@@ -185,12 +224,7 @@ internal class GlassLayer(context: Context) : View(context) {
     private val tiles = ArrayList<Tile>()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val matrix = Matrix()
-    // The glass's edge: a faint 1 dp line all round, and a 1 dp sliver of light along the top that follows the corners.
     private val onePx = context.resources.displayMetrics.density
-    private val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = onePx }
-    private val shinePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val shine = android.graphics.Path()
-    private val below = android.graphics.Path()
     private val visible = Rect()
     private val row = Rect()
     private val rect = RectF()
@@ -199,27 +233,36 @@ internal class GlassLayer(context: Context) : View(context) {
     private var shader: BitmapShader? = null
     var blur: Bitmap? = null // the blurred wallpaper, for the surfaces that paint it themselves (GlassBox)
         private set
-    /** A flat colour under each tile when there is no blur (a video wallpaper): 0 for none. */
-    var tint = 0
-        set(v) {
-            field = v
-            invalidate()
-        }
     var lens = 1f // see GlassStyle.lens
         set(v) {
+            if (field != v) invalidate()
             field = v
-            invalidate()
         }
-    var rim = 0 // the alpha of the light on each tile's edge, 0 for none
+    var grain = false // see GlassStyle.grain
         set(v) {
+            if (field != v) invalidate()
             field = v
-            invalidate()
         }
+    // What makes a pane read as glass without an outline: light caught on its top half, a soft shadow under it, and
+    // the fine grain of frosted glass. All drawn with fixed shaders.
+    private val sheenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = android.graphics.LinearGradient(0f, 0f, 0f, 1f, intArrayOf(0x4DFFFFFF, 0x12FFFFFF, 0), floatArrayOf(0f, 0.38f, 0.62f), Shader.TileMode.CLAMP)
+    }
+    private val grainPaint = Paint().apply { shader = grainShader() }
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF000000.toInt() }
+    private val unit = Matrix()
+    private val pane = android.graphics.Path()
     private var until = 0L // keeps redrawing for a moment after a scroll or a focus change, which move the tiles
 
     fun add(v: View, radius: Float) {
         tiles.removeAll { it.view.get() == null }
         if (tiles.none { it.view.get() === v }) tiles += Tile(WeakReference(v), radius)
+        invalidate()
+    }
+
+    fun remove(v: View) {
+        tiles.removeAll { it.view.get().let { t -> t == null || t === v } }
+        invalidate()
     }
 
     fun clearTiles() {
@@ -255,14 +298,9 @@ internal class GlassLayer(context: Context) : View(context) {
     }
 
     override fun onDraw(c: Canvas) {
+        if (tiles.isEmpty()) return
         val s = shader
-        if (s == null && tint == 0 && rim == 0) return
-        if (s != null) {
-            matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
-            s.setLocalMatrix(matrix)
-        } else paint.color = tint
         paint.shader = s
-        val full = if (s != null) 255 else tint ushr 24 // a tint keeps its own alpha, then fades with the tile
         getLocationInWindow(at)
         val ox = at[0]
         val oy = at[1]
@@ -286,34 +324,49 @@ internal class GlassLayer(context: Context) : View(context) {
             v.getLocationInWindow(at)
             // Where the tile is drawn, lift and row scale included; what a scroll view cuts off stays cut off.
             rect.set(at[0] - ox.toFloat(), at[1] - oy.toFloat(), at[0] - ox + v.width * sx, at[1] - oy + v.height * sy)
-            paint.alpha = alpha * full / 255
-            if (s != null && lens != 1f) {
+            val rx = t.radius * sx
+            val ry = t.radius * sy
+            val lit = v.isFocused
+            shadow(c, rx, ry, alpha, lit, scroller, ox)
+            c.save()
+            c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
+            if (s != null) {
                 matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
                 matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
                 s.setLocalMatrix(matrix)
+                paint.alpha = alpha
+                c.drawRoundRect(rect, rx, ry, paint)
+                if (grain) {
+                    grainPaint.alpha = alpha
+                    c.drawRoundRect(rect, rx, ry, grainPaint)
+                }
             }
-            c.save()
-            c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
-            if (s != null || tint != 0) c.drawRoundRect(rect, t.radius * sx, t.radius * sy, paint)
-            if (rim != 0) {
-                val rx = t.radius * sx
-                val ry = t.radius * sy
-                shine.reset()
-                shine.addRoundRect(rect, rx, ry, android.graphics.Path.Direction.CW)
-                below.reset()
-                rect.offset(0f, onePx)
-                below.addRoundRect(rect, rx, ry, android.graphics.Path.Direction.CW)
-                rect.offset(0f, -onePx)
-                shine.op(below, android.graphics.Path.Op.DIFFERENCE)
-                shinePaint.color = rim * alpha / 255 shl 24 or 0xFFFFFF
-                c.drawPath(shine, shinePaint)
-                edgePaint.color = 0x24 * alpha / 255 shl 24 or 0xFFFFFF
-                rect.inset(onePx / 2, onePx / 2)
-                c.drawRoundRect(rect, rx, ry, edgePaint)
-            }
+            light(c, rx, ry, alpha, lit)
             c.restore()
         }
         if (SystemClock.uptimeMillis() < until) postInvalidateOnAnimation()
+    }
+
+    /** A soft shadow under the pane at [rect], outside it only: inside, it would darken the glass. */
+    private fun shadow(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean, scroller: View?, ox: Int) {
+        pane.reset()
+        pane.addRoundRect(rect, rx, ry, android.graphics.Path.Direction.CW)
+        c.save()
+        c.clipOutPath(pane)
+        // In a row, the shadow stops at the row's ends as the tiles do (see the stub note in onDraw).
+        if (scroller != null) c.clipRect(row.left - ox.toFloat(), 0f, row.right - ox.toFloat(), height.toFloat())
+        shadowPaint.setShadowLayer((if (lit) 22f else 14f) * onePx, 0f, (if (lit) 8f else 5f) * onePx, (if (lit) 0x59 else 0x38) * alpha / 255 shl 24)
+        c.drawRoundRect(rect, rx, ry, shadowPaint)
+        c.restore()
+    }
+
+    /** The light on the pane: the sheen on its top half, brighter on the focused tile. */
+    private fun light(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean) {
+        unit.setScale(1f, rect.height())
+        unit.postTranslate(0f, rect.top)
+        sheenPaint.shader.setLocalMatrix(unit)
+        sheenPaint.alpha = if (lit) alpha else alpha * 3 / 4
+        c.drawRoundRect(rect, rx, ry, sheenPaint)
     }
 
     /** The tile's alpha multiplied by every parent's, so a fading row takes its frost with it. */
@@ -349,7 +402,7 @@ internal fun glassMapping(screenW: Int, screenH: Int, x: Int, y: Int) =
 
 /**
  * The look of a frosted surface: the blurred wallpaper that is under the [host] view, at the host's own place, then a
- * tint (dark or white), a hairline rim and a little light on the top edge. The blur is the one the tiles use, so
+ * tint (dark or white) and a little light on the top edge, with no outline. The blur is the one the tiles use, so
  * nothing is blurred again, and what is behind the surface (tiles, cards) does not show through the text.
  * [round] is the corner radius, [flatRight]: the right corners run off the screen (a panel along the right edge).
  * [ref] is the view whose wallpaper the blur shows (the activity root), so a surface in another window (a menu, a
@@ -360,7 +413,7 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
     // or a panel is drawn once and then sits still, so the dither costs nothing that shows (the tiles of the row differ).
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
     private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
-    private val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1f }
+    private val grainPaint = Paint().apply { shader = grainShader() }
     private val matrix = Matrix()
     private val rect = RectF()
     private val at = IntArray(2)
@@ -371,7 +424,6 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
     var flatRight = false
     var ref: View? = null // the view the blur was made for; its size and place fix the mapping
     var wash = 0
-    var rim = 0
     var highlight = 0 // white at the top edge, fading out: the light of the glass
         set(v) {
             field = v
@@ -419,17 +471,16 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
             s.setLocalMatrix(matrix)
             paint.shader = s
             c.drawRoundRect(rect, round, round, paint)
+            c.drawRoundRect(rect, round, round, grainPaint) // a surface is always Frosted (see GlassLook.wash)
         }
+        // Without a blur the tint is solid: see-through, the tiles and posters behind would show under the text.
         tintPaint.color = if (shader == null) wash or (0xFF shl 24) else wash
         c.drawRoundRect(rect, round, round, tintPaint)
-        if (highlight != 0 && shader != null) {
+        if (highlight != 0) {
             tintPaint.shader = gloss
             c.drawRoundRect(rect, round, round, tintPaint)
             tintPaint.shader = null
         }
-        rimPaint.color = rim
-        rect.inset(0.5f, 0.5f)
-        c.drawRoundRect(rect, round, round, rimPaint)
     }
 
     override fun setAlpha(alpha: Int) {}
