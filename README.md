@@ -142,6 +142,7 @@ If Home doesn't reach Plume on your Fire TV, run [`tools/plume-firetv-probe.sh`]
 | Hide a Continue Watching item | Hold **OK** on its card, then **Remove from Continue Watching** |
 | Remove an app from the row | Hold **OK** on it, then **Remove from row** (it stays in *All apps*) |
 | Choose which apps feed Continue Watching | **Plume settings → Shows row → From apps** |
+| Show each source of the shows row on its own | **Plume settings → Shows row → Rows** (see [Rows of the shows row](#rows-of-the-shows-row)) |
 | Pin an app from *All apps* to the front | Open **All apps**, hold **OK** on the app (this also unhides it) |
 | Hide apps from the row | **Plume settings → Apps row → Choose apps** |
 | Show app names always, on focus or never | **Plume settings → Apps row → App names** |
@@ -151,6 +152,12 @@ If Home doesn't reach Plume on your Fire TV, run [`tools/plume-firetv-probe.sh`]
 | Lock the layout with a PIN | **Plume settings → Lock layout** |
 | Move, hide or add a top-bar icon | Hold **OK** on an icon at the top of the home screen, then select **Move**, **Hide** or **Add icon** |
 | Open the Google TV dashboard | Hold the **Home** button |
+
+### Rows of the shows row
+
+**Plume settings → Shows row → Rows** opens a page with three choices. Select one: it gets a tick, and a line under the list says what it does and which buttons to press. **Mixed** (the default) puts every source in one row. **By title** shows one source at a time: push **Down** from the apps to the row's title, then **Left** or **Right** to show another source. **Per channel** also shows one source at a time, as a row of its own: push **Down** on a card for the next source and **Up** for the one before. The arrows by the title show where you can go.
+
+The sources are Android TV's Watch Next and every channel that is on in **Plume settings → Shows row → Channels**. In **By title** and **Per channel**, Watch Next comes first, then the channels named "Continue Watching", then the others. A source with nothing in it is left out. The cards stay where they are when the source changes: only their poster, title and progress change. Plume loads the new posters first, so a card never shows an empty picture. With only one source that has shows, By title and Per channel look like Mixed, and the Rows page says so.
 
 ### Remote keys
 

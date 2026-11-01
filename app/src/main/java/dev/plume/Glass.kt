@@ -115,6 +115,10 @@ internal class GlassLayer(context: Context) : View(context) {
         if (tiles.none { it.view.get() === v }) tiles += Tile(WeakReference(v), radius)
     }
 
+    fun remove(v: View) {
+        tiles.removeAll { it.view.get().let { w -> w == null || w === v } }
+    }
+
     fun clearTiles() {
         tiles.clear()
         invalidate()

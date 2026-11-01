@@ -209,6 +209,16 @@
     <string name="help_apps_when_hidden">When the shows row hides, the apps stay in place or move down.</string>
     <string name="help_show_icons">The small app icon on each card. Colour shows it in the app\'s own colour.</string>
     <string name="help_row_name">The name above the row. Automatic uses the name your apps give it.</string>
+    <string name="cards_rows">Rows</string>
+    <string name="cards_mixed">Mixed</string>
+    <string name="cards_title">By title</string>
+    <string name="cards_each">Per channel</string>
+    <string name="help_cards_rows">How the shows are grouped. Select it to see the choices and the buttons that each one uses.</string>
+    <string name="help_cards_mixed">Every source in one row, newest first. There is nothing to switch.</string>
+    <string name="help_cards_title">One source at a time. Press Down from the apps to the title, then Left or Right to show another source.</string>
+    <string name="help_cards_each">One row for each source, shown one at a time. Press Down on a card for the next source, Up for the one before. The arrows by the title show where you can go.</string>
+    <string name="cards_rows_note">A source is Watch Next, or a channel that an app adds. By title and Per channel need two or more sources with shows.</string>
+    <string name="cards_rows_one">Now only one source has shows, so the row looks the same.</string>
     <string name="help_from_apps">Choose the apps that can add shows to this row.</string>
     <string name="help_channels">Turn on or off the channels that apps add, like Recommended.</string>
     <string name="help_hidden_shows">Shows you hid from the row. Press OK to show all of them again.</string>

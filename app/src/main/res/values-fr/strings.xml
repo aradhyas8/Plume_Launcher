@@ -193,6 +193,16 @@
     <string name="install_update">Installer %1$s</string>
     <string name="row_position">Position de la ligne d\'applis</string>
     <string name="show_row">Afficher la ligne</string>
+    <string name="cards_rows">Rangées</string>
+    <string name="cards_mixed">Mélangées</string>
+    <string name="cards_title">Par titre</string>
+    <string name="cards_each">Par chaîne</string>
+    <string name="help_cards_rows">Comment les séries sont regroupées. Sélectionnez-la pour voir les choix et les boutons que chacun utilise.</string>
+    <string name="help_cards_mixed">Toutes les sources dans une rangée, les plus récentes d\'abord. Rien à changer.</string>
+    <string name="help_cards_title">Une source à la fois. Appuyez sur Bas depuis les applications pour aller au titre, puis sur Gauche ou Droite pour afficher une autre source.</string>
+    <string name="help_cards_each">Une rangée pour chaque source, affichées une à la fois. Bas sur une carte donne la source suivante, Haut la précédente. Les flèches près du titre montrent où aller.</string>
+    <string name="cards_rows_note">Une source est Watch Next, ou une chaîne qu\'une application ajoute. Par titre et Par chaîne demandent au moins deux sources avec des séries.</string>
+    <string name="cards_rows_one">Une seule source a des séries pour l\'instant : la rangée reste la même.</string>
     <string name="on_down">Avec Bas</string>
     <string name="apps_when_hidden">Ligne d\'applis si masquée</string>
     <string name="stays_put">Ne bouge pas</string>
