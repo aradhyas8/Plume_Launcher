@@ -63,7 +63,7 @@ internal fun glassTone(px: IntArray, dark: Boolean): IntArray = IntArray(px.size
  * The look of glass. [FROSTED] is the original; [CLEAR] uses lighter tints so more of the wallpaper shows through.
  * Both share the one blur, so a style change needs no decode, no second bitmap and no extra memory.
  * [tileRest] and [tileLit] are the light-mode card colours, [darkTileRest] and [darkTileLit] the dark-mode alphas;
- * [dim] and [scrim] are the settings overlays.
+ * [dim] and [scrim] are the settings overlays; [radius] is the blur's, so Clear shows more of the wallpaper's shapes.
  */
 internal enum class GlassStyle(
     val key: String,
@@ -75,11 +75,12 @@ internal enum class GlassStyle(
     val darkTileLit: Int,
     val dim: Float,
     val scrim: Int,
+    val radius: Int,
 ) {
     FROSTED("frosted", 0x8C000000.toInt(), 0xA8FFFFFF.toInt(),
-        intArrayOf(0x6EE2E5E9, 0x6ED8DCE1), intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()), 0x40, 0x66, 0.35f, 0x55),
+        intArrayOf(0x6EE2E5E9, 0x6ED8DCE1), intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()), 0x40, 0x66, 0.35f, 0x55, 2),
     CLEAR("clear", 0x4D000000.toInt(), 0x66FFFFFF.toInt(),
-        intArrayOf(0x3DE2E5E9, 0x3DD8DCE1), intArrayOf(0x8CFFFFFF.toInt(), 0x8CFFFFFF.toInt()), 0x26, 0x4D, 0.25f, 0x40);
+        intArrayOf(0x3DE2E5E9, 0x3DD8DCE1), intArrayOf(0x8CFFFFFF.toInt(), 0x8CFFFFFF.toInt()), 0x26, 0x4D, 0.25f, 0x40, 1);
 
     companion object {
         /** The style a stored choice means; null is off. Before the choice, Glass was a switch ([oldOn]). */
@@ -107,7 +108,7 @@ internal fun glassCrop(w: Int, h: Int): FloatArray {
  * does not cover, and [fades] paints the top and bottom fades over it, as the wallpaper view shows them. Done once
  * when a wallpaper loads, off the UI thread.
  */
-internal fun glassPixels(wallpaper: Bitmap, ground: Int, dark: Boolean, fades: ((Canvas, Float, Float) -> Unit)? = null): IntArray {
+internal fun glassPixels(wallpaper: Bitmap, ground: Int, dark: Boolean, fades: ((Canvas, Float, Float) -> Unit)? = null, radius: Int = 2): IntArray {
     // In two steps, or a 1920 px picture shrunk to 120 px in one would skip most of its pixels.
     val mid = Bitmap.createScaledBitmap(wallpaper, maxOf(1, wallpaper.width / 4), maxOf(1, wallpaper.height / 4), true)
     val screen = Bitmap.createBitmap(GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888)
@@ -121,7 +122,7 @@ internal fun glassPixels(wallpaper: Bitmap, ground: Int, dark: Boolean, fades: (
     val px = IntArray(GLASS_W * GLASS_H)
     screen.getPixels(px, 0, GLASS_W, 0, 0, GLASS_W, GLASS_H)
     screen.recycle()
-    return glassTone(boxBlur(px, GLASS_W, GLASS_H, 2), dark)
+    return glassTone(boxBlur(px, GLASS_W, GLASS_H, radius), dark)
 }
 
 /**
@@ -287,7 +288,6 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
     var flatRight = false
     var ref: View? = null // the view the blur was made for; its size and place fix the mapping
     var wash = 0
-    var seeThrough = false // no blur, and the wash keeps its alpha anyway (the panel over a video wallpaper)
     var rim = 0
     var highlight = 0 // white at the top edge, fading out: the light of the glass
         set(v) {
@@ -337,9 +337,9 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
             paint.shader = s
             c.drawRoundRect(rect, round, round, paint)
         }
-        tintPaint.color = if (shader == null && !seeThrough) wash or (0xFF shl 24) else wash
+        tintPaint.color = if (shader == null) wash or (0xFF shl 24) else wash
         c.drawRoundRect(rect, round, round, tintPaint)
-        if (highlight != 0 && (shader != null || seeThrough)) {
+        if (highlight != 0 && shader != null) {
             tintPaint.shader = gloss
             c.drawRoundRect(rect, round, round, tintPaint)
             tintPaint.shader = null

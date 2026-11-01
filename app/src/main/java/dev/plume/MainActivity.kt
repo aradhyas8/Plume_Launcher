@@ -928,12 +928,12 @@ class MainActivity : Activity() {
     private fun applyTheme() {
         dark = wantDark()
         fg = if (dark) DARK_TEXT else 0xFF111214.toInt()
-        // Cards are see-through, so the wallpaper shows through them like glass: dark ones are rimCard()s at
-        // 70%, light ones frosted grey at 78%, and focus lifts them to 80% and 95%.
+        // Without glass the cards are nearly solid, so Off looks clearly different from glass: dark ones are rimCard()s
+        // at 90%, light ones grey at 94%, and focus lifts them to 95% and 100%.
         // Over a blur the light tiles need less colour of their own (43% at rest, 75% selected; Clear is lighter).
         val glassy = glassStyle()?.takeIf { glassActive() }
-        cardRest = if (dark) DARK_CARD else glassy?.tileRest ?: intArrayOf(0xC8E2E5E9.toInt(), 0xC8D8DCE1.toInt())
-        cardLit = if (dark) DARK_CARD_LIT else glassy?.tileLit ?: intArrayOf(0xF2FFFFFF.toInt(), 0xF2FFFFFF.toInt())
+        cardRest = if (dark) DARK_CARD else glassy?.tileRest ?: intArrayOf(0xF0E2E5E9.toInt(), 0xF0D8DCE1.toInt())
+        cardLit = if (dark) DARK_CARD_LIT else glassy?.tileLit ?: intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         // Must match the colour each wallpaper fades into, or the bottom edge shows a seam.
         ground = if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
@@ -1060,7 +1060,7 @@ class MainActivity : Activity() {
     /**
      * A video moves, so a blur of it is always out of date: the tiles sit on a flat tint of the style's wash instead.
      * Capturing frames to blur fails on TVs that play video on a hardware overlay, and redrawing costs memory and frames.
-     * Half the wash's alpha: the tile adds its own, and the sum must stay clearly lighter than Off's tiles (70%, 78%).
+     * Half the wash's alpha: the tile adds its own, and the sum must stay clearly lighter than Off's tiles (90%, 94%).
      */
     private fun videoTint() = glassStyle()?.takeIf { glassActive() && currentWallpaper().startsWith("video:") }
         ?.let { (if (dark) it.washDark else it.washLight).let { w -> w and 0xFFFFFF or ((w ushr 25) shl 24) } } ?: 0
@@ -1204,7 +1204,7 @@ class MainActivity : Activity() {
             // The fades are drawn over your photos: the frost must carry them too, or the bottom tiles punch
             // a bright, unfaded rectangle through the dark fade.
             val fades = own != null && !choice.startsWith("res:")
-            val blur = if (bmp != null && !video && glassActive()) glassPixels(bmp, ground, dark, if (fades) ::paintFades else null) else null
+            val blur = if (bmp != null && !video && glassActive()) glassPixels(bmp, ground, dark, if (fades) ::paintFades else null, glassStyle()?.radius ?: 2) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
             // Nothing reads the pixels from here on: keep the picture in graphics memory only, not once more in the process.
             val shown = bmp?.let { b ->
@@ -2056,10 +2056,6 @@ class MainActivity : Activity() {
             panel.background = null
             panel.setWillNotDraw(false)
             styleGlass(panel.glass, dp(22).toFloat(), flatRight = true)
-            // Over a video the panel has no blur, but it still shows the video through it. Frosted's wash for both
-            // styles: Clear's is too thin for text over a moving picture.
-            panel.glass.seeThrough = videoTint() != 0
-            if (panel.glass.seeThrough) panel.glass.wash = if (dark) GlassStyle.FROSTED.washDark else GlassStyle.FROSTED.washLight
         } else {
             panel.setWillNotDraw(true)
             panel.background = if (!dark) ColorDrawable(0xFFF7F8FA.toInt())
@@ -2152,8 +2148,8 @@ class MainActivity : Activity() {
                 applyTheme()
                 baked.clear()
                 glass.clearTiles()
-                if (after != null && before == null) {
-                    loadWallpaper()
+                if (after != null && after.radius != before?.radius && !currentWallpaper().startsWith("video:")) {
+                    loadWallpaper() // the blur differs by style; a video has none, and its tint comes with applyTheme
                 } else if (after == null) {
                     applyGlassBlur(null)
                 }
@@ -4903,8 +4899,8 @@ class MainActivity : Activity() {
         // Translucent (70% at rest, 80% selected), so the wallpaper shows through the tiles like frosted glass.
         /** Android's own Watch Next list, listed with the channels so it can be turned off too. */
         const val WATCH_NEXT = "watchnext"
-        val DARK_CARD = intArrayOf(0xB30B0B0B.toInt(), 0xB3040404.toInt())
-        val DARK_CARD_LIT = intArrayOf(0xCC141414.toInt(), 0xCC070707.toInt())
+        val DARK_CARD = intArrayOf(0xE60B0B0B.toInt(), 0xE6040404.toInt())
+        val DARK_CARD_LIT = intArrayOf(0xF2141414.toInt(), 0xF2070707.toInt())
         const val RIM_TOP = 0x17FFFFFF // white 9%
         const val RIM_SIDE = 0x0AFFFFFF // white 4%
         const val RIM_TOP_LIT = 0x38FFFFFF // white 22%
