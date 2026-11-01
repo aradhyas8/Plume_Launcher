@@ -19,6 +19,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - **Softer photo fade.** The top and bottom fades start lower and end softer, so more of the picture shows.
 - **The fades work on every wallpaper.** **Top fade** and **Bottom fade** change the two bundled pictures too. Before, they changed only your own photos.
 - **New bundled wallpapers.** **Mist (day)** and **Peak (dusk)** replace the two Rockies pictures. The fades are no longer part of the picture.
+- Plume starts at cold boot when it is the only Home app. Before, the TV stayed on the boot screen.
 - The **Glass** setting changes tiles, cards and the settings panel live without restarting Plume.
 - In light mode with **Glass** off, the Plume settings panel is light again. Before, it was black.
 

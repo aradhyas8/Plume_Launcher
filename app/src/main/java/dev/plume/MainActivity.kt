@@ -59,6 +59,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.os.UserManager
 import android.provider.MediaStore
 import android.provider.Settings
 import android.text.InputType
@@ -331,6 +332,11 @@ class MainActivity : Activity() {
     private lateinit var videoWallpaper: VideoWallpaper
 
     private var resumed = false
+    private var ready = false // false while the user is still locked: no prefs, files or cache yet
+    private var recreating = false
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) = rebuildWhenUnlocked()
+    }
     private val refreshIfDirty = Runnable { if (appsDirty && !editing) refreshApps() } // not while a tile is being moved: onResume catches up
 
     private val packageReceiver = object : BroadcastReceiver() {
@@ -360,8 +366,23 @@ class MainActivity : Activity() {
         }
     }
 
+    /** The user is unlocked now: rebuild the home screen, so it reads the now-available saved data. */
+    private fun rebuildWhenUnlocked() {
+        if (ready || recreating || isFinishing || isDestroyed) return
+        recreating = true
+        recreate()
+    }
+
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        // The system starts Home before the user unlocks (Direct Boot). Register first, so a missed
+        // broadcast cannot leave the home screen empty. Do not read prefs, files or the cache yet.
+        registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_UNLOCKED))
+        if (!getSystemService(UserManager::class.java).isUserUnlocked) {
+            setContentView(R.layout.activity_main)
+            return
+        }
+        ready = true
         setContentView(R.layout.activity_main)
         glass = GlassLayer(this)
         findViewById<ViewGroup>(R.id.root).addView(glass, 2, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)) // over both wallpaper layers
@@ -448,6 +469,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (!ready) {
+            if (getSystemService(UserManager::class.java).isUserUnlocked) rebuildWhenUnlocked()
+            return
+        }
         resumed = true
         if (currentWallpaper().startsWith("video:")) videoWallpaper.resume()
         returnTo = null // back by another way than Home: the next Home starts again at the first tile
@@ -501,22 +526,26 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
-        resumed = false
-        videoWallpaper.pause()
-        findViewById<ImageView>(R.id.wallpaper).alpha = 1f
-        ui.removeCallbacks(refreshIfDirty)
-        ui.removeCallbacks(weatherTick)
-        ui.removeCallbacks(themeTick)
-        ui.removeCallbacks(wallpaperTick)
-        if (editing) endEdit()
-        if (movingTop != null) endTopMove(false) // Home or an app opened in the middle of a move: the bar goes back as it was
+        if (ready) {
+            resumed = false
+            videoWallpaper.pause()
+            findViewById<ImageView>(R.id.wallpaper).alpha = 1f
+            ui.removeCallbacks(refreshIfDirty)
+            ui.removeCallbacks(weatherTick)
+            ui.removeCallbacks(themeTick)
+            ui.removeCallbacks(wallpaperTick)
+            if (editing) endEdit()
+            if (movingTop != null) endTopMove(false) // Home or an app opened in the middle of a move: the bar goes back as it was
+        }
         super.onPause()
     }
 
     override fun onStop() {
-        unlockedUntil = 0L // leaving the home screen locks it again (onPause would also fire for permission dialogs)
-        Remap.learn = null // never keep swallowing keys for a page that's no longer on screen
-        if (homeTest != 0) leftDuringTest = true
+        if (ready) {
+            unlockedUntil = 0L // leaving the home screen locks it again (onPause would also fire for permission dialogs)
+            Remap.learn = null // never keep swallowing keys for a page that's no longer on screen
+            if (homeTest != 0) leftDuringTest = true
+        }
         super.onStop()
     }
 
@@ -526,20 +555,23 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        videoWallpaper.clear()
-        if (Bing.onChanged === bingChanged) Bing.onChanged = null
-        unregisterReceiver(packageReceiver)
-        applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
-        getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
-        upload?.stop()
-        try {
-            contentResolver.unregisterContentObserver(photoObserver)
-        } catch (e: Exception) {
+        unregisterReceiver(unlockReceiver)
+        if (ready) {
+            videoWallpaper.clear()
+            if (Bing.onChanged === bingChanged) Bing.onChanged = null
+            unregisterReceiver(packageReceiver)
+            applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
+            getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
+            upload?.stop()
+            try {
+                contentResolver.unregisterContentObserver(photoObserver)
+            } catch (e: Exception) {
+            }
+            ui.removeCallbacks(folderRetryTask)
+            ui.removeCallbacksAndMessages(null) // the clocks and the posts still queued must not use the pools below
+            io.shutdownNow()
+            posterIo.shutdownNow()
         }
-        ui.removeCallbacks(folderRetryTask)
-        ui.removeCallbacksAndMessages(null) // the clocks and the posts still queued must not use the pools below
-        io.shutdownNow()
-        posterIo.shutdownNow()
         super.onDestroy()
     }
 
@@ -884,6 +916,7 @@ class MainActivity : Activity() {
     /** Home pressed while already home: close whatever is open and go back to the start of the apps row. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (!ready) return
         if (intent.action == UPDATE_STATUS) return installStatus(intent)
         if (fakeSetup(intent)) return
         if (homeTest != 0 && intent.hasCategory(Intent.CATEGORY_HOME)) { // the Home press reached us: setup works
@@ -905,6 +938,7 @@ class MainActivity : Activity() {
 
     @Deprecated("Home screen: Back only closes overlays")
     override fun onBackPressed() {
+        if (!ready) return
         when {
             settingsScrim.visibility == View.VISIBLE -> pageBack?.invoke() ?: closeLauncherSettings()
             allApps.visibility == View.VISIBLE -> closeAllApps()
@@ -3217,6 +3251,7 @@ class MainActivity : Activity() {
      * listener in style() is a fallback for remotes that send no repeats. [holdFired] stops both firing.
      */
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        if (!ready) return super.dispatchKeyEvent(e)
         val confirm = e.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || e.keyCode == KeyEvent.KEYCODE_ENTER ||
             e.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
         if (movingTop != null && topMoveKey(e, confirm)) return true
