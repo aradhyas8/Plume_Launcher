@@ -1060,9 +1060,10 @@ class MainActivity : Activity() {
     /**
      * A video moves, so a blur of it is always out of date: the tiles sit on a flat tint of the style's wash instead.
      * Capturing frames to blur fails on TVs that play video on a hardware overlay, and redrawing costs memory and frames.
+     * Half the wash's alpha: the tile adds its own, and the sum must stay clearly lighter than Off's tiles (70%, 78%).
      */
     private fun videoTint() = glassStyle()?.takeIf { glassActive() && currentWallpaper().startsWith("video:") }
-        ?.let { if (dark) it.washDark else it.washLight } ?: 0
+        ?.let { (if (dark) it.washDark else it.washLight).let { w -> w and 0xFFFFFF or ((w ushr 25) shl 24) } } ?: 0
 
     /** The name of the current style, for the settings row. */
     private fun glassName() = when (glassStyle()) {
@@ -2055,6 +2056,10 @@ class MainActivity : Activity() {
             panel.background = null
             panel.setWillNotDraw(false)
             styleGlass(panel.glass, dp(22).toFloat(), flatRight = true)
+            // Over a video the panel has no blur, but it still shows the video through it. Frosted's wash for both
+            // styles: Clear's is too thin for text over a moving picture.
+            panel.glass.seeThrough = videoTint() != 0
+            if (panel.glass.seeThrough) panel.glass.wash = if (dark) GlassStyle.FROSTED.washDark else GlassStyle.FROSTED.washLight
         } else {
             panel.setWillNotDraw(true)
             panel.background = if (!dark) ColorDrawable(0xFFF7F8FA.toInt())

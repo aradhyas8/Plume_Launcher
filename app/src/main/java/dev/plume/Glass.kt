@@ -287,6 +287,7 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
     var flatRight = false
     var ref: View? = null // the view the blur was made for; its size and place fix the mapping
     var wash = 0
+    var seeThrough = false // no blur, and the wash keeps its alpha anyway (the panel over a video wallpaper)
     var rim = 0
     var highlight = 0 // white at the top edge, fading out: the light of the glass
         set(v) {
@@ -336,9 +337,9 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
             paint.shader = s
             c.drawRoundRect(rect, round, round, paint)
         }
-        tintPaint.color = if (shader == null) wash or (0xFF shl 24) else wash
+        tintPaint.color = if (shader == null && !seeThrough) wash or (0xFF shl 24) else wash
         c.drawRoundRect(rect, round, round, tintPaint)
-        if (highlight != 0 && shader != null) {
+        if (highlight != 0 && (shader != null || seeThrough)) {
             tintPaint.shader = gloss
             c.drawRoundRect(rect, round, round, tintPaint)
             tintPaint.shader = null
