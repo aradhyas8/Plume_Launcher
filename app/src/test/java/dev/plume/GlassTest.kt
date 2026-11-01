@@ -86,4 +86,30 @@ class GlassTest {
         assertEquals(GlassStyle.CLEAR, GlassStyle.of("clear", oldOn = true))
         assertTrue(GlassStyle.of("off", oldOn = true) == null)
     }
+
+    @Test fun theWallpaperChoiceNamesItsBackdrop() {
+        assertEquals(Backdrop.PLAIN, Backdrop.of("plain:Pure black"))
+        assertEquals(Backdrop.VIDEO, Backdrop.of("video:apple_yosemite.mp4"))
+        assertEquals(Backdrop.PICTURE, Backdrop.of("res:Rockies (day)"))
+        assertEquals(Backdrop.PICTURE, Backdrop.of("folder:12:Photos"))
+    }
+
+    /** Every style, theme and backdrop: frost only over a picture, a tint only over a video, nothing over a plain colour. */
+    @Test fun eachLookPaintsOneThing() {
+        for (style in listOf(null, GlassStyle.FROSTED, GlassStyle.CLEAR)) for (dark in listOf(false, true)) for (b in Backdrop.entries) {
+            val look = GlassLook(style, dark, b)
+            val on = style != null && b != Backdrop.PLAIN
+            assertEquals("$look active", if (on) style else null, look.active)
+            assertEquals("$look blurs", on && b == Backdrop.PICTURE, look.blurs)
+            assertEquals("$look tints", on && b == Backdrop.VIDEO, look.tint != 0)
+        }
+    }
+
+    @Test fun aVideoTintIsHalfTheWashAndClearIsLighter() {
+        val frosted = GlassLook(GlassStyle.FROSTED, dark = true, Backdrop.VIDEO).tint
+        val clear = GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.VIDEO).tint
+        assertEquals(GlassStyle.FROSTED.washDark and 0xFFFFFF, frosted and 0xFFFFFF)
+        assertEquals((GlassStyle.FROSTED.washDark ushr 24) / 2, frosted ushr 24)
+        assertTrue(clear ushr 24 < frosted ushr 24)
+    }
 }

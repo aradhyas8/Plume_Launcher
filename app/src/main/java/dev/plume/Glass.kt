@@ -92,6 +92,37 @@ internal enum class GlassStyle(
     }
 }
 
+/** What is behind the home screen, as far as glass cares: a plain colour, a picture to blur or a video to tint over. */
+internal enum class Backdrop {
+    PLAIN, PICTURE, VIDEO;
+
+    companion object {
+        fun of(choice: String) = when {
+            choice.startsWith("plain:") -> PLAIN
+            choice.startsWith("video:") -> VIDEO
+            else -> PICTURE
+        }
+    }
+}
+
+/**
+ * Everything glass paints follows from these three, so two equal looks need no redraw. [style] is the stored choice
+ * (null for off); a plain background has nothing behind it, so there glass stays off ([active] is null).
+ */
+internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val backdrop: Backdrop) {
+    val active: GlassStyle? get() = style?.takeIf { backdrop != Backdrop.PLAIN }
+
+    /** A picture is blurred under the tiles. */
+    val blurs: Boolean get() = active != null && backdrop == Backdrop.PICTURE
+
+    /**
+     * A video moves, so a blur of it is always out of date: the tiles sit on a flat tint of the wash instead. Half
+     * the wash's alpha: the tile adds its own, and the sum must stay clearly lighter than Off's tiles (90%, 94%).
+     */
+    val tint: Int get() = active?.takeIf { backdrop == Backdrop.VIDEO }
+        ?.let { (if (dark) it.washDark else it.washLight).let { w -> w and 0xFFFFFF or ((w ushr 25) shl 24) } } ?: 0
+}
+
 /**
  * Where a [w]x[h] picture lands on the [GLASS_W]x[GLASS_H] screen, as the wallpaper view's centerCrop puts it: scaled by
  * the larger of the two ratios and centred. Left, top, right, bottom; a photo that is not 16:9 spills over the edges.
@@ -104,11 +135,11 @@ internal fun glassCrop(w: Int, h: Int): FloatArray {
 }
 
 /**
- * The wallpaper as it shows on the screen, blurred, as [GLASS_W]x[GLASS_H] pixels. [ground] fills what the picture
- * does not cover, and [fades] paints the top and bottom fades over it, as the wallpaper view shows them. Done once
- * when a wallpaper loads, off the UI thread.
+ * The wallpaper as it shows on the screen, as [GLASS_W]x[GLASS_H] pixels, not blurred yet. [ground] fills what the
+ * picture does not cover, and [fades] paints the top and bottom fades over it, as the wallpaper view shows them.
+ * Done once when a wallpaper loads, off the UI thread; kept (36 KB), so a style change only blurs it again.
  */
-internal fun glassPixels(wallpaper: Bitmap, ground: Int, dark: Boolean, fades: ((Canvas, Float, Float) -> Unit)? = null, radius: Int = 2): IntArray {
+internal fun glassScreen(wallpaper: Bitmap, ground: Int, fades: ((Canvas, Float, Float) -> Unit)? = null): IntArray {
     // In two steps, or a 1920 px picture shrunk to 120 px in one would skip most of its pixels.
     val mid = Bitmap.createScaledBitmap(wallpaper, maxOf(1, wallpaper.width / 4), maxOf(1, wallpaper.height / 4), true)
     val screen = Bitmap.createBitmap(GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888)
@@ -118,12 +149,15 @@ internal fun glassPixels(wallpaper: Bitmap, ground: Int, dark: Boolean, fades: (
     val at = glassCrop(mid.width, mid.height)
     c.drawBitmap(mid, Rect(0, 0, mid.width, mid.height), RectF(at[0], at[1], at[2], at[3]), paint)
     fades?.invoke(c, GLASS_W.toFloat(), GLASS_H.toFloat())
-    mid.recycle()
+    if (mid !== wallpaper) mid.recycle()
     val px = IntArray(GLASS_W * GLASS_H)
     screen.getPixels(px, 0, GLASS_W, 0, 0, GLASS_W, GLASS_H)
     screen.recycle()
-    return glassTone(boxBlur(px, GLASS_W, GLASS_H, radius), dark)
+    return px
 }
+
+/** The frost for [glassScreen] pixels: about a millisecond, so it is redone on the UI thread when the look changes. */
+internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius), dark)
 
 /**
  * Sits between the wallpaper and the home screen and paints the blurred wallpaper under each glass tile, at the
