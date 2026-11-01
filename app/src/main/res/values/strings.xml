@@ -51,6 +51,7 @@
     <string name="home_off_hint">Turn off \"Plume: Home button\" in Settings → System → Accessibility</string>
     <string name="home_on_hint">Turn on \"Plume: Home button\" in Settings → System → Accessibility</string>
     <string name="dark_wallpaper">Dark wallpaper</string>
+    <string name="wallpaper">Wallpaper</string>
     <string name="light_wallpaper">Light wallpaper</string>
     <string name="folder_photo_changes">Change photo every</string>
     <string name="no_photos">No photos found. Copy some to the TV or plug in a USB drive with photos.</string>

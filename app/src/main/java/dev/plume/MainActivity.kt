@@ -377,6 +377,16 @@ class MainActivity : Activity() {
         allApps = findViewById(R.id.allApps)
         allAppsGrid = findViewById(R.id.allAppsGrid)
         wifi = findViewById(R.id.wifi)
+        if (!prefs.getBoolean("wp_shared", false)) {
+            val wasDark = wantDark()
+            val choice = prefs.getString(if (wasDark) "wp_dark" else "wp_light", null)
+                ?: if (wasDark) "res:Rockies (dusk)" else "res:Rockies (day)"
+            val photo = prefs.getLong(if (wasDark) "wp_photo_dark" else "wp_photo_light", -1)
+            val at = prefs.getLong(if (wasDark) "wp_photo_at_dark" else "wp_photo_at_light", System.currentTimeMillis())
+            prefs.edit().putString("wp_light", choice).putString("wp_dark", choice)
+                .putLong("wp_photo_light", photo).putLong("wp_photo_at_light", at)
+                .putBoolean("wp_shared", true).apply()
+        }
         applyTopBar()
         applyTheme()
         loadWallpaper()
@@ -1012,7 +1022,7 @@ class MainActivity : Activity() {
     // Bundled ones have their fade baked in. Your own go in Android/data/dev.plume/files/wallpapers/
     // (adb push, no permission needed) and get the fades drawn over them (see paintFades). A folder on the TV (MediaStore,
     // so USB drives too) shows its photos in shuffled turns, one decoded at a time.
-    // Each theme remembers its own pick. Decoded off the UI thread, max 1080p (~8 MB). Full colour, not RGB_565:
+    // Decoded off the UI thread, max 1080p (~8 MB). Full colour, not RGB_565:
     // 565 rounds a smooth sky's 1-2 level JPEG ripples into visible grey and green blocks.
 
     private fun wallpaperDir() = getExternalFilesDir("wallpapers")
@@ -1030,7 +1040,7 @@ class MainActivity : Activity() {
     // Light gets a soft white (the light ground colour), not #FFFFFF: pure white glares on a TV.
     private fun plainWallpaper(forDark: Boolean) = if (forDark) "plain:Pure black" else "plain:Soft white"
 
-    private fun defaultWallpaper(forDark: Boolean) = if (forDark) "res:Rockies (dusk)" else "res:Rockies (day)"
+    private fun defaultWallpaper(forDark: Boolean) = "res:Rockies (day)"
 
     private fun currentWallpaper(forDark: Boolean = dark) =
         prefs.getString(if (forDark) "wp_dark" else "wp_light", null) ?: defaultWallpaper(forDark)
@@ -1364,7 +1374,7 @@ class MainActivity : Activity() {
 
     /** Wallpapers page, framed by "Add from phone…" first and, once there are photos, "Remove a photo…" last. */
     private fun pickWallpaper(forDark: Boolean) {
-        val row = if (forDark) R.string.dark_wallpaper else R.string.light_wallpaper
+        val row = R.string.wallpaper
         val choices = wallpaperChoices(forDark)
         val own = choices.filter { it.second.startsWith("file:") }
         val current = currentWallpaper(forDark)
@@ -1373,7 +1383,7 @@ class MainActivity : Activity() {
             page(getString(R.string.video_wallpapers), if (current.startsWith("video:")) CHOSEN else "") { pickVideoWallpaper(forDark) }) +
             choices.map { (name, choice) -> page(name, if (choice == current) CHOSEN else "") { setWallpaper(forDark, choice); renderSettings(row) } } +
             if (own.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_photo_row)) { removeWallpaper(own, forDark) })
-        showPage(if (forDark) getString(R.string.dark_wallpaper) else getString(R.string.light_wallpaper), rows,
+        showPage(getString(R.string.wallpaper), rows,
             if (current.startsWith("video:")) 2 else 3 + choices.indexOfFirst { it.second == current }) {
             renderSettings(row)
         }
@@ -1582,8 +1592,8 @@ class MainActivity : Activity() {
     }
 
     private fun setWallpaper(forDark: Boolean, choice: String) {
-        prefs.edit().putString(if (forDark) "wp_dark" else "wp_light", choice)
-            .remove(photoKey(forDark)).putLong(photoAtKey(forDark), System.currentTimeMillis()).apply()
+        prefs.edit().putString("wp_dark", choice).putString("wp_light", choice)
+            .remove(photoKey()).putLong(photoAtKey(), System.currentTimeMillis()).apply()
         Bing.dropIfUnused(applicationContext, prefs) // choosing another wallpaper deletes the Bing picture at once
         if (choice == Bing.CHOICE) Bing.refresh(applicationContext, prefs, force = true)
         dropShowsIfUnused()
@@ -1595,7 +1605,7 @@ class MainActivity : Activity() {
             wallpaperDir()?.let { cleanUnusedVideoWallpapers(it) }
         }
         updateFeatured()
-        if (forDark == dark) loadWallpaper()
+        loadWallpaper()
     }
 
     private val bingChanged: () -> Unit = { if (currentWallpaper() == Bing.CHOICE) loadWallpaper() }
@@ -1736,8 +1746,8 @@ class MainActivity : Activity() {
     private var afterPhotoAccess: (() -> Unit)? = null // what asked, while Android's permission prompt is up
     private val deck = ArrayDeque<Long>() // photos not shown yet this round; io thread only
 
-    private fun photoKey(forDark: Boolean = dark) = if (forDark) "wp_photo_dark" else "wp_photo_light"
-    private fun photoAtKey(forDark: Boolean = dark) = if (forDark) "wp_photo_at_dark" else "wp_photo_at_light"
+    private fun photoKey(forDark: Boolean = dark) = "wp_photo_light"
+    private fun photoAtKey(forDark: Boolean = dark) = "wp_photo_at_light"
     private fun photoEvery() = prefs.getInt("wp_every", 30)
 
     private fun pickPhotoEvery() {
@@ -1862,7 +1872,7 @@ class MainActivity : Activity() {
 
     private fun pickFolder(forDark: Boolean) = pickFolder({ pickWallpaper(forDark) }) { choice ->
         setWallpaper(forDark, choice)
-        renderSettings(if (forDark) R.string.dark_wallpaper else R.string.light_wallpaper)
+        renderSettings(R.string.wallpaper)
     }
 
     /** Folders page for wallpapers and the screensaver; [onPick] gets "folder:<bucket id>:<name>". */
@@ -2145,8 +2155,7 @@ class MainActivity : Activity() {
             R.string.theme to Triple(getString(R.string.theme), getString(mapOf("light" to R.string.theme_light, "dark" to R.string.theme_dark, "auto" to R.string.theme_auto)[theme] ?: R.string.theme_light)) {
                 steps[R.string.theme]!!(1)
             },
-            R.string.light_wallpaper to Triple(getString(R.string.light_wallpaper), wallpaperName(currentWallpaper(false))) { pickWallpaper(false) },
-            R.string.dark_wallpaper to Triple(getString(R.string.dark_wallpaper), wallpaperName(currentWallpaper(true))) { pickWallpaper(true) },
+            R.string.wallpaper to Triple(getString(R.string.wallpaper), wallpaperName(currentWallpaper())) { pickWallpaper(dark) },
             R.string.glass to Triple(getString(R.string.glass), getString(glassName())) {
                 steps[R.string.glass]!!(1)
             },
@@ -2254,7 +2263,7 @@ class MainActivity : Activity() {
         // In the order things sit on the home screen, top to bottom, then what isn't on it.
         val sections = listOf(
             Triple(R.string.section_appearance, "${rows[R.string.theme]!!.second} · ${wallpaperName(currentWallpaper(dark))}",
-                listOfNotNull(R.string.theme, R.string.light_wallpaper, R.string.dark_wallpaper, R.string.wp_dim.takeIf { dimmed }, R.string.fade_top.takeIf { photo },
+                listOfNotNull(R.string.theme, R.string.wallpaper, R.string.wp_dim.takeIf { dimmed }, R.string.fade_top.takeIf { photo },
                     R.string.fade_bottom.takeIf { photo }, R.string.glass, R.string.app_animations,
                     R.string.folder_photo_changes.takeIf { folder || shows }, R.string.wp_sources.takeIf { shows })),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${rows[R.string.weather_location]!!.second}",
@@ -2294,7 +2303,7 @@ class MainActivity : Activity() {
                 R.string.show_icons to listOf(R.string.monochrome, R.string.colour).map { getString(it) to null },
                 R.string.weather_units to listOf("°C" to null, "°F" to null),
             )
-            val walls = mapOf(R.string.light_wallpaper to false, R.string.dark_wallpaper to true)
+            val walls = mapOf(R.string.wallpaper to dark)
             val styles = keys.map { k ->
                 val forDark = walls[k]
                 RowStyle(choices = choices[k], help = ROW_HELP[k]?.let { getString(it) }, area = SECTION_AREAS[section.first],
