@@ -13,9 +13,9 @@ import android.os.SystemClock
 import android.view.View
 import java.lang.ref.WeakReference
 
-/** The blurred wallpaper is this many pixels wide, and as tall as a 16:9 screen: 120x68 is ~32 KB. */
-internal const val GLASS_W = 120
-internal const val GLASS_H = 68
+/** The blurred wallpaper is this many pixels across: 128x72 is 16:9 and ~36 KB. */
+internal const val GLASS_W = 128
+internal const val GLASS_H = 72
 
 /** A blur of [px] (opaque ARGB, [w]x[h]): [passes] box blurs of radius [radius], horizontal then vertical each time. */
 internal fun boxBlur(px: IntArray, w: Int, h: Int, radius: Int, passes: Int = 2): IntArray {
@@ -62,7 +62,8 @@ internal fun glassTone(px: IntArray, dark: Boolean): IntArray = IntArray(px.size
 /**
  * The look of glass. [FROSTED] is the original; [CLEAR] uses lighter tints so more of the wallpaper shows through.
  * Both share the one blur, so a style change needs no decode, no second bitmap and no extra memory.
- * [tileRest] and [tileLit] are the light-mode card colours; [dim] and [scrim] are the settings overlays.
+ * [tileRest] and [tileLit] are the light-mode card colours, [darkTileRest] and [darkTileLit] the dark-mode alphas;
+ * [dim] and [scrim] are the settings overlays.
  */
 internal enum class GlassStyle(
     val key: String,
@@ -70,13 +71,15 @@ internal enum class GlassStyle(
     val washLight: Int,
     val tileRest: IntArray,
     val tileLit: IntArray,
+    val darkTileRest: Int,
+    val darkTileLit: Int,
     val dim: Float,
     val scrim: Int,
 ) {
     FROSTED("frosted", 0x8C000000.toInt(), 0xA8FFFFFF.toInt(),
-        intArrayOf(0x6EE2E5E9, 0x6ED8DCE1), intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()), 0.35f, 0x55),
+        intArrayOf(0x6EE2E5E9, 0x6ED8DCE1), intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()), 0x40, 0x66, 0.35f, 0x55),
     CLEAR("clear", 0x4D000000.toInt(), 0x66FFFFFF.toInt(),
-        intArrayOf(0x3DE2E5E9, 0x3DD8DCE1), intArrayOf(0x8CFFFFFF.toInt(), 0x8CFFFFFF.toInt()), 0.25f, 0x40);
+        intArrayOf(0x3DE2E5E9, 0x3DD8DCE1), intArrayOf(0x8CFFFFFF.toInt(), 0x8CFFFFFF.toInt()), 0x26, 0x4D, 0.25f, 0x40);
 
     companion object {
         /** The style a stored choice means; null is off. Before the choice, Glass was a switch ([oldOn]). */
@@ -101,17 +104,19 @@ internal fun glassCrop(w: Int, h: Int): FloatArray {
 
 /**
  * The wallpaper as it shows on the screen, blurred, as [GLASS_W]x[GLASS_H] pixels. [ground] fills what the picture
- * does not cover. Done once when a wallpaper loads, off the UI thread.
+ * does not cover, and [fades] paints the top and bottom fades over it, as the wallpaper view shows them. Done once
+ * when a wallpaper loads, off the UI thread.
  */
-internal fun glassPixels(wallpaper: Bitmap, ground: Int, dark: Boolean): IntArray {
+internal fun glassPixels(wallpaper: Bitmap, ground: Int, dark: Boolean, fades: ((Canvas, Float, Float) -> Unit)? = null): IntArray {
     // In two steps, or a 1920 px picture shrunk to 120 px in one would skip most of its pixels.
-    val mid = Bitmap.createScaledBitmap(wallpaper, wallpaper.width / 4, wallpaper.height / 4, true)
+    val mid = Bitmap.createScaledBitmap(wallpaper, maxOf(1, wallpaper.width / 4), maxOf(1, wallpaper.height / 4), true)
     val screen = Bitmap.createBitmap(GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888)
     val c = Canvas(screen)
     c.drawColor(ground or (0xFF shl 24))
     val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     val at = glassCrop(mid.width, mid.height)
     c.drawBitmap(mid, Rect(0, 0, mid.width, mid.height), RectF(at[0], at[1], at[2], at[3]), paint)
+    fades?.invoke(c, GLASS_W.toFloat(), GLASS_H.toFloat())
     mid.recycle()
     val px = IntArray(GLASS_W * GLASS_H)
     screen.getPixels(px, 0, GLASS_W, 0, 0, GLASS_W, GLASS_H)
@@ -125,7 +130,10 @@ internal fun glassPixels(wallpaper: Bitmap, ground: Int, dark: Boolean): IntArra
  * rectangles: no library, no live blur, nothing for the GPU to redo on each frame.
  */
 internal class GlassLayer(context: Context) : View(context) {
-    private class Tile(val view: WeakReference<View>, val radius: Float)
+    private class Tile(val view: WeakReference<View>, val radius: Float) {
+        var scroller: WeakReference<View>? = null
+        var scrollerFound = false // resolved once, when the tile is attached: its row is there by then
+    }
 
     private val tiles = ArrayList<Tile>()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -134,6 +142,7 @@ internal class GlassLayer(context: Context) : View(context) {
     private val row = Rect()
     private val rect = RectF()
     private val at = IntArray(2)
+    private val scale = FloatArray(2)
     private var shader: BitmapShader? = null
     var blur: Bitmap? = null // the blurred wallpaper, for the surfaces that paint it themselves (GlassBox)
         private set
@@ -186,20 +195,57 @@ internal class GlassLayer(context: Context) : View(context) {
         val oy = at[1]
         for (t in tiles) {
             val v = t.view.get() ?: continue
-            if (!v.isShown || !v.getGlobalVisibleRect(visible)) continue
+            val alpha = alphaOf(v)
+            if (alpha == 0 || !v.isShown || !v.getGlobalVisibleRect(visible)) continue
             // A row scroller doesn't clip its children (room for the focus lift), so the visible rect runs past
             // its edge: cut it there, or the next tile's frost shows as a grey stub at the screen edge.
-            val scroller = generateSequence(v.parent) { it.parent }.firstOrNull { it is SnapScrollView } as? View
+            if (!t.scrollerFound) {
+                t.scrollerFound = true
+                t.scroller = (generateSequence(v.parent) { it.parent }.firstOrNull { it is SnapScrollView } as? View)
+                    ?.let { WeakReference(it) }
+            }
+            val scroller = t.scroller?.get()
             if (scroller != null && (!scroller.getGlobalVisibleRect(row) || !visible.intersect(row))) continue
+            // A row also scales (it settles after an app closes): the frost must grow with the tile, or it slips.
+            parentScale(v)
+            val sx = v.scaleX * scale[0]
+            val sy = v.scaleY * scale[1]
             v.getLocationInWindow(at)
-            // Where the tile is drawn, lift included; what a scroll view cuts off of it stays cut off.
-            rect.set(at[0] - ox.toFloat(), at[1] - oy.toFloat(), at[0] - ox + v.width * v.scaleX, at[1] - oy + v.height * v.scaleY)
+            // Where the tile is drawn, lift and row scale included; what a scroll view cuts off stays cut off.
+            rect.set(at[0] - ox.toFloat(), at[1] - oy.toFloat(), at[0] - ox + v.width * sx, at[1] - oy + v.height * sy)
+            paint.alpha = alpha
             c.save()
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
-            c.drawRoundRect(rect, t.radius * v.scaleX, t.radius * v.scaleY, paint)
+            c.drawRoundRect(rect, t.radius * sx, t.radius * sy, paint)
             c.restore()
         }
         if (SystemClock.uptimeMillis() < until) postInvalidateOnAnimation()
+    }
+
+    /** The tile's alpha multiplied by every parent's, so a fading row takes its frost with it. */
+    private fun alphaOf(v: View): Int {
+        var a = 1f
+        var c: View? = v
+        while (c != null) {
+            a *= c.alpha
+            if (a <= 0f) return 0
+            c = c.parent as? View
+        }
+        return (a * 255f + 0.5f).toInt().coerceIn(0, 255)
+    }
+
+    /** The scale every parent puts on the tile; [scale] gets x, then y. */
+    private fun parentScale(v: View) {
+        var x = 1f
+        var y = 1f
+        var p = v.parent
+        while (p is View) {
+            x *= p.scaleX
+            y *= p.scaleY
+            p = p.parent
+        }
+        scale[0] = x
+        scale[1] = y
     }
 }
 
@@ -212,7 +258,8 @@ internal fun glassMapping(screenW: Int, screenH: Int, x: Int, y: Int) =
  * tint (dark or white), a hairline rim and a little light on the top edge. The blur is the one the tiles use, so
  * nothing is blurred again, and what is behind the surface (tiles, cards) does not show through the text.
  * [round] is the corner radius, [flatRight]: the right corners run off the screen (a panel along the right edge).
- * Until there is a blur (a card opened at start), the tint is solid.
+ * [ref] is the view whose wallpaper the blur shows (the activity root), so a surface in another window (a menu, a
+ * dialog) still finds its place in the same blur. Until there is a blur (a card opened at start), the tint is solid.
  */
 internal class GlassDrawable(private val host: View) : android.graphics.drawable.Drawable() {
     // Dithered: a dark blur and a faint gradient have only a few levels, which show as bands on a big surface. A menu
@@ -223,10 +270,12 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
     private val matrix = Matrix()
     private val rect = RectF()
     private val at = IntArray(2)
+    private val origin = IntArray(2)
     private var shader: BitmapShader? = null
     private var gloss: android.graphics.LinearGradient? = null
     var round = 0f
     var flatRight = false
+    var ref: View? = null // the view the blur was made for; its size and place fix the mapping
     var wash = 0
     var rim = 0
     var highlight = 0 // white at the top edge, fading out: the light of the glass
@@ -247,8 +296,9 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
     }
 
     private fun updateGloss() {
+        val top = bounds.top.toFloat()
         val h = minOf(bounds.height().toFloat(), 120f * host.resources.displayMetrics.density)
-        gloss = if (h > 0f) android.graphics.LinearGradient(0f, 0f, 0f, h, highlight, 0, Shader.TileMode.CLAMP) else null
+        gloss = if (h > 0f) android.graphics.LinearGradient(0f, top, 0f, top + h, highlight, 0, Shader.TileMode.CLAMP) else null
     }
 
     override fun draw(c: Canvas) {
@@ -256,9 +306,22 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
         if (flatRight) rect.right += round
         shader?.let { s ->
             host.getLocationOnScreen(at)
-            val m = glassMapping(host.resources.displayMetrics.widthPixels, host.resources.displayMetrics.heightPixels, at[0] + bounds.left, at[1] + bounds.top)
-            matrix.setScale(m[0], m[1])
-            matrix.postTranslate(m[2], m[3])
+            val x = (at[0] + bounds.left).toFloat()
+            val y = (at[1] + bounds.top).toFloat()
+            val r = ref
+            if (r != null && r.isAttachedToWindow && r.width > 0 && r.height > 0) {
+                // The blur covers the activity's wallpaper, not the display: a menu or a panel in another window
+                // finds its place in that same picture, and a window inset by system bars still lines up.
+                r.getLocationOnScreen(origin)
+                val sx = r.width.toFloat() / GLASS_W
+                val sy = r.height.toFloat() / GLASS_H
+                matrix.setScale(sx, sy)
+                matrix.postTranslate(origin[0] - x, origin[1] - y)
+            } else {
+                val m = glassMapping(host.resources.displayMetrics.widthPixels, host.resources.displayMetrics.heightPixels, x.toInt(), y.toInt())
+                matrix.setScale(m[0], m[1])
+                matrix.postTranslate(m[2], m[3])
+            }
             s.setLocalMatrix(matrix)
             paint.shader = s
             c.drawRoundRect(rect, round, round, paint)

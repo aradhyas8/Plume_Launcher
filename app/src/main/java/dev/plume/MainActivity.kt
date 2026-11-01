@@ -927,13 +927,15 @@ class MainActivity : Activity() {
         // Must match the colour each wallpaper fades into, or the bottom edge shows a seam.
         ground = if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
-        allApps.setBackgroundColor(ground)
+        // With glass, the wallpaper and the frost behind the grid are the point of All apps: let them show.
+        allApps.setBackgroundColor(if (glassActive()) Color.TRANSPARENT else ground)
         for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
             findViewById<TextView>(id).setTextColor(fg)
         }
         iconInk = fg
         for (v in topIcons()) v.setColorFilter(if (v.isFocused) fg else iconInk)
         watchInk = fg
+        glassShown = glassActive()
     }
 
     // ---------- text over the wallpaper ----------
@@ -1061,12 +1063,36 @@ class MainActivity : Activity() {
         val style = glassStyle() ?: GlassStyle.FROSTED
         g.round = round
         g.flatRight = flatRight
+        g.ref = findViewById(R.id.root) // the wallpaper the blur shows, also for a menu in its own window
         g.wash = if (dark) style.washDark else style.washLight
         g.rim = if (dark) 0x33FFFFFF else 0x1F000000
         g.highlight = if (dark) 0x14FFFFFF else 0x66FFFFFF
         g.setBlur(glass.blur)
         glassSurfaces.removeAll { it.get() == null }
         glassSurfaces.add(java.lang.ref.WeakReference(g))
+    }
+
+    /** Whether the shown wallpaper lets glass paint; the card tints follow it, so they must not outlive it. */
+    private var glassShown = false
+
+    /** The card tints depend on what is behind them: a photo, a plain colour or a video. Redo them when that changes. */
+    private fun syncGlassTint() {
+        val on = glassActive()
+        if (on == glassShown) return
+        glassShown = on
+        applyTheme()
+        baked.clear()
+        renderApps()
+        watchKey = null
+        showWatchNext(watchList)
+        showPanelGlass()
+    }
+
+    /** The one blur, for the layer and for the surfaces that paint it themselves. */
+    private fun applyGlassBlur(px: IntArray?) {
+        glass.setBlur(px)
+        glassSurfaces.forEach { it.get()?.setBlur(glass.blur) } // menus and cards that are open, and the panel
+        if (settingsScrim.visibility == View.VISIBLE) showPanelGlass() // a wallpaper picked from the panel itself
     }
 
     private var noteView: View? = null
@@ -1124,7 +1150,8 @@ class MainActivity : Activity() {
         if (!video) videoWallpaper.clear()
         if (choice.startsWith("plain:")) { // the root's ground colour shows through
             view.setImageDrawable(null)
-            glass.setBlur(null)
+            applyGlassBlur(null) // open menus and the panel lose their frost too
+            syncGlassTint()
             wpRaw = null
             fadesOn = false
             refreshFades()
@@ -1154,7 +1181,10 @@ class MainActivity : Activity() {
                 ui.post { ui.removeCallbacks(folderRetryTask) }
             }
             val bmp = own ?: decodeWallpaper(fallback)
-            val blur = if (bmp != null && glassActive()) glassPixels(bmp, ground, dark) else null
+            // The fades are drawn over your photos: the frost must carry them too, or the bottom tiles punch
+            // a bright, unfaded rectangle through the dark fade.
+            val fades = own != null && !choice.startsWith("res:")
+            val blur = if (bmp != null && glassActive()) glassPixels(bmp, ground, dark, if (fades) ::paintFades else null) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
             // Nothing reads the pixels from here on: keep the picture in graphics memory only, not once more in the process.
             val shown = bmp?.let { b ->
@@ -1166,14 +1196,13 @@ class MainActivity : Activity() {
             }
             ui.post {
                 if (isDestroyed || load != wallpaperLoad) return@post
-                glass.setBlur(blur)
-                glassSurfaces.forEach { it.get()?.setBlur(glass.blur) } // menus and cards that are open, and the panel
-                if (settingsScrim.visibility == View.VISIBLE) showPanelGlass() // a wallpaper picked from the panel itself
+                syncGlassTint()
                 wpRaw = thumb
                 fadesOn = video || own != null && !choice.startsWith("res:")
                 refreshFades()
                 val old = view.drawable
                 if (old == null || shown == null) {
+                    applyGlassBlur(blur)
                     view.setImageBitmap(shown)
                     if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
                     return@post
@@ -1182,7 +1211,11 @@ class MainActivity : Activity() {
                 val fade = TransitionDrawable(arrayOf(old, BitmapDrawable(resources, shown))).apply { isCrossFadeEnabled = true }
                 view.setImageDrawable(fade)
                 fade.startTransition(800)
-                ui.postDelayed({ if (view.drawable === fade) view.setImageBitmap(shown) }, 900)
+                ui.postDelayed({
+                    if (isDestroyed || load != wallpaperLoad) return@postDelayed
+                    if (view.drawable === fade) view.setImageBitmap(shown)
+                    applyGlassBlur(blur) // the frost changes with the picture, when the crossfade lands
+                }, 900)
                 if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
             }
         }
@@ -2098,8 +2131,7 @@ class MainActivity : Activity() {
                 if (after != null && before == null) {
                     loadWallpaper()
                 } else if (after == null) {
-                    glass.setBlur(null)
-                    glassSurfaces.forEach { it.get()?.setBlur(null) }
+                    applyGlassBlur(null)
                 }
                 renderApps()
                 watchKey = null
@@ -3748,6 +3780,8 @@ class MainActivity : Activity() {
         row.alpha = 0.4f
         // A moment late: the app's own window is still fading out over us for the first part.
         row.animate().scaleX(1f).scaleY(1f).alpha(1f).setStartDelay(90).setDuration(420).setInterpolator(DECELERATE).start()
+        // The row scales and fades with no layout and no focus change: the frost must redraw as it settles.
+        glass.kick(600)
     }
 
     // ---------- all apps ----------
@@ -3765,12 +3799,16 @@ class MainActivity : Activity() {
             })
         }
         allApps.visibility = View.VISIBLE
+        // Glass shows the wallpaper here, so the home screen under the grid has to go; without glass the opaque
+        // background covers it anyway.
+        findViewById<View>(R.id.content).visibility = if (glassActive()) View.INVISIBLE else View.VISIBLE
         homeFocusable(false)
         allAppsGrid.getChildAt(0)?.requestFocus()
     }
 
     private fun closeAllApps() {
         allApps.visibility = View.GONE
+        findViewById<View>(R.id.content).visibility = View.VISIBLE
         homeFocusable(true)
         renderApps()
         findViewById<View>(R.id.allAppsButton).requestFocus() // back where it was opened from
@@ -4522,6 +4560,8 @@ class MainActivity : Activity() {
         move(appScroll, appY, 1f)
         move(watchTitle, rowY, if (hidden) 0f else titleAlpha)
         move(watchScroll, rowY, if (hidden) 0f else 1f)
+        // The rows are layers: they move and fade without a layout, so the frost has to be told to follow them.
+        glass.kick(if (animate) 320 else 0)
     }
 
     /**
@@ -4562,7 +4602,8 @@ class MainActivity : Activity() {
             ink(this, watchInk)
         }
         val frame = FrameLayout(this)
-        style(frame, dp(8), card = true, lift = 1.1f) { focused ->
+        // The poster fills the card, so frost under it would never show and would only cost work on every frame.
+        style(frame, dp(8), card = true, lift = 1.1f, frost = false) { focused ->
             title.isSelected = focused
             if (focused) {
                 lastCard = frame
@@ -4679,7 +4720,7 @@ class MainActivity : Activity() {
      * top sheen; dark mode brightens the glass gradient instead (a white sheen would haze it grey).
      * Only transform/alpha/colour change, so it stays on the GPU and costs no re-layout.
      */
-    private fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, onFocus: ((Boolean) -> Unit)? = null) {
+    private fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, frost: Boolean = true, onFocus: ((Boolean) -> Unit)? = null) {
         fun gradient(colors: IntArray) = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, colors).apply {
             cornerRadius = radius.toFloat()
             setDither(true)
@@ -4688,7 +4729,7 @@ class MainActivity : Activity() {
         val sheen = Baked("sheen $radius", gradient(sheenColors)).apply { alpha = 0 }
         val rest = if (card) Baked("card $radius ${cardRest.contentToString()}", gradient(cardRest)) else null
         val lit = if (card) Baked("card $radius ${cardLit.contentToString()}", gradient(cardLit)) else null
-        val frosted = card && glassActive()
+        val frosted = frost && card && glassActive()
         if (frosted) glass.add(v, radius.toFloat())
         v.background = if (dark && card) rimCard(radius, false, frosted = frosted) else rest ?: GradientDrawable().apply { cornerRadius = radius.toFloat() }
         if (!dark) v.foreground = sheen
@@ -4716,9 +4757,10 @@ class MainActivity : Activity() {
      * dialogs, which sit over other things and have to stay readable (light mode's are solid too).
      */
     private fun rimCard(radius: Int, lit: Boolean, solid: Boolean = false, frosted: Boolean = false): Drawable {
+        val style = if (frosted) glassStyle() ?: GlassStyle.FROSTED else null
         val glass = (if (lit) DARK_CARD_LIT else DARK_CARD).let { c ->
             if (solid) IntArray(c.size) { c[it] or 0xFF000000.toInt() }
-            else if (frosted) IntArray(c.size) { c[it] and 0xFFFFFF or ((if (lit) 0x66 else 0x40) shl 24) } // 25% at rest, 40% selected, over the blur
+            else if (style != null) IntArray(c.size) { c[it] and 0xFFFFFF or ((if (lit) style.darkTileLit else style.darkTileRest) shl 24) }
             else c
         }
         val body = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, glass).apply {

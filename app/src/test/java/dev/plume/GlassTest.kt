@@ -39,10 +39,10 @@ class GlassTest {
     }
 
     @Test fun aSurfaceFindsItsPlaceInTheBlur() {
-        // On a 1920x1080 screen the 120x68 blur is scaled by 16 and 15.88; a view at (300, 200) shifts it back.
+        // The blur is 16:9 (128x72), so on a 1920x1080 screen it scales by 15 both ways; a view at (300, 200) shifts it back.
         val m = glassMapping(1920, 1080, 300, 200)
-        assertEquals(16f, m[0], 0.001f)
-        assertEquals(1080f / 68, m[1], 0.001f)
+        assertEquals(15f, m[0], 0.001f)
+        assertEquals(15f, m[1], 0.001f)
         assertEquals(-300f, m[2], 0.001f)
         assertEquals(-200f, m[3], 0.001f)
     }
@@ -76,6 +76,8 @@ class GlassTest {
         assertTrue("light tint is lighter", (clear.washLight ushr 24) < (frosted.washLight ushr 24))
         assertTrue("tiles let more through", (clear.tileRest[0] ushr 24) < (frosted.tileRest[0] ushr 24))
         assertTrue("a lit tile lets more through", (clear.tileLit[0] ushr 24) < (frosted.tileLit[0] ushr 24))
+        assertTrue("dark tiles let more through", clear.darkTileRest < frosted.darkTileRest)
+        assertTrue("a lit dark tile lets more through", clear.darkTileLit < frosted.darkTileLit)
     }
 
     @Test fun theOldGlassSwitchStillMeansSomething() {
