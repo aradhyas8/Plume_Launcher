@@ -14,8 +14,8 @@
     <string name="time_left_hm">Restano %1$d h %2$d min</string>
     <string name="time_left_m">Restano %1$d min</string>
     <string name="folder_name">Cartella: %1$s</string>
-    <string name="wp_rockies_day">Rockies (giorno)</string>
-    <string name="wp_rockies_dusk">Rockies (crepuscolo)</string>
+    <string name="wp_mist_day">Nebbia (giorno)</string>
+    <string name="wp_peak_dusk">Vetta (crepuscolo)</string>
     <string name="wp_pure_black">Nero pieno</string>
     <string name="wp_soft_white">Bianco tenue</string>
     <string name="every_1">Ogni minuto</string>

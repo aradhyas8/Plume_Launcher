@@ -13,8 +13,8 @@
     <string name="time_left_hm">%1$d h %2$d min restantes</string>
     <string name="time_left_m">%1$d min restantes</string>
     <string name="folder_name">Dossier : %1$s</string>
-    <string name="wp_rockies_day">Rocheuses (jour)</string>
-    <string name="wp_rockies_dusk">Rocheuses (crépuscule)</string>
+    <string name="wp_mist_day">Brume (jour)</string>
+    <string name="wp_peak_dusk">Sommet (crépuscule)</string>
     <string name="wp_pure_black">Noir pur</string>
     <string name="wp_soft_white">Blanc doux</string>
     <string name="every_1">Toutes les minutes</string>

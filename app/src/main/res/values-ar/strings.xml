@@ -13,8 +13,8 @@
     <string name="time_left_hm">بقي %1$d س %2$d د</string>
     <string name="time_left_m">بقي %1$d د</string>
     <string name="folder_name">المجلد: %1$s</string>
-    <string name="wp_rockies_day">جبال روكي (نهار)</string>
-    <string name="wp_rockies_dusk">جبال روكي (غروب)</string>
+    <string name="wp_mist_day">ضباب (نهار)</string>
+    <string name="wp_peak_dusk">قمة (غسق)</string>
     <string name="wp_pure_black">أسود خالص</string>
     <string name="wp_soft_white">أبيض ناعم</string>
     <string name="every_1">كل دقيقة</string>
