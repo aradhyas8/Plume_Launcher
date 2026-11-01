@@ -257,4 +257,12 @@
     <string name="dim_medium">Moyen</string>
     <string name="dim_strong">Fort</string>
     <string name="help_wp_dim">Le noir posé sur une image Bing ou Séries en mode sombre, pour que l\'heure, les icônes et les cartes restent lisibles. Auto regarde chaque image : une image claire reçoit plus de noir, une image très sombre est un peu éclaircie.</string>
+    <string name="remote_battery">Pile de la télécommande</string>
+    <string name="remote_battery_value">Pile de la télécommande : %1$s</string>
+    <string name="remote_reading">Lecture de la télécommande…</string>
+    <string name="remote_not_found">Aucune télécommande Bluetooth n\'a répondu</string>
+    <string name="remote_low_alert">Alerte de pile faible : %1$s</string>
+    <string name="remote_low_value">%1$d%%</string>
+    <string name="remote_low_off">désactivée</string>
+    <string name="remote_low_warning">Pile de la télécommande faible : %1$d%%</string>
 </resources>

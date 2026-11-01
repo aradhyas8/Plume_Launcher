@@ -153,6 +153,19 @@
                 android:padding="8dp"
                 android:src="@drawable/ic_power"
                 android:visibility="gone" />
+
+            <!-- The battery of the remote, read over Bluetooth. Hidden until it is added from the top bar's menu. -->
+            <ImageView
+                android:id="@+id/batteryButton"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="@string/remote_battery"
+                android:focusable="true"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:scaleType="center"
+                android:visibility="gone" />
         </LinearLayout>
 
         <View

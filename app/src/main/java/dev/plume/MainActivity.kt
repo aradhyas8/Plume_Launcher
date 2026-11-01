@@ -397,6 +397,7 @@ class MainActivity : Activity() {
             R.id.systemSettings to { unlock { openSettings(Settings.ACTION_SETTINGS) } },
             R.id.launcherSettings to { unlock { openLauncherSettings() } },
             R.id.powerButton to { powerDialog() },
+            R.id.batteryButton to { refreshRemoteBattery(force = true) },
         )) findViewById<ImageView>(id).apply {
             setColorFilter(fg)
             val ring = GradientDrawable().apply { shape = GradientDrawable.OVAL }
@@ -469,6 +470,8 @@ class MainActivity : Activity() {
         ui.removeCallbacks(wallpaperTick)
         ui.post(wallpaperTick)
         updateFeatured()
+        updateBatteryIcon()
+        refreshRemoteBattery()
         // Gallery chosen but its paintings missing (updated from a version that bundled them): fetch them.
         if (galleryOn() && photoScreensaver() == null && !paintingsReady(this)) downloadPaintings {}
         checkUpdate(force = false)
@@ -485,6 +488,10 @@ class MainActivity : Activity() {
     }
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
+        if (code == BLUETOOTH_REQUEST) { // the permission to read the remote's battery
+            if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) refreshRemoteBattery(force = true) else updateBatteryIcon()
+            return
+        }
         if (code != MEDIA_REQUEST) return refreshWatchNext()
         if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) afterPhotoAccess?.invoke()
         else toast(getString(R.string.photos_permission), long = true)
@@ -1720,6 +1727,51 @@ class MainActivity : Activity() {
         val v = findViewById<TextView>(R.id.featured)
         v.text = title?.let { getString(R.string.featured_now, it) }.orEmpty()
         v.visibility = if (title == null) View.GONE else View.VISIBLE
+    }
+
+    // ---------- the remote's battery in the top bar (see RemoteBattery) ----------
+
+    /** The last level read, or null when there is none or it is old (see RemoteBattery.STALE_MS). */
+    private fun remoteLevel() = RemoteBattery.shown(prefs.getInt("rb_level", -1).takeIf { it >= 0 }, prefs.getLong("rb_at", 0), System.currentTimeMillis())
+
+    /** The low-battery alert: 20 % (the default), 15 %, or 0 for off. The icon turns red from there, and a message shows once a day. */
+    private fun lowAt() = prefs.getInt("rb_low", 20).takeIf { it in RemoteBattery.LOWS } ?: 20
+
+    private fun lowName(at: Int) = if (at == 0) getString(R.string.remote_low_off) else getString(R.string.remote_low_value, at)
+
+    private fun updateBatteryIcon() {
+        val level = remoteLevel()
+        val button = findViewById<ImageView>(R.id.batteryButton)
+        button.setImageDrawable(RemoteBatteryIcon(resources.displayMetrics.density, level, RemoteBattery.isLow(level, lowAt())))
+        button.contentDescription = if (level == null) getString(R.string.remote_battery) else getString(R.string.remote_battery_value, RemoteBattery.label(level))
+    }
+
+    /**
+     * Reads the remote's level when its icon is on the bar. Selecting the icon reads it now, and asks for the Bluetooth
+     * permission the first time on Android 12 and newer. Before that the permission is granted at install.
+     */
+    private fun refreshRemoteBattery(force: Boolean = false) {
+        if (R.id.batteryButton !in shownTop()) return
+        if (!RemoteBattery.allowed(this)) {
+            updateBatteryIcon()
+            if (force && RemoteBattery.asksFirst()) requestPermissions(arrayOf(RemoteBattery.permission()), BLUETOOTH_REQUEST)
+            return
+        }
+        if (force && RemoteBattery.isBusy()) return toast(getString(R.string.remote_reading))
+        if (!force && RemoteBattery.fresh(prefs.getLong("rb_at", 0), System.currentTimeMillis())) return
+        if (force) toast(getString(R.string.remote_reading))
+        RemoteBattery.read(this) { readings ->
+            if (isDestroyed) return@read
+            val lowest = RemoteBattery.lowest(readings)
+            lowest?.let { prefs.edit().putInt("rb_level", it).putLong("rb_at", System.currentTimeMillis()).apply() }
+            updateBatteryIcon()
+            val today = java.time.LocalDate.now().toEpochDay()
+            if (!force && RemoteBattery.isLow(lowest, lowAt()) && prefs.getLong("rb_alert_day", 0) != today) { // once a day
+                prefs.edit().putLong("rb_alert_day", today).apply()
+                toast(getString(R.string.remote_low_warning, lowest), long = true)
+            }
+            if (force) toast(if (readings.isEmpty()) getString(R.string.remote_not_found) else getString(R.string.remote_battery_value, RemoteBattery.describe(readings)))
+        }
     }
 
     // ---------- folder wallpapers ----------
@@ -3441,7 +3493,8 @@ class MainActivity : Activity() {
 
     /** The bar's icons in their default order, with the key each is saved under. */
     private val TOP_KEYS = linkedMapOf(R.id.wifi to "wifi", R.id.sourcesButton to "sources", R.id.allAppsButton to "apps",
-        R.id.systemSettings to "system", R.id.launcherSettings to "plume", R.id.powerButton to "power")
+        R.id.systemSettings to "system", R.id.launcherSettings to "plume", R.id.powerButton to "power",
+        R.id.batteryButton to "battery")
 
     private var movingTop: View? = null // the icon being moved, while Left and Right slide it
     private var topLive: List<Int> = emptyList() // the order while moving; saved when OK places the icon
@@ -3450,8 +3503,8 @@ class MainActivity : Activity() {
     /** The icons the bar shows, in order: the saved list, or all of them. Plume settings is always on it. */
     private fun topOrder(): List<Int> {
         val all = TOP_KEYS.values.toList()
-        // Power is not on the bar until someone adds it.
-        return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - "power", "plume"))
+        // Power and the remote's battery are not on the bar until someone adds them.
+        return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - "power" - "battery", "plume"))
     }
 
     /** What is really on screen: Sources stays out while the TV has no input. */
@@ -3472,6 +3525,8 @@ class MainActivity : Activity() {
             v.visibility = if (id in shown) View.VISIBLE else View.GONE
             bar.addView(v, start + i, lp)
         }
+        updateBatteryIcon() // an icon just added has no picture yet
+        refreshRemoteBattery()
     }
 
     private fun saveTopOrder(order: List<Int>) {
@@ -3500,7 +3555,16 @@ class MainActivity : Activity() {
             getString(R.string.move) to { startTopMove(v) },
             if (v.id == R.id.launcherSettings) null else getString(R.string.hide) to { hideTop(v) },
             if (hidden.isEmpty()) null else getString(R.string.add_icon) to { addIconMenu(v) },
+            if (v.id != R.id.batteryButton) null else getString(R.string.remote_low_alert, lowName(lowAt())) to { cycleLowAlert() },
         ), below = true)
+    }
+
+    /** Hold menu of the battery icon: the alert goes 20 % -> 15 % -> off -> 20 %. */
+    private fun cycleLowAlert() {
+        val next = RemoteBattery.LOWS.step(lowAt(), 1)
+        prefs.edit().putInt("rb_low", next).remove("rb_alert_day").apply()
+        updateBatteryIcon()
+        toast(getString(R.string.remote_low_alert, lowName(next)))
     }
 
     private fun hideTop(v: View) {
@@ -4885,6 +4949,7 @@ class MainActivity : Activity() {
         const val PIN_TRIES = 5 // wrong PINs before a 30 s wait
         const val UNLOCKED_MS = 5 * 60_000L
         const val MEDIA_REQUEST = 3
+        const val BLUETOOTH_REQUEST = 4
         const val PER_APP = 3 // Continue Watching items per app ahead of the rest
         const val CARDS_AHEAD = 8 // Continue Watching cards built past the focused one (see addCardsTo)
         val READ_PHOTOS = if (Build.VERSION.SDK_INT >= 33) "android.permission.READ_MEDIA_IMAGES" else "android.permission.READ_EXTERNAL_STORAGE"
