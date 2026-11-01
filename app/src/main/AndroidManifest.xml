@@ -38,6 +38,7 @@
         android:banner="@drawable/banner"
         android:icon="@drawable/ic_launcher"
         android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity
@@ -76,6 +77,13 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- Update file for the TV's own installer: see ApkProvider. -->
+        <provider
+            android:name=".ApkProvider"
+            android:authorities="${applicationId}.apk"
+            android:exported="false"
+            android:grantUriPermissions="true" />
 
         <!-- Gallery screensaver; switched on and off from launcher settings. -->
         <service

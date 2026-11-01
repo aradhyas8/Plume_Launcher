@@ -13,8 +13,8 @@
     <string name="time_left_hm">%1$d h %2$d min restantes</string>
     <string name="time_left_m">%1$d min restantes</string>
     <string name="folder_name">Dossier : %1$s</string>
-    <string name="wp_rockies_day">Rocheuses (jour)</string>
-    <string name="wp_rockies_dusk">Rocheuses (crépuscule)</string>
+    <string name="wp_mist_day">Brume (jour)</string>
+    <string name="wp_peak_dusk">Sommet (crépuscule)</string>
     <string name="wp_pure_black">Noir pur</string>
     <string name="wp_soft_white">Blanc doux</string>
     <string name="every_1">Toutes les minutes</string>
@@ -100,6 +100,8 @@
     <string name="icon_hidden">Masquée. Pour la remettre, maintenez OK sur une icône et choisissez Ajouter une icône.</string>
     <string name="shows_with_input">S\'affiche quand la TV a une entrée</string>
     <string name="top_bar_hint">Maintenez OK sur une icône de la barre du haut pour la déplacer, la masquer ou en ajouter.</string>
+    <string name="power_needs_home">Activez le bouton Accueil</string>
+    <string name="power_menu_failed">Ce téléviseur n\'ouvre pas le menu d\'alimentation.</string>
     <string name="move">Déplacer</string>
     <string name="remove_from_row">Retirer de la ligne</string>
     <string name="removed_from_row">Retirée de la ligne. Elle reste dans Toutes les applis.</string>

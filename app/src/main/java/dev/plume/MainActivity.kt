@@ -7,6 +7,7 @@ import android.app.ActivityOptions
 import android.app.Dialog
 import android.app.PendingIntent
 import android.app.role.RoleManager
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.ContentResolver
@@ -15,6 +16,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.database.ContentObserver
 import android.content.pm.PackageInstaller
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -72,6 +74,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.view.ViewOutlineProvider
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -85,12 +88,15 @@ import android.widget.PopupWindow
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.VideoView
+import android.view.SurfaceView
 import java.io.File
 import java.lang.ref.WeakReference
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -135,6 +141,25 @@ internal val PHOTOS: Uri by lazy { // lazy: unit tests load this file without An
 internal fun folderPhotos(cr: ContentResolver, choice: String): List<Long> =
     cr.query(PHOTOS, arrayOf(MediaStore.Images.Media._ID), "${MediaStore.Images.Media.BUCKET_ID} = ?", arrayOf(choice.split(':')[1]), null)
         ?.use { c -> List(c.count) { c.moveToNext(); c.getLong(0) } } ?: emptyList()
+
+/** Picks the current or next photo from [ids], preserving [deck] if the media scan is still pending. */
+internal fun pickFolderPhoto(
+    ids: List<Long>,
+    currentSaved: Long?,
+    deck: ArrayDeque<Long>,
+    shuffle: (List<Long>) -> List<Long> = { it.shuffled() }
+): Long? {
+    if (ids.isEmpty()) return null
+    val all = ids.toHashSet()
+    if (currentSaved != null && currentSaved in all) return currentSaved
+    deck.removeAll { it !in all }
+    if (deck.isEmpty()) deck.addAll(shuffle(ids))
+    return deck.removeFirstOrNull()
+}
+
+/** Whether the Google TV launcher package is active (not debloated or disabled). */
+internal fun isGoogleTvLauncher(enabled: Boolean, setting: Int): Boolean =
+    enabled && (setting == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT || setting == PackageManager.COMPONENT_ENABLED_STATE_ENABLED)
 
 /**
  * Sort key of a Watch Next row: what you started comes before suggestions (types other than 0, "continue"), then
@@ -231,7 +256,20 @@ internal fun iconStyleOf(stored: String?, oldColour: Boolean) =
 /** Allowed to start an activity from the background because the Home button service is bound. */
 class Updated : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
+        File(c.cacheDir, ApkProvider.NAME).delete() // the downloaded update (see installUpdate)
         c.startActivity(Intent(c, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        dropSessions(c)
+    }
+}
+
+/** Sessions the TV's own installer left waiting for the confirm box (see MainActivity.openApk). */
+internal fun dropSessions(c: Context) {
+    val installer = c.packageManager.packageInstaller
+    installer.mySessions.forEach {
+        try {
+            installer.abandonSession(it.sessionId)
+        } catch (_: Exception) { // already gone
+        }
     }
 }
 
@@ -298,6 +336,7 @@ class MainActivity : Activity() {
     private lateinit var allAppsGrid: GridLayout
     private lateinit var wifi: ImageView
     private lateinit var glass: GlassLayer // paints the blurred wallpaper under glass tiles
+    private lateinit var videoWallpaper: VideoWallpaper
 
     private var resumed = false
     private val refreshIfDirty = Runnable { if (appsDirty && !editing) refreshApps() } // not while a tile is being moved: onResume catches up
@@ -333,7 +372,10 @@ class MainActivity : Activity() {
         super.onCreate(state)
         setContentView(R.layout.activity_main)
         glass = GlassLayer(this)
-        findViewById<ViewGroup>(R.id.root).addView(glass, 1, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)) // over the wallpaper, under the home screen
+        findViewById<ViewGroup>(R.id.root).addView(glass, 2, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)) // over both wallpaper layers
+        videoWallpaper = VideoWallpaper(findViewById<SurfaceView>(R.id.videoWallpaper),
+            { findViewById<ImageView>(R.id.wallpaper).alpha = 0f },
+            { findViewById<ImageView>(R.id.wallpaper).alpha = 1f; if (resumed) toast(getString(R.string.video_cannot_play), long = true) })
         for (id in intArrayOf(R.id.appScroll, R.id.watchScroll, R.id.allApps)) findViewById<View>(id).setOnScrollChangeListener { _, _, _, _, _ -> glass.kick(150) }
         appRow = findViewById(R.id.appRow)
         watchRow = findViewById(R.id.watchRow)
@@ -363,6 +405,7 @@ class MainActivity : Activity() {
             R.id.allAppsButton to { openAllApps() },
             R.id.systemSettings to { unlock { openSettings(Settings.ACTION_SETTINGS) } },
             R.id.launcherSettings to { unlock { openLauncherSettings() } },
+            R.id.powerButton to { powerDialog() },
         )) findViewById<ImageView>(id).apply {
             setColorFilter(fg)
             val ring = GradientDrawable().apply { shape = GradientDrawable.OVAL }
@@ -383,12 +426,17 @@ class MainActivity : Activity() {
         } else if (prefs.getBoolean("reopen_settings", false)) {
             prefs.edit().remove("reopen_settings").apply()
             ui.post { openLauncherSettings(R.string.theme) }
-        } else if (!homeServiceOn() && !prefs.getBoolean("setup_shown", false)) {
+        } else if (!homeSetUp() && !prefs.getBoolean("setup_shown", false)) {
             // Fresh install: walk through making Home land on Plume, the one step that has to happen by hand.
             prefs.edit().putBoolean("setup_shown", true).apply()
             ui.post { startHomeSetup() }
         } else if (notesUnseen()) {
             ui.post { whatsNewCard() } // after an update; the self-updater reopens Plume, so it's seen right away
+        }
+
+        try {
+            contentResolver.registerContentObserver(PHOTOS, true, photoObserver)
+        } catch (e: Exception) {
         }
 
         registerReceiver(packageReceiver, IntentFilter().apply {
@@ -410,6 +458,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        if (currentWallpaper().startsWith("video:")) videoWallpaper.resume()
+        returnTo = null // back by another way than Home: the next Home starts again at the first tile
         openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
         openedFrom = null
         ensureHomeService()
@@ -449,8 +499,9 @@ class MainActivity : Activity() {
         else toast(getString(R.string.photos_permission), long = true)
     }
 
-    @Deprecated("Only used for the default-home role request")
+    @Deprecated("Only used for the default-home role request and the TV's own installer")
     override fun onActivityResult(code: Int, result: Int, data: Intent?) {
+        if (code == INSTALL_REQUEST) installerClosed()
         if (code == ROLE_REQUEST && settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.default_launcher)
         if (code == ROLE_REQUEST && setupStep == 1) {
             setupStep = 0
@@ -460,6 +511,8 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         resumed = false
+        videoWallpaper.pause()
+        findViewById<ImageView>(R.id.wallpaper).alpha = 1f
         ui.removeCallbacks(refreshIfDirty)
         ui.removeCallbacks(weatherTick)
         ui.removeCallbacks(themeTick)
@@ -482,11 +535,17 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        videoWallpaper.clear()
         if (Bing.onChanged === bingChanged) Bing.onChanged = null
         unregisterReceiver(packageReceiver)
         applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
         getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
         upload?.stop()
+        try {
+            contentResolver.unregisterContentObserver(photoObserver)
+        } catch (e: Exception) {
+        }
+        ui.removeCallbacks(folderRetryTask)
         ui.removeCallbacksAndMessages(null) // the clocks and the posts still queued must not use the pools below
         io.shutdownNow()
         posterIo.shutdownNow()
@@ -563,8 +622,11 @@ class MainActivity : Activity() {
         return false
     }
 
-    private fun isDefaultHome() = Build.VERSION.SDK_INT >= 29 &&
-        getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
+    private fun isDefaultHome(): Boolean {
+        if (Build.VERSION.SDK_INT >= 29 && getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_HOME) == true) return true
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        return packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == packageName
+    }
 
     /**
      * Asks Android to make us the default home app (its own confirmation dialog). On Google TV the system
@@ -597,9 +659,10 @@ class MainActivity : Activity() {
 
     /** Google TV takes the home role but its own launcher still gets Home, so only the service works there. */
     private fun googleTv() = fakeDevice?.let { it == "google" } ?: try {
-        packageManager.getPackageInfo(HomeWatch.GOOGLE_TV, 0)
-        true
-    } catch (e: PackageManager.NameNotFoundException) {
+        val app = packageManager.getApplicationInfo(HomeWatch.GOOGLE_TV, 0)
+        val setting = packageManager.getApplicationEnabledSetting(HomeWatch.GOOGLE_TV)
+        isGoogleTvLauncher(app.enabled, setting)
+    } catch (e: Exception) {
         false
     }
 
@@ -763,9 +826,12 @@ class MainActivity : Activity() {
             })
     }
 
-    private fun donePopup() = homePopup(0, getString(R.string.setup_done_title),
-        getString(if (homeServiceOn() && !fireTv()) R.string.setup_done_body_service else R.string.setup_done_body), null,
-        getString(R.string.setup_done) to { setupDialog?.dismiss() })
+    private fun donePopup(): Unit {
+        prefs.edit().putBoolean("setup_shown", true).apply()
+        homePopup(0, getString(R.string.setup_done_title),
+            getString(if (homeServiceOn() && !fireTv()) R.string.setup_done_body_service else R.string.setup_done_body), null,
+            getString(R.string.setup_done) to { setupDialog?.dismiss() })
+    }
 
     /** A card in the middle of the screen over the dimmed home screen, in the hold menus' colours. */
     private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>) {
@@ -833,10 +899,15 @@ class MainActivity : Activity() {
             homeTest = 0
             return donePopup()
         }
+        val back = returnTo // set when Plume started the app that Home leaves
+        returnTo = null
         if (editing) endEdit()
         if (movingTop != null) endTopMove(false)
         if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
         if (allApps.visibility == View.VISIBLE) closeAllApps()
+        // Home from an app goes back to the tile or card it was started from, wherever focus is now. If Plume did not start the app,
+        // or the tile or card is gone, Home starts again at the first tile.
+        if (back?.let { homeViewFor(it) }?.requestFocus() == true) return
         watchScroll.scrollTo(0, 0)
         appRow.getChildAt(0)?.requestFocus()
     }
@@ -905,6 +976,7 @@ class MainActivity : Activity() {
 
     /** White or near-black, by the average brightness of the wallpaper under [views]; the theme colour without a photo. */
     private fun inkBehind(views: List<View>): Int {
+        if (currentWallpaper().startsWith("video:")) return Color.WHITE
         val t = wpThumb ?: return fg
         val wall = findViewById<View>(R.id.wallpaper)
         val at = IntArray(2)
@@ -965,16 +1037,23 @@ class MainActivity : Activity() {
     // Light gets a soft white (the light ground colour), not #FFFFFF: pure white glares on a TV.
     private fun plainWallpaper(forDark: Boolean) = if (forDark) "plain:Pure black" else "plain:Soft white"
 
-    private fun defaultWallpaper(forDark: Boolean) = if (forDark) "res:Rockies (dusk)" else "res:Rockies (day)"
+    private fun defaultWallpaper(forDark: Boolean) = if (forDark) "res:Peak (dusk)" else "res:Mist (day)"
 
     private fun currentWallpaper(forDark: Boolean = dark) =
-        prefs.getString(if (forDark) "wp_dark" else "wp_light", null) ?: defaultWallpaper(forDark)
+        prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it) } ?: defaultWallpaper(forDark)
+
+    /** The two bundled pictures were replaced: an old choice keeps working, on the picture that took its place. */
+    private fun movedWallpaper(choice: String) = when (choice) {
+        "res:Rockies (day)" -> "res:Mist (day)"
+        "res:Rockies (dusk)" -> "res:Peak (dusk)"
+        else -> choice
+    }
 
     /** Glass: the tiles are see-through over a blur of the wallpaper (a setting, on by default since 1.6). */
     private fun glassOn() = prefs.getBoolean("glass", true)
 
     /** Glass needs a picture to blur: with a plain background the tiles stay as they are. */
-    private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:")
+    private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:") && !currentWallpaper().startsWith("video:")
 
     /** The menus, the cards and the settings panel are glass too when Glass is on. */
     private fun frosted() = glassActive()
@@ -1036,6 +1115,8 @@ class MainActivity : Activity() {
     private fun wallpaperName(choice: String) = when {
         choice == Bing.CHOICE -> getString(R.string.bing_daily)
         choice == ShowsWall.CHOICE -> getString(R.string.shows_wallpaper)
+        choice.startsWith("video:") -> videoScenes(this).firstOrNull { "video:${it.file}" == choice }?.name
+            ?: choice.removePrefix("video:").substringBeforeLast('.')
         choice.startsWith("folder:") -> getString(R.string.folder_name, choice.substringAfter(':').substringAfter(':'))
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
     }
@@ -1043,6 +1124,10 @@ class MainActivity : Activity() {
     private fun loadWallpaper() {
         val view = findViewById<ImageView>(R.id.wallpaper)
         val choice = currentWallpaper()
+        val video = choice.startsWith("video:")
+        val load = ++wallpaperLoad
+        view.alpha = 1f
+        if (!video) videoWallpaper.clear()
         if (choice.startsWith("plain:")) { // the root's ground colour shows through
             view.setImageDrawable(null)
             glass.setBlur(null)
@@ -1054,11 +1139,25 @@ class MainActivity : Activity() {
         val fallback = defaultWallpaper(dark)
         io.execute {
             val own = try {
-                decodeWallpaper(choice)
+                decodeWallpaper(if (video) fallback else choice)
             } catch (e: Exception) {
                 null
             } catch (e: OutOfMemoryError) { // a picture on a TV short of memory: show the default instead of crashing
                 null
+            }
+            if (choice.startsWith("folder:")) {
+                if (own == null) {
+                    folderPending = true
+                    ui.post { scheduleFolderRetry() }
+                } else {
+                    folderPending = false
+                    folderRetries = 0
+                    ui.post { ui.removeCallbacks(folderRetryTask) }
+                }
+            } else {
+                folderPending = false
+                folderRetries = 0
+                ui.post { ui.removeCallbacks(folderRetryTask) }
             }
             val bmp = own ?: decodeWallpaper(fallback)
             val blur = if (bmp != null && glassActive()) glassPixels(bmp, ground, dark) else null
@@ -1072,22 +1171,59 @@ class MainActivity : Activity() {
                 }
             }
             ui.post {
-                if (isDestroyed) return@post
+                if (isDestroyed || load != wallpaperLoad) return@post
                 glass.setBlur(blur)
                 glassSurfaces.forEach { it.get()?.setBlur(glass.blur) } // menus and cards that are open, and the panel
                 if (settingsScrim.visibility == View.VISIBLE) showPanelGlass() // a wallpaper picked from the panel itself
                 wpRaw = thumb
-                fadesOn = own != null && !choice.startsWith("res:")
+                fadesOn = video || thumb != null
                 refreshFades()
                 val old = view.drawable
-                if (old == null || shown == null) return@post view.setImageBitmap(shown)
+                if (old == null || shown == null) {
+                    view.setImageBitmap(shown)
+                    if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
+                    return@post
+                }
                 // Soft change from one photo to the next; then drop the old one so only one stays in memory.
                 val fade = TransitionDrawable(arrayOf(old, BitmapDrawable(resources, shown))).apply { isCrossFadeEnabled = true }
                 view.setImageDrawable(fade)
                 fade.startTransition(800)
                 ui.postDelayed({ if (view.drawable === fade) view.setImageBitmap(shown) }, 900)
+                if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
             }
         }
+    }
+
+    private var wallpaperLoad = 0
+    private var folderPending = false
+    private var folderRetries = 0
+
+    private val folderRetryTask = Runnable {
+        if (!isDestroyed && folderPending && currentWallpaper().startsWith("folder:")) {
+            loadWallpaper()
+        }
+    }
+
+    private val photoObserver by lazy {
+        object : ContentObserver(ui) {
+            override fun onChange(selfChange: Boolean) {
+                if (!isDestroyed && folderPending && currentWallpaper().startsWith("folder:")) {
+                    loadWallpaper()
+                }
+            }
+        }
+    }
+
+    private fun scheduleFolderRetry() {
+        if (folderRetries >= 5 || isDestroyed) return
+        val delay = when (folderRetries++) {
+            0 -> 2_000L
+            1 -> 4_000L
+            2 -> 8_000L
+            else -> 15_000L
+        }
+        ui.removeCallbacks(folderRetryTask)
+        ui.postDelayed(folderRetryTask, delay)
     }
 
     private fun decodeWallpaper(choice: String): Bitmap? {
@@ -1140,7 +1276,7 @@ class MainActivity : Activity() {
     // ---------- fades over your own photos ----------
     // Drawn as a layer over the wallpaper, not into it, so the sliders in settings change them live.
 
-    private var fadesOn = false // the wallpaper shown is your own photo (bundled ones have their fade baked in)
+    private var fadesOn = false // the wallpaper is a picture, so the fades are drawn over it (videos have their own)
     private var wpRaw: Bitmap? = null // wpThumb before the fades are painted onto it
 
     private val fades by lazy {
@@ -1148,28 +1284,39 @@ class MainActivity : Activity() {
             override fun onDraw(c: Canvas) {
                 if (fadesOn) paintFades(c, width.toFloat(), height.toFloat())
             }
-        }.also { findViewById<ViewGroup>(R.id.root).addView(it, 1, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)) }
+        }.also { findViewById<ViewGroup>(R.id.root).addView(it, 2, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)) }
     }
 
     /** Strength of the "fade_top" or "fade_bottom" layer, 0-100; 0 is off. Starts off for anyone who had Photo fade off. */
     private fun fade(key: String) = prefs.getInt(key, if (prefs.getBoolean("wp_fade", true)) 100 else 0)
 
     private fun paintFades(c: Canvas, w: Float, h: Float) {
+        if (currentWallpaper().startsWith("video:")) {
+            c.drawColor(0x33000000)
+            val veil = Paint().apply {
+                shader = LinearGradient(0f, 0f, 0f, h * 0.3f,
+                    0xCC000000.toInt(), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+            }
+            c.drawRect(0f, 0f, w, h * 0.3f, veil)
+            veil.shader = LinearGradient(0f, h * 0.65f, 0f, h,
+                Color.TRANSPARENT, 0xCC000000.toInt(), Shader.TileMode.CLAMP)
+            c.drawRect(0f, h * 0.65f, w, h, veil)
+            return
+        }
         val base = ground and 0x00FFFFFF
         val paint = Paint().apply { isDither = true }
-        // Photos rarely have the bundled ones' empty sky: a soft veil behind the clock and top-bar icons keeps them readable.
-        // Strong over the clock and icons (top ~20%), gone by 30% so the photo still shows above the apps.
-        fade("fade_top").takeIf { it > 0 }?.let { pct ->
-            paint.shader = LinearGradient(0f, 0f, 0f, h * 0.3f, intArrayOf(base or 0xC0000000.toInt(), base or 0xA0000000.toInt(), base),
-                floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
-            paint.alpha = pct * 255 / 100
-            c.drawRect(0f, 0f, w, h * 0.3f, paint)
-        }
-        // Same fade as the bundled ones: clear above 28% height, into the background colour by 50%.
-        fade("fade_bottom").takeIf { it > 0 }?.let { pct ->
-            paint.shader = LinearGradient(0f, h * 0.28f, 0f, h * 0.5f, base, base or 0xE6000000.toInt(), Shader.TileMode.CLAMP)
-            paint.alpha = pct * 255 / 100
-            c.drawRect(0f, h * 0.28f, w, h, paint)
+        val top = fade("fade_top") / 100f
+        val bottom = fade("fade_bottom") / 100f
+        if (top <= 0f && bottom <= 0f) return
+        // Eased, so the picture dissolves into the ground instead of stopping at a line: a veil behind the clock and
+        // the top-bar icons, and a bed under the Shows row and its labels. Drawn here, so the sliders reach every
+        // picture, the bundled ones included.
+        val rows = h.toInt().coerceAtLeast(1)
+        for (y in 0 until rows) {
+            val a = maxOf(Fades.topAlpha(y, rows) * top, Fades.bottomAlpha(y, rows) * bottom).toInt()
+            if (a <= 0) continue
+            paint.color = base or (a shl 24)
+            c.drawRect(0f, y.toFloat(), w, (y + 1).toFloat(), paint)
         }
     }
 
@@ -1193,12 +1340,217 @@ class MainActivity : Activity() {
         val choices = wallpaperChoices(forDark)
         val own = choices.filter { it.second.startsWith("file:") }
         val current = currentWallpaper(forDark)
-        val rows = listOf(page(getString(R.string.add_from_phone)) { uploadWallpaper(forDark) }, page(getString(R.string.choose_from_tv)) { pickFolder(forDark) }) +
+        val rows = listOf(page(getString(R.string.add_from_phone)) { uploadWallpaper(forDark) },
+            page(getString(R.string.choose_from_tv)) { pickFolder(forDark) },
+            page(getString(R.string.video_wallpapers), if (current.startsWith("video:")) CHOSEN else "") { pickVideoWallpaper(forDark) }) +
             choices.map { (name, choice) -> page(name, if (choice == current) CHOSEN else "") { setWallpaper(forDark, choice); renderSettings(row) } } +
             if (own.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_photo_row)) { removeWallpaper(own, forDark) })
-        showPage(if (forDark) getString(R.string.dark_wallpaper) else getString(R.string.light_wallpaper), rows, 2 + choices.indexOfFirst { it.second == current }) {
+        showPage(if (forDark) getString(R.string.dark_wallpaper) else getString(R.string.light_wallpaper), rows,
+            if (current.startsWith("video:")) 2 else 3 + choices.indexOfFirst { it.second == current }) {
             renderSettings(row)
         }
+    }
+
+    private fun cleanUnusedVideoWallpapers(dir: File) {
+        val light = prefs.getString("wp_light", null)
+        val dark = prefs.getString("wp_dark", null)
+        val catalogFiles = videoScenes(this).map { it.file }.toSet()
+        dir.listFiles { f -> f.extension.equals("mp4", true) }?.forEach { file ->
+            val choice = "video:${file.name}"
+            if (file.name in catalogFiles && choice != light && choice != dark) {
+                file.delete()
+            }
+        }
+    }
+
+    private fun pickVideoWallpaper(forDark: Boolean) {
+        val dir = wallpaperDir() ?: return
+        val current = currentWallpaper(forDark)
+        val allScenes = videoScenes(this)
+        val currentScene = allScenes.firstOrNull { "video:${it.file}" == current }
+        val files = dir.listFiles { f -> f.extension.equals("mp4", true) }?.sortedBy { it.name } ?: emptyList()
+        val own = files.filterNot { file -> allScenes.any { it.file == file.name } }
+        val keepOne = prefs.getBoolean("video_keep_one", false)
+
+        val nasaScenes = allScenes.filter { it.source == "NASA Earth" }
+        val appleScenes = allScenes.filter { it.source == "Apple Aerial" }
+        val amazonScenes = allScenes.filter { it.source == "Amazon Fire TV" }
+
+        val rows = listOf(
+            page(getString(R.string.surprise_me), getString(R.string.random_scene)) {
+                if (allScenes.isNotEmpty()) {
+                    val randomItem = allScenes.random()
+                    val file = File(dir, randomItem.file)
+                    if (file.isFile && validVideo(file)) previewVideo(forDark, file)
+                    else downloadVideo(forDark, randomItem, file) { pickVideoWallpaper(forDark) }
+                }
+            },
+            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else getString(R.string.n_scenes, nasaScenes.size)) {
+                pickVideoScenesList(forDark, getString(R.string.nasa_earth), nasaScenes) { pickVideoWallpaper(forDark) }
+            },
+            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else getString(R.string.n_scenes, appleScenes.size)) {
+                pickSourceCategories(forDark, getString(R.string.apple_aerial), appleScenes) { pickVideoWallpaper(forDark) }
+            },
+            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else getString(R.string.n_scenes, amazonScenes.size)) {
+                pickSourceCategories(forDark, getString(R.string.amazon_fire_tv), amazonScenes) { pickVideoWallpaper(forDark) }
+            },
+            page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) },
+        ) + own.map { file ->
+            page(file.nameWithoutExtension, if (current == "video:${file.name}") CHOSEN else "") { previewVideo(forDark, file) }
+        } + listOf(
+            page(getString(R.string.video_keep_one), toggle(keepOne)) {
+                val next = !keepOne
+                prefs.edit().putBoolean("video_keep_one", next).apply()
+                if (next) cleanUnusedVideoWallpapers(dir)
+                pickVideoWallpaper(forDark)
+            }
+        ) + if (files.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_video)) { removeVideo(forDark, files) })
+
+        val styles = rows.map { r ->
+            if (r.first == getString(R.string.video_keep_one)) RowStyle(sub = getString(R.string.video_keep_one_desc))
+            else null
+        }
+
+        val initialIndex = when {
+            currentScene?.source == "NASA Earth" -> 1
+            currentScene?.source == "Apple Aerial" -> 2
+            currentScene?.source == "Amazon Fire TV" -> 3
+            current.startsWith("video:") -> rows.indexOfFirst { it.first == wallpaperName(current) }.coerceAtLeast(0)
+            else -> 0
+        }
+
+        showPage(getString(R.string.video_wallpapers), rows, initialIndex, styles = styles,
+            top = label(getString(R.string.video_sources_credit), 13f).apply { maxLines = 2; setPadding(dp(14), dp(4), dp(14), dp(12)) }) {
+            pickWallpaper(forDark)
+        }
+    }
+
+    private fun pickSourceCategories(forDark: Boolean, source: String, sourceScenes: List<VideoScene>, onBack: () -> Unit) {
+        val current = currentWallpaper(forDark)
+        val currentScene = sourceScenes.firstOrNull { "video:${it.file}" == current }
+        val categories = sourceScenes.map { it.category }.distinct()
+        val rows = categories.map { category ->
+            val catScenes = sourceScenes.filter { it.category == category }
+            page(category, if (currentScene?.category == category) CHOSEN else getString(R.string.n_scenes, catScenes.size)) {
+                pickVideoScenesList(forDark, category, catScenes) { pickSourceCategories(forDark, source, sourceScenes, onBack) }
+            }
+        }
+        val initialIndex = currentScene?.let { sc -> categories.indexOf(sc.category).coerceAtLeast(0) } ?: 0
+        showPage(source, rows, initialIndex,
+            top = label(getString(R.string.video_sources_credit), 13f).apply { maxLines = 2; setPadding(dp(14), dp(4), dp(14), dp(12)) }) {
+            onBack()
+        }
+    }
+
+    private fun pickVideoScenesList(forDark: Boolean, title: String, scenes: List<VideoScene>, onBack: () -> Unit) {
+        val dir = wallpaperDir() ?: return
+        val current = currentWallpaper(forDark)
+        val rows = scenes.map { item ->
+            val file = File(dir, item.file)
+            page(item.name, if (current == "video:${file.name}") CHOSEN else "") {
+                if (file.isFile && validVideo(file)) previewVideo(forDark, file)
+                else downloadVideo(forDark, item, file) { pickVideoScenesList(forDark, title, scenes, onBack) }
+            }
+        }
+        val initialIndex = if (current.startsWith("video:")) rows.indexOfFirst { it.first == wallpaperName(current) }.coerceAtLeast(0) else 0
+        showPage(title, rows, initialIndex) {
+            onBack()
+        }
+    }
+
+    private fun downloadVideo(forDark: Boolean, item: VideoScene, file: File, onBack: () -> Unit) {
+        val cancelled = AtomicBoolean(false)
+        val status = label(getString(R.string.video_downloading, 0), 16f).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(24), 0, dp(12))
+        }
+        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(4)).apply {
+                setMargins(dp(14), 0, dp(14), dp(24))
+            }
+            max = 100
+            progress = 0
+            isIndeterminate = false
+            progressDrawable = progressBarDrawable()
+        }
+        val topBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(status)
+            addView(progressBar)
+        }
+        showPage(item.name, listOf(page(getString(R.string.cancel)) { onBack() }), top = topBox) {
+            onBack()
+        }
+        pageExit = { cancelled.set(true) }
+        io.execute {
+            val ok = downloadVideoScene(item, file, cancelled) { pct ->
+                ui.post {
+                    if (!cancelled.get()) {
+                        status.text = getString(R.string.video_downloading, pct)
+                        progressBar.progress = pct
+                    }
+                }
+            }
+            ui.post {
+                if (cancelled.get() || isDestroyed) return@post
+                if (ok) previewVideo(forDark, file)
+                else { toast(getString(R.string.video_download_failed), long = true); onBack() }
+            }
+        }
+    }
+
+    private fun previewVideo(forDark: Boolean, file: File) {
+        videoWallpaper.pause()
+        findViewById<ImageView>(R.id.wallpaper).alpha = 1f
+        val preview = VideoView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(182)).apply {
+                setMargins(dp(14), dp(4), dp(14), dp(14))
+            }
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(v: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, v.width, v.height, dp(14).toFloat())
+                }
+            }
+            clipToOutline = true
+            setVideoPath(file.path)
+            setOnPreparedListener { player -> player.isLooping = true; player.setVolume(0f, 0f); start() }
+            setOnErrorListener { _, _, _ -> toast(getString(R.string.video_cannot_play), long = true); true }
+        }
+        showPage(wallpaperName("video:${file.name}"), listOf(
+            page(getString(R.string.use_video)) {
+                preview.stopPlayback()
+                setWallpaper(forDark, "video:${file.name}")
+                pickVideoWallpaper(forDark)
+            },
+            page(getString(R.string.cancel)) { pickVideoWallpaper(forDark) },
+        ), top = preview) { pickVideoWallpaper(forDark) }
+        pageExit = {
+            preview.stopPlayback()
+            if (resumed && currentWallpaper().startsWith("video:")) videoWallpaper.resume()
+        }
+        preview.start()
+    }
+
+    private fun removeVideo(forDark: Boolean, files: List<File>) {
+        showPage(getString(R.string.remove_video), files.map { file ->
+            page(wallpaperName("video:${file.name}")) {
+                showPage(getString(R.string.delete_photo, wallpaperName("video:${file.name}")), listOf(
+                    page(getString(R.string.cancel)) { removeVideo(forDark, files) },
+                    page(getString(R.string.delete)) {
+                        val choice = "video:${file.name}"
+                        prefs.edit().apply {
+                            if (prefs.getString("wp_light", null) == choice) remove("wp_light")
+                            if (prefs.getString("wp_dark", null) == choice) remove("wp_dark")
+                        }.apply()
+                        videoWallpaper.clear()
+                        file.delete()
+                        loadWallpaper()
+                        pickVideoWallpaper(forDark)
+                    },
+                )) { removeVideo(forDark, files) }
+            }
+        }) { pickVideoWallpaper(forDark) }
     }
 
     private fun setWallpaper(forDark: Boolean, choice: String) {
@@ -1210,6 +1562,9 @@ class MainActivity : Activity() {
         if (choice == ShowsWall.CHOICE) {
             prefs.edit().remove("wp_show_key").putLong("wp_show_at", 0).apply()
             refreshShows()
+        }
+        if (prefs.getBoolean("video_keep_one", false)) {
+            wallpaperDir()?.let { cleanUnusedVideoWallpapers(it) }
         }
         updateFeatured()
         if (forDark == dark) loadWallpaper()
@@ -1458,11 +1813,10 @@ class MainActivity : Activity() {
     /** The folder's photo on show now, or the next one in this round's shuffle. Runs on the io thread. */
     private fun folderPhoto(choice: String): Long? {
         val ids = folderPhotos(contentResolver, choice)
-        val all = ids.toHashSet()
-        prefs.getLong(photoKey(), -1).takeIf { it in all }?.let { return it }
-        deck.removeAll { it !in all } // deleted, or another folder's
-        if (deck.isEmpty()) deck.addAll(ids.shuffled())
-        return deck.removeFirstOrNull()?.also { prefs.edit().putLong(photoKey(), it).apply() }
+        val saved = prefs.getLong(photoKey(), -1).takeIf { it >= 0 }
+        val picked = pickFolderPhoto(ids, saved, deck)
+        if (picked != null && picked != saved) prefs.edit().putLong(photoKey(), picked).apply()
+        return picked
     }
 
     /** Every folder with photos in it, internal storage and USB drives alike: (bucket id, name, photo count). */
@@ -1528,12 +1882,14 @@ class MainActivity : Activity() {
     private fun uploadWallpaper(forDark: Boolean) {
         val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
         val dir = wallpaperDir() ?: return
+        val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_photo), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File(cacheDir, "upload.tmp")) { file ->
+            UploadServer((1000..9999).random().toString(), File.createTempFile("photo-upload-", ".tmp", cacheDir)) { file ->
+                if (!active.get()) return@UploadServer null
                 val saved = importWallpaper(file, dir) ?: return@UploadServer null
                 ui.post {
-                    if (isDestroyed) return@post
+                    if (isDestroyed || !active.get()) { saved.delete(); return@post }
                     setWallpaper(forDark, "file:${saved.name}")
                     status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
                 }
@@ -1559,9 +1915,46 @@ class MainActivity : Activity() {
         }
         showPage(getString(R.string.add_from_your_phone), listOf(page(getString(R.string.done)) { pickWallpaper(forDark) }), top = box) { pickWallpaper(forDark) }
         pageExit = {
+            active.set(false)
             server.stop()
             if (upload === server) upload = null
         }
+    }
+
+    private fun uploadVideoWallpaper(forDark: Boolean) {
+        val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
+        val dir = wallpaperDir() ?: return
+        val active = AtomicBoolean(true)
+        val status = label(getString(R.string.waiting_video), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
+        val server = try {
+            UploadServer((1000..9999).random().toString(), File.createTempFile("video-upload-", ".tmp", cacheDir), video = true) { file ->
+                if (!active.get()) return@UploadServer null
+                val saved = importVideoWallpaper(file, dir) ?: return@UploadServer null
+                ui.post {
+                    if (isDestroyed || !active.get()) { saved.delete(); return@post }
+                    status.text = getString(R.string.video_added, saved.nameWithoutExtension)
+                    previewVideo(forDark, saved)
+                }
+                saved.nameWithoutExtension
+            }
+        } catch (_: IOException) {
+            return toast(getString(R.string.upload_failed), long = true)
+        }
+        upload = server
+        val url = "http://$ip:${server.port}/${server.code}"
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(4), 0, dp(12))
+            addView(ImageView(this@MainActivity).apply { setImageBitmap(qrBitmap(url, dp(200))) })
+            addView(label(url, 14f).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(4)) })
+            addView(label(getString(R.string.scan_hint), 12f).apply { gravity = Gravity.CENTER; maxLines = 3 })
+            addView(status.apply { setPadding(0, dp(12), 0, 0) })
+        }
+        showPage(getString(R.string.add_video_from_phone), listOf(page(getString(R.string.done)) { pickVideoWallpaper(forDark) }), top = box) {
+            pickVideoWallpaper(forDark)
+        }
+        pageExit = { active.set(false); server.stop(); if (upload === server) upload = null }
     }
 
     /** The TV's own address on the home network (IPv4: easy to read and type). */
@@ -1615,7 +2008,6 @@ class MainActivity : Activity() {
             panel.background = null
             panel.setWillNotDraw(false)
             styleGlass(panel.glass, dp(22).toFloat(), flatRight = true)
-            settingsScrim.setBackgroundColor(0x55000000)
         } else {
             panel.setWillNotDraw(true)
             panel.background = if (!dark) ColorDrawable(0xFFF7F8FA.toInt())
@@ -1623,8 +2015,10 @@ class MainActivity : Activity() {
                     setLayerGravity(1, Gravity.START or Gravity.FILL_VERTICAL)
                     setLayerWidth(1, 1)
                 }
-            settingsScrim.setBackgroundColor(0x99000000.toInt())
         }
+        panel.invalidate()
+        if (settingsScrim.background === spotlight) spotlight.invalidateSelf()
+        settingsScrim.invalidate()
     }
 
     private fun closeLauncherSettings() {
@@ -1705,6 +2099,24 @@ class MainActivity : Activity() {
                 showWatchNext(Cards(cardSources, cardCurrent, watchList))
                 renderSettings(R.string.show_icons)
             },
+            R.string.glass to { _ ->
+                val next = !glassOn()
+                prefs.edit().putBoolean("glass", next).apply()
+                applyTheme()
+                baked.clear()
+                glass.clearTiles()
+                if (next) {
+                    loadWallpaper()
+                } else {
+                    glass.setBlur(null)
+                    glassSurfaces.forEach { it.get()?.setBlur(null) }
+                }
+                renderApps()
+                watchKey = null
+                showWatchNext(watchList)
+                showPanelGlass()
+                renderSettings(R.string.glass)
+            },
         )
         val rows = linkedMapOf<Int, Triple<String, String, () -> Unit>>(
             R.string.edit_apps_row to Triple(getString(R.string.edit_apps_row), "") { closeLauncherSettings(); startEdit(grab = null) },
@@ -1714,8 +2126,7 @@ class MainActivity : Activity() {
             R.string.light_wallpaper to Triple(getString(R.string.light_wallpaper), wallpaperName(currentWallpaper(false))) { pickWallpaper(false) },
             R.string.dark_wallpaper to Triple(getString(R.string.dark_wallpaper), wallpaperName(currentWallpaper(true))) { pickWallpaper(true) },
             R.string.glass to Triple(getString(R.string.glass), toggle(glassOn())) {
-                prefs.edit().putBoolean("glass", !glassOn()).putBoolean("reopen_settings", true).apply()
-                recreate() // tile colours are applied once per activity; reopen the panel after
+                steps[R.string.glass]!!(1)
             },
             // Select steps up like Right, and past 100% starts again at 0%.
             R.string.fade_top to Triple(getString(R.string.fade_top), "$SLIDER${fade("fade_top")}") { steps[R.string.fade_top]!!(if (fade("fade_top") == 100) -100 / FADE_STEP else 1) },
@@ -2142,8 +2553,10 @@ class MainActivity : Activity() {
             }
         }
 
+        private val scrimAlpha get() = if (frosted()) 0x55 else SCRIM_ALPHA
+
         override fun draw(c: Canvas) {
-            val dim = SCRIM_ALPHA shl 24
+            val dim = scrimAlpha shl 24
             if (open == 0f) return c.drawColor(dim)
             path.reset()
             path.addRoundRect(hole, dp(16).toFloat(), dp(16).toFloat(), Path.Direction.CW)
@@ -2153,7 +2566,7 @@ class MainActivity : Activity() {
             c.restore()
             c.save()
             c.clipPath(path)
-            c.drawColor((SCRIM_ALPHA * (1 - open)).toInt() shl 24) // the window clears as it opens
+            c.drawColor((scrimAlpha * (1 - open)).toInt() shl 24) // the window clears as it opens
             c.restore()
         }
 
@@ -3034,15 +3447,18 @@ class MainActivity : Activity() {
 
     /** The bar's icons in their default order, with the key each is saved under. */
     private val TOP_KEYS = linkedMapOf(R.id.wifi to "wifi", R.id.sourcesButton to "sources", R.id.allAppsButton to "apps",
-        R.id.systemSettings to "system", R.id.launcherSettings to "plume")
+        R.id.systemSettings to "system", R.id.launcherSettings to "plume", R.id.powerButton to "power")
 
     private var movingTop: View? = null // the icon being moved, while Left and Right slide it
     private var topLive: List<Int> = emptyList() // the order while moving; saved when OK places the icon
     private var topBefore: List<Int> = emptyList() // the order when the move started, for Back
 
     /** The icons the bar shows, in order: the saved list, or all of them. Plume settings is always on it. */
-    private fun topOrder(): List<Int> =
-        TopBar.parse(prefs.getString("top_bar", null), TOP_KEYS.values.toList(), TOP_KEYS.values.toList(), "plume").map { key -> TOP_KEYS.entries.first { it.value == key }.key }
+    private fun topOrder(): List<Int> {
+        val all = TOP_KEYS.values.toList()
+        // Power is not on the bar until someone adds it.
+        return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - "power", "plume"))
+    }
 
     /** What is really on screen: Sources stays out while the TV has no input. */
     private fun shownTop(order: List<Int> = topOrder()) = order.filter { it != R.id.sourcesButton || sources.isNotEmpty() }
@@ -3071,6 +3487,16 @@ class MainActivity : Activity() {
     private fun keyList(ids: List<Int>) = ids.map { TOP_KEYS.getValue(it) }
 
     private fun keys(list: List<String>) = list.map { key -> TOP_KEYS.entries.first { it.value == key }.key }
+
+    /**
+     * The system's own power dialog (power off, restart; Cancel leaves everything as it was). Only the Home button service can
+     * ask for it, so without the service the icon offers to turn that on.
+     */
+    private fun powerDialog() {
+        val service = HomeOverride.running
+            ?: return holdMenu(findViewById(R.id.powerButton), listOf(getString(R.string.power_needs_home) to { turnOnHomeButton() }), below = true)
+        Remap.powerMenu(service)
+    }
 
     /** Hold OK on a top-bar icon: Move, Hide (not Plume settings, so the bar is never empty) and Add icon. */
     private fun topMenu(v: View) {
@@ -3293,7 +3719,10 @@ class MainActivity : Activity() {
         if (prefs.getString("sort", "manual") == "usage") appsDirty = true
         val from = currentFocus?.takeIf { it.tag == a.pkg } // the tile that was pressed, not one a remote key opened it from
         try {
-            if (a.pkg.startsWith(HDMI)) Remap.openInput(this, a.pkg.removePrefix(HDMI)) else startApp(a.launch, from)
+            if (a.pkg.startsWith(HDMI)) {
+                Remap.openInput(this, a.pkg.removePrefix(HDMI))
+                returnTo = focusKey(from)
+            } else startApp(a.launch, from)
         } catch (e: Exception) {
             packageManager.getLeanbackLaunchIntentForPackage(a.pkg)?.let { startApp(it, from) }
         }
@@ -3309,6 +3738,23 @@ class MainActivity : Activity() {
         val options = source?.let { ActivityOptions.makeScaleUpAnimation(it, 0, 0, it.width, it.height).toBundle() }
         startActivity(intent, options)
         openedFrom = source?.let { WeakReference(it) }
+        returnTo = focusKey(from)
+    }
+
+    /** What Home goes back to: the pressed tile's package or the pressed card's [cardKey], and null for an app that Plume did not start. */
+    private var returnTo: String? = null
+
+    private fun cardKey(p: Prog) = "card|${p.title}|${p.pkg}|${p.intent}"
+
+    private fun focusKey(v: View?): String? = (v?.getTag(R.id.watchRow) as? Prog)?.let { cardKey(it) } ?: v?.tag as? String
+
+    /** The tile or card that [key] names, with the cards built up to it; null when it left the rows (uninstalled, hidden, off the list). */
+    private fun homeViewFor(key: String): View? {
+        (0 until appRow.childCount).map { appRow.getChildAt(it) }.firstOrNull { it.tag == key }?.let { return it }
+        val at = watchList.indexOfFirst { cardKey(it) == key }
+        if (at < 0) return null
+        addCardsTo(at)
+        return (watchRow.getChildAt(at) as? ViewGroup)?.getChildAt(0)
     }
 
     /**
@@ -3480,7 +3926,9 @@ class MainActivity : Activity() {
 
     // ---------- updates (GitHub releases) ----------
     // Checked once a day from the home screen; a new version is announced once, then waits in settings.
-    // The APK streams straight into an install session, so there's no temporary file to clean up.
+    // The APK goes to a file in the cache, then into an install session. TVs without the confirm box open that file in
+    // their own installer (see ApkProvider). The file is deleted when an update fails or is cancelled, and by the new
+    // version when it starts (see Updated).
 
     @Volatile private var checking = false
     @Volatile private var updating = false
@@ -3590,8 +4038,13 @@ class MainActivity : Activity() {
         updating = true
         renderSettings(R.string.updates)
         val installer = packageManager.packageInstaller
+        val apk = File(cacheDir, ApkProvider.NAME)
         io.execute {
             val ok = try {
+                apk.delete()
+                openStream("https://github.com/$REPO/releases/download/v$ver/Plume.apk").use { input ->
+                    apk.outputStream().use { input.copyTo(it) }
+                }
                 val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
                 params.setAppPackageName(packageName)
                 // Android 12+ can skip the confirm box when we're the app's installer; otherwise Android asks.
@@ -3599,8 +4052,8 @@ class MainActivity : Activity() {
                 val id = installer.createSession(params)
                 installer.openSession(id).use { session ->
                     try {
-                        openStream("https://github.com/$REPO/releases/download/v$ver/Plume.apk").use { input ->
-                            session.openWrite("Plume.apk", 0, -1).use { out ->
+                        apk.inputStream().use { input ->
+                            session.openWrite("Plume.apk", 0, apk.length()).use { out ->
                                 input.copyTo(out)
                                 session.fsync(out)
                             }
@@ -3617,6 +4070,7 @@ class MainActivity : Activity() {
                 true
             } catch (e: Exception) {
                 android.util.Log.w("Plume", "update download failed ($e)")
+                apk.delete()
                 false
             }
             ui.post {
@@ -3630,16 +4084,22 @@ class MainActivity : Activity() {
         }
     }
 
-    /** The install session reports back here: show Android's confirm box, or say why it failed. */
+    /** The install session reports back here: show Android's confirm box (or the TV's own installer), or say why it failed. */
     private fun installStatus(intent: Intent) {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)?.let { startActivity(it) }
-            return
+            try {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)?.let { startActivity(it) }
+                return
+            } catch (_: ActivityNotFoundException) {
+                // Some TVs (Xiaomi HyperOS) have no confirm box: their own installer takes the file instead.
+                return openApk()
+            }
         }
         updating = false
         if (status != PackageInstaller.STATUS_SUCCESS) {
+            File(cacheDir, ApkProvider.NAME).delete()
             val why = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
             android.util.Log.w("Plume", "update install failed: $status $why")
             if (status != PackageInstaller.STATUS_FAILURE_ABORTED) {
@@ -3647,6 +4107,29 @@ class MainActivity : Activity() {
             }
         }
         if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.updates)
+    }
+
+    /** Opens the file in the TV's own installer, for a TV without the confirm box. */
+    private fun openApk() {
+        updating = false
+        try {
+            startActivityForResult(Intent(Intent.ACTION_VIEW)
+                .setDataAndType(ApkProvider.uri(this), "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), INSTALL_REQUEST)
+        } catch (_: Exception) {
+            installerClosed()
+            toast(getString(R.string.update_install_failed), long = true)
+        }
+        if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.updates)
+    }
+
+    /**
+     * Only now drops the waiting session: dropping it sends its result back to this activity, which would bring Plume
+     * back over the installer. After a successful update Plume restarts instead, and Updated drops it.
+     */
+    private fun installerClosed() {
+        dropSessions(this)
+        File(cacheDir, ApkProvider.NAME).delete()
     }
 
     // ---------- weather (under the date) ----------
@@ -4142,6 +4625,7 @@ class MainActivity : Activity() {
         showTitle(fade = inPlace)
         if (inPlace) return swapCards()
         val focusedAt = watchRow.indexOfChild(currentFocus?.parent as? View)
+        val focusedKey = (currentFocus?.getTag(R.id.watchRow) as? Prog)?.let { cardKey(it) } // the same show, whatever place it has now
         watchRow.removeAllViews()
         placeRow(animate = false)
         // ~16 ms per card here and only four show at once: the first four now, the next four on the next frame.
@@ -4149,8 +4633,9 @@ class MainActivity : Activity() {
         watchRow.post { fitInk() }
         ui.post { if (watchKey == key) addCardsTo(CARDS_AHEAD - 1) } // unless a newer list replaced this one
         if (focusedAt >= 0) {
-            ((watchRow.getChildAt(focusedAt.coerceAtMost(watchRow.childCount - 1)) as? LinearLayout)?.getChildAt(0)
-                ?: appRow.getChildAt(0))?.requestFocus()
+            val at = watchList.indexOfFirst { cardKey(it) == focusedKey }.takeIf { it >= 0 } ?: focusedAt.coerceAtMost(watchList.size - 1)
+            addCardsTo(at) // the card may be past the first ones that are built
+            ((watchRow.getChildAt(at) as? LinearLayout)?.getChildAt(0) ?: appRow.getChildAt(0))?.requestFocus()
         }
     }
 
@@ -4513,6 +4998,7 @@ class MainActivity : Activity() {
         const val TV_LISTINGS = "android.permission.READ_TV_LISTINGS"
         const val WRITE_SECURE = "android.permission.WRITE_SECURE_SETTINGS"
         const val ROLE_REQUEST = 2
+        const val INSTALL_REQUEST = 4
         val ROW_ALIGN = linkedMapOf( // setting -> its name, and the row's gravity in the scroller
             "left" to (R.string.align_left to Gravity.START),
             "centre" to (R.string.align_centre to Gravity.CENTER_HORIZONTAL),
@@ -4611,12 +5097,12 @@ class MainActivity : Activity() {
         const val GRID_GAP = 16 // dp; shared by the apps row and the cards so their columns line up
         /** Shown names for the wallpaper keys saved in prefs (the keys stay English). */
         val WALLPAPER_NAMES = mapOf(
-            "Rockies (day)" to R.string.wp_rockies_day, "Rockies (dusk)" to R.string.wp_rockies_dusk,
+            "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,
             "Pure black" to R.string.wp_pure_black, "Soft white" to R.string.wp_soft_white,
         )
         val BUNDLED_WALLPAPERS = linkedMapOf(
-            "Rockies (day)" to R.drawable.wallpaper,
-            "Rockies (dusk)" to R.drawable.wallpaper_dark,
+            "Mist (day)" to R.drawable.wallpaper,
+            "Peak (dusk)" to R.drawable.wallpaper_dark,
         )
         val PIN_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,

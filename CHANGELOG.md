@@ -16,16 +16,25 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Softer photo fade.** The top and bottom fades start lower and end softer, so more of the picture shows.
+- **The fades work on every wallpaper.** **Top fade** and **Bottom fade** change the two bundled pictures too. Before, they changed only your own photos.
+- **New bundled wallpapers.** **Mist (day)** and **Peak (dusk)** replace the two Rockies pictures. The fades are no longer part of the picture.
+- The **Glass** setting changes tiles, cards and the settings panel live without restarting Plume.
 - In light mode with **Glass** off, the Plume settings panel is light again. Before, it was black.
 
 - **Shows wallpaper.** Select **Plume settings → Appearance → Light wallpaper** or **Dark wallpaper**, then **Shows from your apps**. The picture of a show that your apps publish becomes the wallpaper. It comes from Watch Next, or from the channels that you choose in **Wallpaper from**. It changes as often as a folder of photos does. Only wide pictures count. **Featured: …** shows under the weather. Plume fetches nothing until you select it.
 - **Darkening.** In dark mode, Plume lays black over the Bing picture and the Shows picture. Select **Plume settings → Appearance → Darkening**. Choose Auto, None, Light, Medium or Strong. Auto gives a bright picture more black and lifts a very dark one a little. **Medium** is what Plume did before.
 - **Edit the top bar.** Hold **OK** on an icon at the top of the home screen. Select **Move**, **Hide** or **Add icon**. In **Move**, press Left or Right to slide the icon. Press **OK** to place it. Press Back to cancel. **Add icon** shows the icons that you hid. **Plume settings** stays on the bar, so you can always bring the icons back.
+- **Power menu icon.** Hold **OK** on a top-bar icon and select **Add icon**, then **Power menu**. Select the icon to open the Android power menu. If the TV does not open it, a message says so. It needs the Home button turned on. If it is off, the icon offers to turn it on.
 - Plume does not close when a theme change arrives while a picture or the apps list is loading, or when the screen saver ends.
 - **Rows of the shows row.** Select **Plume settings → Shows row → Rows**. **Mixed** puts the shows of every source in one row. It is the default. **By title** keeps one row: select its title and press Left or Right to change the source. **Per channel** gives each source its own row: press Down or Up on a card to change the row. The cards stay in place and change their picture, title and progress.
+- **Home returns to your app.** Press Home in an app that you started from a tile or a card. The home screen shows that tile or card in focus, not the first tile. If you started the app in another way, or the tile is gone, Home shows the first tile.
 - Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
 - **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.
 - **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.
+- On Fire TV, Plume comes back when you press **Home** on the Plume home screen or in the Plume settings. Before, Amazon's home stayed on the screen.
+- On Google TV, Plume covers the app that you watch only when the Google TV home screen opens. Before, a notice or a sign-in screen from the Google TV launcher also brought Plume to the front.
+- On Xiaomi TVs, **Plume settings → Updates → Install** opens the TV's installer. Before, Plume closed.
 
 ## 1.6
 

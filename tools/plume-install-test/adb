@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+# A fake adb for run.sh, which tests tools/plume-install.sh without a TV. It keeps the TV's state in the JSON file
+# $FAKE_STATE and answers only the commands the script sends.
+#   FAKE_KIND         fire7 (Android 9) | fire8 (Android 11) | fire14 (Android 14) | google (Android 14)
+#   FAKE_INIT         a JSON object merged into the TV's first state (for example a service that is on already)
+#   FAKE_FAIL         substrings, separated by |: a shell command that has one fails, with a message and exit status 1
+#   FAKE_FAIL_SILENT  the same, but with no message at all (only the exit status says it failed)
+#   FAKE_NOALARM      Plume does not have the alarm change: it never sets min_futurity
+#   FAKE_HOME_BROKEN  Home does not open Plume, whatever the service does
+import json, os, re, sys
+
+SP = os.environ["FAKE_STATE"]
+KIND = os.environ.get("FAKE_KIND", "fire7")
+SVC = "dev.plume/dev.plume.HomeOverride"
+STOCK = "com.amazon.tv.launcher"
+FIRE = KIND.startswith("fire")
+if os.path.exists(SP):
+    st = json.load(open(SP))
+else:
+    st = {"enabled": "", "granted": False, "installed": True, "global": "", "files": {}, "disabled": [], "alarm_saved": None,
+          "top": (STOCK if FIRE else "com.google.android.apps.tv.launcherx") + "/.Home"}
+    st.update(json.loads(os.environ.get("FAKE_INIT", "{}")))
+
+
+def save():
+    json.dump(st, open(SP, "w"))
+
+
+def service_on():
+    return SVC in st["enabled"].split(":") and st["installed"]
+
+
+def app_sync():
+    # What Plume does: set min_futurity when its service runs and the grant is there, put the old value back when it stops.
+    if FIRE and "FAKE_NOALARM" not in os.environ:
+        if service_on() and st["granted"] and "min_futurity=0" not in st["global"]:
+            st["alarm_saved"] = st["global"]
+            st["global"] = ",".join([x for x in st["global"].split(",") if x and not x.startswith("min_futurity=")] + ["min_futurity=0"])
+        if not service_on() and st["alarm_saved"] is not None and st["granted"]:
+            st["global"] = st["alarm_saved"]
+            st["alarm_saved"] = None
+
+
+a = sys.argv[1:]
+if a and a[0] == "-s":
+    a = a[2:]
+cmd = a[0] if a else ""
+if cmd == "connect":
+    print("connected"); sys.exit(0)
+if cmd == "devices":
+    print("List of devices attached\n10.0.0.2:5555\tdevice"); sys.exit(0)
+if cmd == "get-state":
+    print("device"); sys.exit(0)
+line = " ".join(a[1:])
+for key, silent in (("FAKE_FAIL", False), ("FAKE_FAIL_SILENT", True)):
+    for pat in filter(None, os.environ.get(key, "").split("|")):
+        if pat in (line if cmd == "shell" else cmd):
+            if not silent:
+                print("Error: the TV refused this command", file=sys.stderr)
+            sys.exit(1)
+if cmd == "install":
+    st["installed"] = True; save(); sys.exit(0)
+
+out = ""
+sdk = {"fire7": "28", "fire8": "30", "fire14": "34", "google": "34"}[KIND]
+rel = {"fire7": "9", "fire8": "11", "fire14": "14", "google": "14"}[KIND]
+if line.startswith("getprop ro.product.manufacturer"): out = "Amazon" if FIRE else "Google"
+elif line.startswith("getprop ro.product.model"): out = "AFTMV00" if FIRE else "Chromecast"
+elif line.startswith("getprop ro.build.version.release"): out = rel
+elif line.startswith("getprop ro.build.version.sdk"): out = sdk
+elif line == "pm list features": out = "feature:android.software.leanback" + ("\nfeature:amazon.hardware.fire_tv" if FIRE else "")
+elif line == "pm list packages":
+    out = "package:com.android.settings" + ("\npackage:dev.plume" if st["installed"] else "") + ("\npackage:com.google.android.apps.tv.launcherx" if KIND == "google" else "")
+elif line == "pm list packages -d": out = "\n".join("package:" + p for p in st["disabled"])
+elif line == "dumpsys package dev.plume":
+    out = "    versionName=1.6\n" + ("    android.permission.WRITE_SECURE_SETTINGS: granted=true" if st["granted"] else "")
+elif line == "settings get secure enabled_accessibility_services": out = st["enabled"] or "null"
+elif line == "settings get secure accessibility_enabled": out = "1" if st["enabled"] else "0"
+elif line == "settings get global alarm_manager_constants": out = st["global"] or "null"
+elif line.startswith("settings put secure enabled_accessibility_services"):
+    st["enabled"] = re.search(r"services '?([^']*)'?$", line).group(1)
+elif line.startswith("settings delete secure enabled_accessibility_services"): st["enabled"] = ""
+elif line.startswith("settings put secure accessibility_enabled"): pass
+elif line == "dumpsys accessibility":
+    pre = "Bound services:{" if KIND != "fire7" else "services:{"
+    out = "  " + pre + ("Service[label=Plume: Home button,feedbackType[]]}" if service_on() else "}")
+elif line == "dumpsys activity activities": out = "  mResumedActivity: ActivityRecord{1 u0 %s t1}" % st["top"]
+elif line.startswith("pm grant"): st["granted"] = st["installed"]
+elif line.startswith("pm revoke"): st["granted"] = False
+elif line.startswith("pm disable-user"):
+    if STOCK not in st["disabled"]: st["disabled"].append(STOCK)
+    out = "Package %s new state: disabled-user" % STOCK
+elif line.startswith("pm enable"):
+    pkg = line.split()[-1]
+    if pkg in st["disabled"]: st["disabled"].remove(pkg)
+    out = "Package %s new state: enabled" % pkg
+elif line.startswith("am start"): st["top"] = "com.android.settings/.Settings"
+elif line == "input keyevent KEYCODE_HOME":
+    if service_on() and "FAKE_HOME_BROKEN" not in os.environ: st["top"] = "dev.plume/.MainActivity"
+    elif STOCK not in st["disabled"]: st["top"] = (STOCK if FIRE else "launcherx") + "/.Home"
+elif line.startswith("cat "): out = st["files"].get(line.split()[1], "cat: %s: No such file or directory" % line.split()[1])
+elif line.startswith("rm -f "): st["files"].pop(line.split()[2], None)
+elif line.startswith("echo ") and ">>" in line:
+    txt, path = line[5:].split(">>")
+    st["files"][path.strip()] = st["files"].get(path.strip(), "") + txt.strip().strip("'") + "\n"
+elif line.startswith("grep -vx "):
+    m = re.match(r"grep -vx '([^']*)' (\S+) > (\S+); mv", line)
+    keep = [l for l in st["files"].get(m.group(2), "").split("\n") if l and l != m.group(1)]
+    st["files"][m.group(2)] = "".join(l + "\n" for l in keep)
+app_sync()
+save()
+if out: print(out)
