@@ -29,12 +29,13 @@ internal class UploadServer(val code: String, private val temp: File, private va
         ServerSocket(0) // 8080 taken: any free port (it's in the QR code either way)
     }
     val port get() = socket.localPort
+    @Volatile private var client: Socket? = null
 
     init {
         Thread(::serve, "wallpaper-upload").start()
     }
 
-    fun stop() = socket.close()
+    fun stop() { socket.close(); client?.close() }
 
     private fun serve() {
         while (!socket.isClosed) {
@@ -43,10 +44,15 @@ internal class UploadServer(val code: String, private val temp: File, private va
             } catch (e: IOException) {
                 return // closed
             }
+            client = s
             try {
+                if (socket.isClosed) s.close()
                 s.use { handle(it) }
             } catch (e: Exception) {
                 android.util.Log.w("Plume", "upload request failed ($e)")
+            } finally {
+                client = null
+                temp.delete()
             }
         }
     }

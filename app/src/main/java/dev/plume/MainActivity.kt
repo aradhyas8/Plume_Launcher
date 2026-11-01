@@ -1667,12 +1667,14 @@ class MainActivity : Activity() {
     private fun uploadWallpaper(forDark: Boolean) {
         val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
         val dir = wallpaperDir() ?: return
+        val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_photo), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File(cacheDir, "upload.tmp")) { file ->
+            UploadServer((1000..9999).random().toString(), File.createTempFile("photo-upload-", ".tmp", cacheDir)) { file ->
+                if (!active.get()) return@UploadServer null
                 val saved = importWallpaper(file, dir) ?: return@UploadServer null
                 ui.post {
-                    if (isDestroyed) return@post
+                    if (isDestroyed || !active.get()) { saved.delete(); return@post }
                     setWallpaper(forDark, "file:${saved.name}")
                     status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
                 }
@@ -1698,6 +1700,7 @@ class MainActivity : Activity() {
         }
         showPage(getString(R.string.add_from_your_phone), listOf(page(getString(R.string.done)) { pickWallpaper(forDark) }), top = box) { pickWallpaper(forDark) }
         pageExit = {
+            active.set(false)
             server.stop()
             if (upload === server) upload = null
         }
@@ -1706,15 +1709,16 @@ class MainActivity : Activity() {
     private fun uploadVideoWallpaper(forDark: Boolean) {
         val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
         val dir = wallpaperDir() ?: return
+        val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_video), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File(cacheDir, "video-upload.tmp"), video = true) { file ->
+            UploadServer((1000..9999).random().toString(), File.createTempFile("video-upload-", ".tmp", cacheDir), video = true) { file ->
+                if (!active.get()) return@UploadServer null
                 val saved = importVideoWallpaper(file, dir) ?: return@UploadServer null
                 ui.post {
-                    if (!isDestroyed) {
-                        status.text = getString(R.string.video_added, saved.nameWithoutExtension)
-                        previewVideo(forDark, saved)
-                    }
+                    if (isDestroyed || !active.get()) { saved.delete(); return@post }
+                    status.text = getString(R.string.video_added, saved.nameWithoutExtension)
+                    previewVideo(forDark, saved)
                 }
                 saved.nameWithoutExtension
             }
@@ -1735,7 +1739,7 @@ class MainActivity : Activity() {
         showPage(getString(R.string.add_video_from_phone), listOf(page(getString(R.string.done)) { pickVideoWallpaper(forDark) }), top = box) {
             pickVideoWallpaper(forDark)
         }
-        pageExit = { server.stop(); if (upload === server) upload = null }
+        pageExit = { active.set(false); server.stop(); if (upload === server) upload = null }
     }
 
     /** The TV's own address on the home network (IPv4: easy to read and type). */

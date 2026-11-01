@@ -23,7 +23,7 @@ internal class VideoWallpaper(private val surface: SurfaceView, private val onFr
         if (this.file != file) { release(); this.file = file }
         active = play
         surface.visibility = android.view.View.VISIBLE
-        if (ready) start()
+        if (ready && active) start()
     }
 
     fun pause() {
