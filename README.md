@@ -155,9 +155,9 @@ If Home doesn't reach Plume on your Fire TV, run [`tools/plume-firetv-probe.sh`]
 
 ### Rows of the shows row
 
-**Plume settings → Shows row → Rows** has three choices. **Mixed** (the default) puts every source in one row. **By title** keeps one row: push **Down** from the apps to the row's title, then **Left** or **Right** to show another source. **Per channel** gives each source its own row: push **Down** or **Up** on a card to change the row.
+**Plume settings → Shows row → Rows** opens a page with three choices. Select one: it gets a tick, and a line under the list says what it does and which buttons to press. **Mixed** (the default) puts every source in one row. **By title** shows one source at a time: push **Down** from the apps to the row's title, then **Left** or **Right** to show another source. **Per channel** also shows one source at a time, as a row of its own: push **Down** on a card for the next source and **Up** for the one before. The arrows by the title show where you can go.
 
-The sources are Android TV's Watch Next and every channel that is on in **Plume settings → Shows row → Channels**. In **By title** and **Per channel**, Watch Next comes first, then the channels named "Continue Watching", then the others. A source with nothing in it is left out. The cards stay where they are when the source changes: only their poster, title and progress change.
+The sources are Android TV's Watch Next and every channel that is on in **Plume settings → Shows row → Channels**. In **By title** and **Per channel**, Watch Next comes first, then the channels named "Continue Watching", then the others. A source with nothing in it is left out. The cards stay where they are when the source changes: only their poster, title and progress change. Plume loads the new posters first, so a card never shows an empty picture. With only one source that has shows, By title and Per channel look like Mixed, and the Rows page says so.
 
 ### Remote keys
 

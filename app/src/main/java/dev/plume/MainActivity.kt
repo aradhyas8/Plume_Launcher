@@ -2082,12 +2082,6 @@ class MainActivity : Activity() {
                 placeRow(animate = false)
                 renderSettings(R.string.show_row)
             },
-            R.string.cards_rows to { d ->
-                prefs.edit().putString("cards_rows", CARDS_ROWS.keys.toList().step(cardsMode(), d)).apply()
-                watchKey = null
-                refreshWatchNext()
-                renderSettings(R.string.cards_rows)
-            },
             R.string.apps_when_hidden to { _ ->
                 prefs.edit().putBoolean("row_drop", !rowDrops()).apply()
                 placeRow(animate = false)
@@ -2167,7 +2161,7 @@ class MainActivity : Activity() {
                 steps[R.string.show_icons]!!(1)
             },
             R.string.show_row to Triple(getString(R.string.show_row), getString(ROW_SHOW.getValue(rowShow()))) { steps[R.string.show_row]!!(1) },
-            R.string.cards_rows to Triple(getString(R.string.cards_rows), getString(CARDS_ROWS.getValue(cardsMode()))) { steps[R.string.cards_rows]!!(1) },
+            R.string.cards_rows to Triple(getString(R.string.cards_rows), getString(CARDS_ROWS.getValue(cardsMode()))) { pickCardsRows() },
             R.string.apps_when_hidden to Triple(getString(R.string.apps_when_hidden), getString(if (rowDrops()) R.string.moves_down else R.string.stays_put)) {
                 steps[R.string.apps_when_hidden]!!(1)
             },
@@ -2269,7 +2263,6 @@ class MainActivity : Activity() {
                 R.string.app_names to listOf(R.string.on_focus, R.string.always, R.string.never).map { getString(it) to null },
                 R.string.row_position to ROW_ALIGN.values.map { getString(it.first) to null },
                 R.string.show_row to ROW_SHOW.values.map { getString(it) to null },
-                R.string.cards_rows to CARDS_ROWS.values.map { getString(it) to null },
                 R.string.apps_when_hidden to listOf(R.string.stays_put, R.string.moves_down).map { getString(it) to null },
                 R.string.show_icons to listOf(R.string.monochrome, R.string.colour).map { getString(it) to null },
                 R.string.weather_units to listOf("°C" to null, "°F" to null),
@@ -4488,6 +4481,36 @@ class MainActivity : Activity() {
     /** "mixed" (every source in one row), "title" (one row, switched with its title) or "stack" (one row per source, Down and Up). */
     private fun cardsMode() = ShowRows.mode(prefs.getString("cards_rows", null))
 
+    /**
+     * The Rows page: one line for each way to group the shows, to select (not a value to step through). The picked one has a
+     * tick, and the help line under the list says what it does and which keys to press.
+     */
+    private fun pickCardsRows(focusAt: Int = CARDS_ROWS.keys.indexOf(cardsMode())) {
+        val current = cardsMode()
+        val help = mapOf(ShowRows.MIXED to R.string.help_cards_mixed, ShowRows.BY_TITLE to R.string.help_cards_title, ShowRows.PER_CHANNEL to R.string.help_cards_each)
+        val rows = CARDS_ROWS.map { (mode, name) ->
+            page(getString(name), if (mode == current) CHOSEN else "") {
+                prefs.edit().putString("cards_rows", mode).apply()
+                watchKey = null
+                refreshWatchNext()
+                pickCardsRows()
+            }
+        }
+        // Split by source with one source only, the row looks like Mixed: say so, or the choice seems to do nothing.
+        val note = getString(R.string.cards_rows_note) + if (current != ShowRows.MIXED && cardSources.size == 1) " " + getString(R.string.cards_rows_one) else ""
+        showPage(getString(R.string.cards_rows), rows, focusAt, styles = CARDS_ROWS.keys.map { RowStyle(help = getString(help.getValue(it))) },
+            top = label(note, 15f).apply {
+                maxLines = 5
+                setPadding(dp(14), dp(4), dp(14), dp(10))
+            }) {
+            renderSettings(R.string.cards_rows)
+        }
+        cardsPage = true // the sources are known a moment after a choice: the note is drawn again then (see showWatchNext)
+        pageExit = { cardsPage = false }
+    }
+
+    private var cardsPage = false
+
     /** By title with at least two sources: the title is a pill you can select. */
     private fun canCycle() = cardsMode() == ShowRows.BY_TITLE && cardSources.size > 1
 
@@ -4622,8 +4645,17 @@ class MainActivity : Activity() {
         watchList = list
         cardSources = cards.sources
         cardCurrent = cards.current
-        showTitle(fade = inPlace)
-        if (inPlace) return swapCards()
+        if (cardsPage) pickCardsRows((settingsList.indexOfChild(currentFocus) - 1).coerceIn(0, CARDS_ROWS.size - 1)) // child 0 is the note
+        if (inPlace) { // the title and the cards change together, once the new posters are there
+            whenPostersReady(list.take(POSTER_CARDS).mapNotNull { it.image }) {
+                if (!isDestroyed && watchKey == key) {
+                    showTitle(fade = true)
+                    swapCards()
+                }
+            }
+            return
+        }
+        showTitle()
         val focusedAt = watchRow.indexOfChild(currentFocus?.parent as? View)
         val focusedKey = (currentFocus?.getTag(R.id.watchRow) as? Prog)?.let { cardKey(it) } // the same show, whatever place it has now
         watchRow.removeAllViews()
@@ -4847,6 +4879,29 @@ class MainActivity : Activity() {
             } ?: return@execute
             posters.put(uri, bmp)
             ui.post { if (!isDestroyed && v.tag == uri) v.setImageBitmap(bmp) }
+        }
+    }
+
+    /**
+     * Runs [then] on the main thread once the posters of [images] are in the cache, so a card that changes its show fades to a
+     * picture that is already there, not to an empty card. A poster that is not there after [POSTER_WAIT_MS] loads on its own.
+     */
+    private fun whenPostersReady(images: List<String>, then: () -> Unit) {
+        val missing = images.distinct().filter { posters.get(it) == null }
+        if (missing.isEmpty()) return then()
+        val ran = java.util.concurrent.atomic.AtomicBoolean(false)
+        val go = Runnable { if (ran.compareAndSet(false, true)) then() }
+        ui.postDelayed(go, POSTER_WAIT_MS)
+        val left = java.util.concurrent.atomic.AtomicInteger(missing.size)
+        for (uri in missing) posterIo.execute {
+            if (loading.add(uri)) try {
+                decode(uri)?.let { posters.put(uri, it) }
+            } catch (e: Exception) {
+                android.util.Log.w("TvHome", "poster failed: $uri ($e)")
+            } finally {
+                loading.remove(uri)
+            }
+            if (left.decrementAndGet() == 0) ui.post { ui.removeCallbacks(go); go.run() }
         }
     }
 
@@ -5077,6 +5132,8 @@ class MainActivity : Activity() {
         const val ROW_CARDS = 20 // the most cards a row holds
         const val SWAP_OUT_MS = 90L // another source of the shows row: what is there fades out ...
         const val SWAP_IN_MS = 150L // ... and the new content fades in
+        const val POSTER_CARDS = 6 // another source: the posters of this many cards are loaded before the cards change
+        const val POSTER_WAIT_MS = 700L // ... and the cards change after this long even if one is still on its way
         const val FADING = "fading" // the tag of a card that is fading out
         const val CARDS_AHEAD = 8 // Continue Watching cards built past the focused one (see addCardsTo)
         val READ_PHOTOS = if (Build.VERSION.SDK_INT >= 33) "android.permission.READ_MEDIA_IMAGES" else "android.permission.READ_EXTERNAL_STORAGE"
