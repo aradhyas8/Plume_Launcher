@@ -35,6 +35,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - On Fire TV, Plume comes back when you press **Home** on the Plume home screen or in the Plume settings. Before, Amazon's home stayed on the screen.
 - On Google TV, Plume covers the app that you watch only when the Google TV home screen opens. Before, a notice or a sign-in screen from the Google TV launcher also brought Plume to the front.
 - On Xiaomi TVs, **Plume settings → Updates → Install** opens the TV's installer. Before, Plume closed.
+- On Xiaomi TVs, **Remote & Home button** shows Off until the **Home button** is on. Before, it showed On, but Home opened the Xiaomi home screen.
 
 ## 1.6
 
