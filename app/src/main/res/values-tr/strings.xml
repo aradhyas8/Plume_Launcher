@@ -47,8 +47,6 @@
     <string name="done">Bitti</string>
     <string name="edit_apps_row">Uygulama satırını düzenle</string>
     <string name="theme">Tema</string>
-    <string name="fade_top">Üst geçiş</string>
-    <string name="fade_bottom">Alt geçiş</string>
     <string name="sort_apps">Uygulamaları sırala</string>
     <string name="manual">Manuel</string>
     <string name="most_used">En çok kullanılanlar</string>

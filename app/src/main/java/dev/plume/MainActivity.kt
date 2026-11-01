@@ -941,8 +941,7 @@ class MainActivity : Activity() {
         // Glass tints with the wallpaper's own colour, and focus brightens a tile without filling it white.
         cardRest = if (dark) DARK_CARD else if (glassy != null) IntArray(2) { look.tile(lit = false) } else intArrayOf(0xF0E2E5E9.toInt(), 0xF0D8DCE1.toInt())
         cardLit = if (dark) DARK_CARD_LIT else if (glassy != null) IntArray(2) { look.tile(lit = true) } else intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
-        // Must match the colour each wallpaper fades into, or the bottom edge shows a seam.
-        ground = if (dark) DARK_BG else 0xFFF3F5F7.toInt()
+        ground =if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
         // With glass, the wallpaper and the frost behind the grid are the point of All apps: let them show.
         allApps.setBackgroundColor(if (glassy != null) Color.TRANSPARENT else ground)
@@ -1025,9 +1024,9 @@ class MainActivity : Activity() {
     }
 
     // ---------- wallpapers ----------
-    // Bundled ones have their fade baked in. Your own go in Android/data/dev.plume/files/wallpapers/
-    // (adb push, no permission needed) and get the fades drawn over them (see paintFades). A folder on the TV (MediaStore,
-    // so USB drives too) shows its photos in shuffled turns, one decoded at a time.
+    // Shown as they are: Plume never paints over the picture, the text and the glass adapt to it instead.
+    // Your own go in Android/data/dev.plume/files/wallpapers/ (adb push, no permission needed). A folder on the TV
+    // (MediaStore, so USB drives too) shows its photos in shuffled turns, one decoded at a time.
     // Decoded off the UI thread, max 1080p (~8 MB). Full colour, not RGB_565:
     // 565 rounds a smooth sky's 1-2 level JPEG ripples into visible grey and green blocks.
 
@@ -1202,9 +1201,8 @@ class MainActivity : Activity() {
             view.setImageDrawable(null)
             glassPixels = null
             applyGlass() // open menus and the panel lose their frost too
-            wpRaw = null
-            fadesOn = false
-            refreshFades()
+            wpThumb = null
+            fitInk()
             return
         }
         val fallback = defaultWallpaper(dark)
@@ -1231,12 +1229,10 @@ class MainActivity : Activity() {
                 ui.post { ui.removeCallbacks(folderRetryTask) }
             }
             val bmp = own ?: decodeWallpaper(fallback)
-            // The fades are drawn over your photos: the frost must carry them too, or the bottom tiles punch
-            // a bright, unfaded rectangle through the dark fade.
             // Kept even with glass off, so turning it on needs no second decode.
             // A video is frosted from its first frame (own); never from the default picture shown when that failed.
-            val screen = if (bmp != null && (!video || own != null)) glassScreen(bmp, ground, ::paintFades) else null
-            val sharp = if (bmp != null && !video && glassStyle() == GlassStyle.CLEAR) glassSharp(bmp, ground, ::paintFades) else null
+            val screen = if (bmp != null && (!video || own != null)) glassScreen(bmp, ground) else null
+            val sharp = if (bmp != null && !video && glassStyle() == GlassStyle.CLEAR) glassSharp(bmp, ground) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
             // Nothing reads the pixels from here on: keep the picture in graphics memory only, not once more in the process.
             val shown = bmp?.let { b ->
@@ -1248,11 +1244,10 @@ class MainActivity : Activity() {
             }
             ui.post {
                 if (isDestroyed || load != wallpaperLoad) return@post
-                wpRaw = thumb
+                wpThumb = thumb
                 // The glass is tinted with the wallpaper's mean colour; kept, so the next start has it before the picture.
                 thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
-                fadesOn = video || thumb != null
-                refreshFades()
+                fitInk()
                 val old = view.drawable
                 if (old == null || shown == null) {
                     glassPixels = screen
@@ -1342,8 +1337,7 @@ class MainActivity : Activity() {
         BUNDLED_WALLPAPERS[choice.removePrefix("res:")]?.let { res ->
             return BitmapFactory.decodeResource(resources, res)
         }
-        // fitWallpaper's bitmap is mutable: the Bing dim is painted onto it.
-        val bmp = when {
+        return when {
             choice == Bing.CHOICE -> fitWallpaper { Bing.file(this).inputStream() }
             choice == ShowsWall.CHOICE -> fitWallpaper { ShowsWall.file(this).inputStream() }
             choice.startsWith("folder:") -> {
@@ -1354,96 +1348,7 @@ class MainActivity : Activity() {
                 val file = File(wallpaperDir(), choice.removePrefix("file:"))
                 fitWallpaper { file.inputStream() }
             }
-        } ?: return null
-        // Bing's pictures and the shows' are often bright, which fights true black: dim them in dark mode.
-        if (dark && (choice == Bing.CHOICE || choice == ShowsWall.CHOICE)) tonePicture(bmp)
-        return bmp
-    }
-
-    /** "wp_dim": "auto" or the percentage of black laid over a picture in dark mode. */
-    private fun wpDim() = prefs.getString("wp_dim", "auto")!!.takeIf { it in DIMS } ?: "auto"
-
-    /**
-     * Brings a Bing or shows picture to a pleasant brightness in dark mode. A fixed strength lays that much black over it.
-     * Auto looks at the picture: a bright one gets black, and a very dark one, which the fades would leave almost
-     * invisible, is lifted a little (the shadows only: lights stay where they are).
-     */
-    private fun tonePicture(bmp: Bitmap) {
-        val d = wpDim()
-        if (d != "auto") {
-            val alpha = d.toInt() * 255 / 100
-            if (alpha > 0) Canvas(bmp).drawColor(Color.argb(alpha, 0, 0, 0))
-            return
         }
-        val small = Bitmap.createScaledBitmap(bmp, 48, 27, true)
-        val px = IntArray(48 * 27).also { small.getPixels(it, 0, 48, 0, 0, 48, 27) }
-        small.recycle()
-        val mean = Dimming.meanLuma(px)
-        val black = Dimming.autoDim(mean)
-        val lift = Dimming.autoLift(mean)
-        if (black > 0) Canvas(bmp).drawColor(Color.argb(black, 0, 0, 0))
-        if (lift > 0) Canvas(bmp).drawColor(Color.rgb(lift, lift, lift), PorterDuff.Mode.SCREEN)
-    }
-
-    // ---------- fades over your own photos ----------
-    // Drawn as a layer over the wallpaper, not into it, so the sliders in settings change them live.
-
-    private var fadesOn = false // the wallpaper is a picture, so the fades are drawn over it (videos have their own)
-    private var wpRaw: Bitmap? = null // wpThumb before the fades are painted onto it
-
-    private val fades by lazy {
-        object : View(this) {
-            override fun onDraw(c: Canvas) {
-                if (fadesOn) paintFades(c, width.toFloat(), height.toFloat())
-            }
-        }.also { findViewById<ViewGroup>(R.id.root).addView(it, 2, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)) }
-    }
-
-    /** Strength of the "fade_top" or "fade_bottom" layer, 0-100; 0 is off. Starts off for anyone who had Photo fade off. */
-    private fun fade(key: String) = prefs.getInt(key, if (prefs.getBoolean("wp_fade", true)) 100 else 0)
-
-    private fun paintFades(c: Canvas, w: Float, h: Float) {
-        if (currentWallpaper().startsWith("video:")) {
-            c.drawColor(0x33000000)
-            val veil = Paint().apply {
-                shader = LinearGradient(0f, 0f, 0f, h * 0.3f,
-                    0xCC000000.toInt(), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-            }
-            c.drawRect(0f, 0f, w, h * 0.3f, veil)
-            veil.shader = LinearGradient(0f, h * 0.65f, 0f, h,
-                Color.TRANSPARENT, 0xCC000000.toInt(), Shader.TileMode.CLAMP)
-            c.drawRect(0f, h * 0.65f, w, h, veil)
-            return
-        }
-        val base = ground and 0x00FFFFFF
-        val paint = Paint().apply { isDither = true }
-        val top = fade("fade_top") / 100f
-        val bottom = fade("fade_bottom") / 100f
-        if (top <= 0f && bottom <= 0f) return
-        // Eased, so the picture dissolves into the ground instead of stopping at a line: a veil behind the clock and
-        // the top-bar icons, and a bed under the Shows row and its labels. Drawn here, so the sliders reach every
-        // picture, the bundled ones included.
-        val rows = h.toInt().coerceAtLeast(1)
-        for (y in 0 until rows) {
-            val a = maxOf(Fades.topAlpha(y, rows) * top, Fades.bottomAlpha(y, rows) * bottom).toInt()
-            if (a <= 0) continue
-            paint.color = base or (a shl 24)
-            c.drawRect(0f, y.toFloat(), w, (y + 1).toFloat(), paint)
-        }
-    }
-
-    /** Text picks its colour from wpThumb, so it holds the fades too. Run after the photo or a fade changes. */
-    private fun refreshFades() {
-        wpThumb = wpRaw?.let { raw ->
-            if (!fadesOn) raw else raw.copy(Bitmap.Config.ARGB_8888, true).also { paintFades(Canvas(it), it.width.toFloat(), it.height.toFloat()) }
-        }
-        fades.invalidate()
-        fitInk()
-    }
-
-    private fun stepFade(key: String, dir: Int) {
-        prefs.edit().putInt(key, (fade(key) + FADE_STEP * dir).coerceIn(0, 100)).apply()
-        refreshFades()
     }
 
     /** Wallpapers page, framed by "Add from phone…" first and, once there are photos, "Remove a photo…" last. */
@@ -2177,17 +2082,10 @@ class MainActivity : Activity() {
                 alignRow()
                 renderSettings(R.string.row_position)
             },
-            R.string.fade_top to { d -> stepFade("fade_top", d); renderSettings(R.string.fade_top) },
-            R.string.fade_bottom to { d -> stepFade("fade_bottom", d); renderSettings(R.string.fade_bottom) },
             R.string.app_names to { d ->
                 prefs.edit().putString("names", listOf("focus", "always", "never").step(names, d)).apply()
                 renderApps()
                 renderSettings(R.string.app_names)
-            },
-            R.string.wp_dim to { d ->
-                prefs.edit().putString("wp_dim", DIMS.keys.toList().step(wpDim(), d)).apply()
-                loadWallpaper()
-                renderSettings(R.string.wp_dim)
             },
             R.string.show_row to { d ->
                 prefs.edit().putString("row_show", ROW_SHOW.keys.toList().step(rowShow(), d)).apply()
@@ -2222,14 +2120,10 @@ class MainActivity : Activity() {
             R.string.glass to Triple(getString(R.string.glass), getString(glassName())) {
                 steps[R.string.glass]!!(1)
             },
-            // Select steps up like Right, and past 100% starts again at 0%.
-            R.string.fade_top to Triple(getString(R.string.fade_top), "$SLIDER${fade("fade_top")}") { steps[R.string.fade_top]!!(if (fade("fade_top") == 100) -100 / FADE_STEP else 1) },
-            R.string.fade_bottom to Triple(getString(R.string.fade_bottom), "$SLIDER${fade("fade_bottom")}") { steps[R.string.fade_bottom]!!(if (fade("fade_bottom") == 100) -100 / FADE_STEP else 1) },
             R.string.app_animations to Triple(getString(R.string.app_animations), toggle(animationsOn())) {
                 prefs.edit().putBoolean("app_anim", !animationsOn()).apply()
                 renderSettings(R.string.app_animations)
             },
-            R.string.wp_dim to Triple(getString(R.string.wp_dim), getString(DIMS.getValue(wpDim()))) { steps[R.string.wp_dim]!!(1) },
             R.string.folder_photo_changes to Triple(getString(R.string.folder_photo_changes), getString(PHOTO_EVERY[photoEvery()]!!)) { pickPhotoEvery() },
             R.string.wp_sources to Triple(getString(R.string.wp_sources), // the count queries the channels: only when the Shows wallpaper is on, so the settings do not wait for it
                 if (ShowsWall.CHOICE in listOf(currentWallpaper(false), currentWallpaper(true))) getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) else "") { pickWpSources() },
@@ -2317,17 +2211,14 @@ class MainActivity : Activity() {
             }
         }
         val on = { b: Boolean -> getString(if (b) R.string.on else R.string.off) }
-        // The fades are for any photo; the timer only for folders, which change photo.
+        // The timer only for folders, which change photo.
         val walls = listOf(currentWallpaper(false), currentWallpaper(true))
-        val photo = walls.any { !it.startsWith("res:") && !it.startsWith("plain:") }
         val folder = walls.any { it.startsWith("folder:") }
         val shows = walls.any { it == ShowsWall.CHOICE }
-        val dimmed = currentWallpaper(true).let { it == Bing.CHOICE || it == ShowsWall.CHOICE } // the darkening is for the dark Bing or shows picture only
         // In the order things sit on the home screen, top to bottom, then what isn't on it.
         val sections = listOf(
             Triple(R.string.section_appearance, "${rows[R.string.theme]!!.second} · ${wallpaperName(currentWallpaper(dark))}",
-                listOfNotNull(R.string.theme, R.string.wallpaper, R.string.wp_dim.takeIf { dimmed }, R.string.fade_top.takeIf { photo },
-                    R.string.fade_bottom.takeIf { photo }, R.string.glass, R.string.app_animations,
+                listOfNotNull(R.string.theme, R.string.wallpaper, R.string.glass, R.string.app_animations,
                     R.string.folder_photo_changes.takeIf { folder || shows }, R.string.wp_sources.takeIf { shows })),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${rows[R.string.weather_location]!!.second}",
                 listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
@@ -2717,16 +2608,11 @@ class MainActivity : Activity() {
                     addView(label(sub, 13f).apply { secondary(0.6f) })
                 }
             } ?: name, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            val pct = value.takeIf { it.startsWith(SLIDER) }?.removePrefix(SLIDER)?.toInt()
-            val text = pct?.let { "$it%" } ?: value
-            if (pct != null) addView(slider(pct), LinearLayout.LayoutParams(dp(SLIDER_DP), dp(14)).apply { marginStart = dp(12) })
-            val shown = if (style?.choices != null || value == TOGGLE_ON || value == TOGGLE_OFF) null else label(text, 14f).apply { secondary(0.6f) }
+            val shown = if (style?.choices != null || value == TOGGLE_ON || value == TOGGLE_OFF) null else label(value, 14f).apply { secondary(0.6f) }
             val wrap = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             style?.thumb?.let { (choice, forDark) -> addView(wallpaperThumb(choice, forDark), LinearLayout.LayoutParams(dp(64), dp(36)).apply { marginStart = dp(12) }) }
             when {
                 style?.choices != null -> addView(choices(style.choices, value), wrap.apply { marginStart = dp(12) })
-                // A slider's value gets a fixed width, room for "‹  100%  ›", so the slider stays put as it changes and on focus.
-                pct != null -> addView(shown!!.apply { gravity = Gravity.END }, LinearLayout.LayoutParams(dp(SLIDER_VALUE_DP), LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(8) })
                 shown == null -> addView(switch(value == TOGGLE_ON), LinearLayout.LayoutParams(dp(36), dp(20)))
                 else -> addView(shown, wrap.apply { if (value.isNotEmpty()) marginStart = dp(16) }) // room between a long title and its value
             }
@@ -2745,7 +2631,7 @@ class MainActivity : Activity() {
                         icon?.setColorFilter(c)
                     }
                 }.start()
-                if (step != null) shown?.text = if (focused) "‹  $text  ›" else text
+                if (step != null) shown?.text = if (focused) "‹  $value  ›" else value
                 if (focused) {
                     showHelp(style?.help)
                     // Posted: when the panel first opens, the scrim has no size yet in this frame.
@@ -2826,17 +2712,6 @@ class MainActivity : Activity() {
     }
 
     private fun toggle(on: Boolean) = if (on) TOGGLE_ON else TOGGLE_OFF
-
-    /** A mono slider, like [switch]: a faint track, filled up to [pct] in the text colour, with a knob at the end. */
-    private fun slider(pct: Int) = FrameLayout(this).apply {
-        val faint = fg and 0xFFFFFF or 0x66000000
-        fun bar(color: Int) = View(context).apply { background = GradientDrawable().apply { cornerRadius = dp(2).toFloat(); setColor(color) } }
-        addView(bar(faint), FrameLayout.LayoutParams(MATCH_PARENT, dp(4), Gravity.CENTER_VERTICAL))
-        addView(bar(fg), FrameLayout.LayoutParams(dp(SLIDER_DP) * pct / 100, dp(4), Gravity.CENTER_VERTICAL))
-        addView(View(context).apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(fg) }
-        }, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.CENTER_VERTICAL).apply { marginStart = dp(SLIDER_DP - 14) * pct / 100 })
-    }
 
     /** A mono switch for on/off rows: filled track with the knob right when on, outlined and left when off. */
     private fun switch(on: Boolean) = FrameLayout(this).apply {
@@ -4935,7 +4810,7 @@ class MainActivity : Activity() {
             R.string.section_app_row to R.string.help_apps_row, R.string.bottom_row to R.string.help_shows_row,
             R.string.section_screensaver to R.string.help_screensaver, R.string.section_remote_home to R.string.help_remote_home,
             R.string.section_lock to R.string.help_lock,
-            R.string.wp_dim to R.string.help_wp_dim, R.string.fade_top to R.string.help_fade_top, R.string.fade_bottom to R.string.help_fade_bottom, R.string.weather_location to R.string.help_location,
+            R.string.weather_location to R.string.help_location,
             R.string.edit_apps_row to R.string.help_rearrange, R.string.apps_in_row to R.string.help_choose_apps,
             R.string.sort_apps to R.string.help_order, R.string.icon_style to R.string.help_icon_style,
             R.string.apps_when_hidden to R.string.help_apps_when_hidden, R.string.row_name to R.string.help_row_name,
@@ -4967,17 +4842,11 @@ class MainActivity : Activity() {
         const val HELP_URL = "https://github.com/aradhyas8/Plume_Launcher#home-button-on-android-13-and-newer"
         const val TOGGLE_ON = "\u0000on" // row values drawn as a switch instead of text
         const val TOGGLE_OFF = "\u0000off"
-        const val SLIDER = "\u0000%" // row value drawn as a slider: SLIDER + 0-100
-        const val FADE_STEP = 5 // percent per Left/Right on a fade slider
-        const val SLIDER_DP = 96 // a slider's width
-        const val SLIDER_VALUE_DP = 72 // width of the value beside a slider
         const val BANNER_DIM = 0.3f // black laid over a colour banner at rest, so the selected one stands out
         const val FETCH_OK = 0
         const val FETCH_DEAD = 1
         const val FETCH_NETWORK = 2
         const val SHOW_MAX = 12_000_000 // bytes: a bigger show picture is left out
-        /** "Darkening" of a Bing or shows picture in dark mode: Auto, or a percentage of black. Medium is what Plume always did for Bing. */
-        val DIMS = linkedMapOf("auto" to R.string.dim_auto, "0" to R.string.dim_none, "20" to R.string.dim_light, "45" to R.string.dim_medium, "65" to R.string.dim_strong)
         const val PIN_TRIES = 5 // wrong PINs before a 30 s wait
         const val UNLOCKED_MS = 5 * 60_000L
         const val MEDIA_REQUEST = 3

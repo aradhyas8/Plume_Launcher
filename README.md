@@ -176,7 +176,7 @@ You can also copy `.jpg`, `.png` or `.webp` files to `Android/data/dev.plume/fil
 adb push my-wallpaper.jpg /sdcard/Android/data/dev.plume/files/wallpapers/
 ```
 
-A gentle fade is added automatically so the rows stay readable (**Plume settings → Wallpaper & theme → Photo fade** turns it off).
+Plume shows the photo as it is. The text picks white or black to suit the picture behind it.
 
 ### Photo folders
 

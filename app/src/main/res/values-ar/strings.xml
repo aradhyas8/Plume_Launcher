@@ -47,8 +47,6 @@
     <string name="done">تم</string>
     <string name="edit_apps_row">تعديل صف التطبيقات</string>
     <string name="theme">المظهر</string>
-    <string name="fade_top">التلاشي العلوي</string>
-    <string name="fade_bottom">التلاشي السفلي</string>
     <string name="sort_apps">ترتيب التطبيقات</string>
     <string name="manual">يدوي</string>
     <string name="most_used">الأكثر استخدامًا</string>

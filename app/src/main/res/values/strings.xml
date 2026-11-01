@@ -68,8 +68,6 @@
     <string name="edit_apps_row">Rearrange apps</string>
     <string name="theme">Theme</string>
     <string name="app_animations">App animations</string>
-    <string name="fade_top">Top fade</string>
-    <string name="fade_bottom">Bottom fade</string>
     <string name="glass">Glass</string>
     <string name="glass_frosted">Frosted</string>
     <string name="glass_clear">Clear</string>
@@ -203,8 +201,6 @@
     <string name="help_lock">A PIN that stops other people from changing your home screen.</string>
     <string name="help_updates">Plume checks for a new version once a day. Install it here.</string>
     <string name="help_finish_setup">Home still opens the TV\'s own home screen. Set it to open Plume.</string>
-    <string name="help_fade_top">Makes the top of your own photos darker, so the clock and the icons stay easy to read. Press Left or Right to change it.</string>
-    <string name="help_fade_bottom">Fades the bottom of your own photos into the background, behind the apps and the Shows row. Press Left or Right to change it.</string>
     <string name="help_location">For the weather, and for sunrise and sunset in Auto. Automatic finds it from your internet address.</string>
     <string name="help_rearrange">Move the apps in the row. You can also hold OK on an app.</string>
     <string name="help_choose_apps">Choose the apps in the row. The others stay in All apps.</string>
@@ -316,11 +312,4 @@
     <string name="wp_usable">%1$d/%2$d</string>
     <string name="featured_now">Featured: %1$s</string>
     <string name="help_wp_sources">The sources whose pictures become the wallpaper: Android TV Watch Next, or a channel of an app. Plume uses only wide pictures. It skips posters, squares and pictures that it cannot get. The wallpaper changes as often as a folder of photos does.</string>
-    <string name="wp_dim">Darkening</string>
-    <string name="dim_auto">Auto</string>
-    <string name="dim_none">None</string>
-    <string name="dim_light">Light</string>
-    <string name="dim_medium">Medium</string>
-    <string name="dim_strong">Strong</string>
-    <string name="help_wp_dim">The black laid over a Bing or shows picture in dark mode, so that the clock, the icons and the cards stay easy to read. Auto adds more black to a bright picture and lifts a very dark one a little.</string>
 </resources>

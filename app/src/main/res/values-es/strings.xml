@@ -48,8 +48,6 @@
     <string name="done">Listo</string>
     <string name="edit_apps_row">Reordenar apps</string>
     <string name="theme">Tema</string>
-    <string name="fade_top">Degradado superior</string>
-    <string name="fade_bottom">Degradado inferior</string>
     <string name="glass">Cristal</string>
     <string name="glass_frosted">Esmerilado</string>
     <string name="glass_clear">Transparente</string>
@@ -174,8 +172,6 @@
     <string name="help_lock">Un PIN que impide que otras personas cambien tu pantalla de inicio.</string>
     <string name="help_updates">Plume busca una versión nueva una vez al día. Instálala aquí.</string>
     <string name="help_finish_setup">Inicio todavía abre la pantalla de inicio propia de la TV. Configúralo para que abra Plume.</string>
-    <string name="help_fade_top">Oscurece la parte superior de tus fotos para que el reloj y los iconos se lean bien. Pulsa Izquierda o Derecha para cambiarlo.</string>
-    <string name="help_fade_bottom">Funde la parte inferior de tus fotos con el fondo, detrás de las apps y de la fila de contenidos. Pulsa Izquierda o Derecha para cambiarlo.</string>
     <string name="help_location">Para el clima y para el amanecer y el atardecer en Auto. Automático la obtiene de tu dirección de internet.</string>
     <string name="help_rearrange">Mueve las apps de la fila. También puedes mantener pulsado OK sobre una app.</string>
     <string name="help_choose_apps">Elige las apps de la fila. Las demás siguen en Todas las apps.</string>
