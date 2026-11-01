@@ -2,6 +2,17 @@
     <string name="override_desc">Opens Plume whenever the Google TV home screen appears, so the Home button lands here.</string>
     <string name="delete_photo">Delete \"%1$s\"?</string>
     <string name="photo_added">Added \"%1$s\". Send another, or press Done.</string>
+    <string name="video_wallpapers">Video wallpapers</string>
+    <string name="add_video_from_phone">Add your video from phone…</string>
+    <string name="waiting_video">Waiting for a video…</string>
+    <string name="video_added">Added \"%1$s\". Choose Use this video to apply it.</string>
+    <string name="use_video">Use this video</string>
+    <string name="remove_video">Remove a video…</string>
+    <string name="nasa_earth">NASA Earth</string>
+    <string name="nasa_credit">Earth videos: NASA Goddard Space Flight Center, Scientific Visualization Studio and Earth Observatory. Downloads start when you select a scene.</string>
+    <string name="video_downloading">Downloading video: %1$d%%</string>
+    <string name="video_download_failed">Could not download or play this video. Check the network and storage.</string>
+    <string name="video_cannot_play">This TV cannot play this video. Choose another wallpaper.</string>
     <string name="n_of_m">%1$d of %2$d</string>
     <string name="n_off">%1$d off</string>
     <string name="n_on">%1$d on</string>

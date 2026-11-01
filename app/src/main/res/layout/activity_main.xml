@@ -6,6 +6,13 @@
     android:layout_height="match_parent"
     android:background="#F3F5F7">
 
+    <SurfaceView
+        android:id="@+id/videoWallpaper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/wallpaper"
         android:layout_width="match_parent"

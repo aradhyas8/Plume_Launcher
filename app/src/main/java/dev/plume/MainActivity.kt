@@ -85,12 +85,15 @@ import android.widget.PopupWindow
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.VideoView
+import android.view.SurfaceView
 import java.io.File
 import java.lang.ref.WeakReference
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -304,6 +307,7 @@ class MainActivity : Activity() {
     private lateinit var allAppsGrid: GridLayout
     private lateinit var wifi: ImageView
     private lateinit var glass: GlassLayer // paints the blurred wallpaper under glass tiles
+    private lateinit var videoWallpaper: VideoWallpaper
 
     private var resumed = false
     private val refreshIfDirty = Runnable { if (appsDirty && !editing) refreshApps() } // not while a tile is being moved: onResume catches up
@@ -339,7 +343,10 @@ class MainActivity : Activity() {
         super.onCreate(state)
         setContentView(R.layout.activity_main)
         glass = GlassLayer(this)
-        findViewById<ViewGroup>(R.id.root).addView(glass, 1, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)) // over the wallpaper, under the home screen
+        findViewById<ViewGroup>(R.id.root).addView(glass, 2, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)) // over both wallpaper layers
+        videoWallpaper = VideoWallpaper(findViewById<SurfaceView>(R.id.videoWallpaper),
+            { findViewById<ImageView>(R.id.wallpaper).alpha = 0f },
+            { findViewById<ImageView>(R.id.wallpaper).alpha = 1f; if (resumed) toast(getString(R.string.video_cannot_play), long = true) })
         for (id in intArrayOf(R.id.appScroll, R.id.watchScroll, R.id.allApps)) findViewById<View>(id).setOnScrollChangeListener { _, _, _, _, _ -> glass.kick(150) }
         appRow = findViewById(R.id.appRow)
         watchRow = findViewById(R.id.watchRow)
@@ -416,6 +423,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        if (currentWallpaper().startsWith("video:")) videoWallpaper.resume()
         returnTo = null // back by another way than Home: the next Home starts again at the first tile
         openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
         openedFrom = null
@@ -468,6 +476,8 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         resumed = false
+        videoWallpaper.pause()
+        findViewById<ImageView>(R.id.wallpaper).alpha = 1f
         ui.removeCallbacks(refreshIfDirty)
         ui.removeCallbacks(weatherTick)
         ui.removeCallbacks(themeTick)
@@ -490,6 +500,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        videoWallpaper.clear()
         if (Bing.onChanged === bingChanged) Bing.onChanged = null
         unregisterReceiver(packageReceiver)
         applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
@@ -918,6 +929,7 @@ class MainActivity : Activity() {
 
     /** White or near-black, by the average brightness of the wallpaper under [views]; the theme colour without a photo. */
     private fun inkBehind(views: List<View>): Int {
+        if (currentWallpaper().startsWith("video:")) return Color.WHITE
         val t = wpThumb ?: return fg
         val wall = findViewById<View>(R.id.wallpaper)
         val at = IntArray(2)
@@ -987,7 +999,7 @@ class MainActivity : Activity() {
     private fun glassOn() = prefs.getBoolean("glass", true)
 
     /** Glass needs a picture to blur: with a plain background the tiles stay as they are. */
-    private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:")
+    private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:") && !currentWallpaper().startsWith("video:")
 
     /** The menus, the cards and the settings panel are glass too when Glass is on. */
     private fun frosted() = glassActive()
@@ -1049,6 +1061,8 @@ class MainActivity : Activity() {
     private fun wallpaperName(choice: String) = when {
         choice == Bing.CHOICE -> getString(R.string.bing_daily)
         choice == ShowsWall.CHOICE -> getString(R.string.shows_wallpaper)
+        choice.startsWith("video:nasa_") -> EARTH_VIDEOS.firstOrNull { "video:nasa_${it.file}" == choice }?.name
+            ?: choice.removePrefix("video:nasa_").substringBeforeLast('.')
         choice.startsWith("folder:") -> getString(R.string.folder_name, choice.substringAfter(':').substringAfter(':'))
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
     }
@@ -1056,6 +1070,10 @@ class MainActivity : Activity() {
     private fun loadWallpaper() {
         val view = findViewById<ImageView>(R.id.wallpaper)
         val choice = currentWallpaper()
+        val video = choice.startsWith("video:")
+        val load = ++wallpaperLoad
+        view.alpha = 1f
+        if (!video) videoWallpaper.clear()
         if (choice.startsWith("plain:")) { // the root's ground colour shows through
             view.setImageDrawable(null)
             glass.setBlur(null)
@@ -1067,7 +1085,7 @@ class MainActivity : Activity() {
         val fallback = defaultWallpaper(dark)
         io.execute {
             val own = try {
-                decodeWallpaper(choice)
+                decodeWallpaper(if (video) fallback else choice)
             } catch (e: Exception) {
                 null
             } catch (e: OutOfMemoryError) { // a picture on a TV short of memory: show the default instead of crashing
@@ -1085,23 +1103,30 @@ class MainActivity : Activity() {
                 }
             }
             ui.post {
-                if (isDestroyed) return@post
+                if (isDestroyed || load != wallpaperLoad) return@post
                 glass.setBlur(blur)
                 glassSurfaces.forEach { it.get()?.setBlur(glass.blur) } // menus and cards that are open, and the panel
                 if (settingsScrim.visibility == View.VISIBLE) showPanelGlass() // a wallpaper picked from the panel itself
                 wpRaw = thumb
-                fadesOn = own != null && !choice.startsWith("res:")
+                fadesOn = video || own != null && !choice.startsWith("res:")
                 refreshFades()
                 val old = view.drawable
-                if (old == null || shown == null) return@post view.setImageBitmap(shown)
+                if (old == null || shown == null) {
+                    view.setImageBitmap(shown)
+                    if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
+                    return@post
+                }
                 // Soft change from one photo to the next; then drop the old one so only one stays in memory.
                 val fade = TransitionDrawable(arrayOf(old, BitmapDrawable(resources, shown))).apply { isCrossFadeEnabled = true }
                 view.setImageDrawable(fade)
                 fade.startTransition(800)
                 ui.postDelayed({ if (view.drawable === fade) view.setImageBitmap(shown) }, 900)
+                if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
             }
         }
     }
+
+    private var wallpaperLoad = 0
 
     private fun decodeWallpaper(choice: String): Bitmap? {
         BUNDLED_WALLPAPERS[choice.removePrefix("res:")]?.let { res ->
@@ -1161,13 +1186,25 @@ class MainActivity : Activity() {
             override fun onDraw(c: Canvas) {
                 if (fadesOn) paintFades(c, width.toFloat(), height.toFloat())
             }
-        }.also { findViewById<ViewGroup>(R.id.root).addView(it, 1, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)) }
+        }.also { findViewById<ViewGroup>(R.id.root).addView(it, 2, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)) }
     }
 
     /** Strength of the "fade_top" or "fade_bottom" layer, 0-100; 0 is off. Starts off for anyone who had Photo fade off. */
     private fun fade(key: String) = prefs.getInt(key, if (prefs.getBoolean("wp_fade", true)) 100 else 0)
 
     private fun paintFades(c: Canvas, w: Float, h: Float) {
+        if (currentWallpaper().startsWith("video:")) {
+            c.drawColor(0x33000000)
+            val veil = Paint().apply {
+                shader = LinearGradient(0f, 0f, 0f, h * 0.3f,
+                    0xCC000000.toInt(), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+            }
+            c.drawRect(0f, 0f, w, h * 0.3f, veil)
+            veil.shader = LinearGradient(0f, h * 0.65f, 0f, h,
+                Color.TRANSPARENT, 0xCC000000.toInt(), Shader.TileMode.CLAMP)
+            c.drawRect(0f, h * 0.65f, w, h, veil)
+            return
+        }
         val base = ground and 0x00FFFFFF
         val paint = Paint().apply { isDither = true }
         // Photos rarely have the bundled ones' empty sky: a soft veil behind the clock and top-bar icons keeps them readable.
@@ -1206,12 +1243,101 @@ class MainActivity : Activity() {
         val choices = wallpaperChoices(forDark)
         val own = choices.filter { it.second.startsWith("file:") }
         val current = currentWallpaper(forDark)
-        val rows = listOf(page(getString(R.string.add_from_phone)) { uploadWallpaper(forDark) }, page(getString(R.string.choose_from_tv)) { pickFolder(forDark) }) +
+        val rows = listOf(page(getString(R.string.add_from_phone)) { uploadWallpaper(forDark) },
+            page(getString(R.string.choose_from_tv)) { pickFolder(forDark) },
+            page(getString(R.string.video_wallpapers), if (current.startsWith("video:")) CHOSEN else "") { pickVideoWallpaper(forDark) }) +
             choices.map { (name, choice) -> page(name, if (choice == current) CHOSEN else "") { setWallpaper(forDark, choice); renderSettings(row) } } +
             if (own.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_photo_row)) { removeWallpaper(own, forDark) })
-        showPage(if (forDark) getString(R.string.dark_wallpaper) else getString(R.string.light_wallpaper), rows, 2 + choices.indexOfFirst { it.second == current }) {
+        showPage(if (forDark) getString(R.string.dark_wallpaper) else getString(R.string.light_wallpaper), rows,
+            if (current.startsWith("video:")) 2 else 3 + choices.indexOfFirst { it.second == current }) {
             renderSettings(row)
         }
+    }
+
+    private fun pickVideoWallpaper(forDark: Boolean) {
+        val dir = wallpaperDir() ?: return
+        val current = currentWallpaper(forDark)
+        val files = dir.listFiles { f -> f.extension.equals("mp4", true) }?.sortedBy { it.name } ?: emptyList()
+        val own = files.filterNot { it.name.startsWith("nasa_") }
+        val rows = listOf(page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) }) +
+            EARTH_VIDEOS.map { item ->
+                val file = File(dir, "nasa_${item.file}")
+                page(item.name, if (current == "video:${file.name}") CHOSEN else getString(R.string.nasa_earth)) {
+                    if (file.isFile && validVideo(file)) previewVideo(forDark, file)
+                    else downloadVideo(forDark, item, file)
+                }
+            } + own.map { file ->
+                page(file.nameWithoutExtension, if (current == "video:${file.name}") CHOSEN else "") { previewVideo(forDark, file) }
+            } + if (files.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_video)) { removeVideo(forDark, files) })
+        showPage(getString(R.string.video_wallpapers), rows,
+            if (current.startsWith("video:")) rows.indexOfFirst { it.first == wallpaperName(current) }.coerceAtLeast(0) else 0,
+            top = label(getString(R.string.nasa_credit), 12f).apply { maxLines = 3; setPadding(dp(14), dp(4), dp(14), dp(8)) }) {
+            pickWallpaper(forDark)
+        }
+    }
+
+    private fun downloadVideo(forDark: Boolean, item: EarthVideo, file: File) {
+        val cancelled = AtomicBoolean(false)
+        val status = label(getString(R.string.video_downloading, 0), 18f).apply { gravity = Gravity.CENTER }
+        showPage(item.name, listOf(page(getString(R.string.cancel)) { pickVideoWallpaper(forDark) }), top = status) {
+            pickVideoWallpaper(forDark)
+        }
+        pageExit = { cancelled.set(true) }
+        io.execute {
+            val ok = downloadEarthVideo(item, file, cancelled) { pct ->
+                ui.post { if (!cancelled.get()) status.text = getString(R.string.video_downloading, pct) }
+            }
+            ui.post {
+                if (cancelled.get() || isDestroyed) return@post
+                if (ok) previewVideo(forDark, file)
+                else { toast(getString(R.string.video_download_failed), long = true); pickVideoWallpaper(forDark) }
+            }
+        }
+    }
+
+    private fun previewVideo(forDark: Boolean, file: File) {
+        videoWallpaper.pause()
+        findViewById<ImageView>(R.id.wallpaper).alpha = 1f
+        val preview = VideoView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(230))
+            setVideoPath(file.path)
+            setOnPreparedListener { player -> player.isLooping = true; player.setVolume(0f, 0f); start() }
+            setOnErrorListener { _, _, _ -> toast(getString(R.string.video_cannot_play), long = true); true }
+        }
+        showPage(wallpaperName("video:${file.name}"), listOf(
+            page(getString(R.string.use_video)) {
+                preview.stopPlayback()
+                setWallpaper(forDark, "video:${file.name}")
+                pickVideoWallpaper(forDark)
+            },
+            page(getString(R.string.cancel)) { pickVideoWallpaper(forDark) },
+        ), top = preview) { pickVideoWallpaper(forDark) }
+        pageExit = {
+            preview.stopPlayback()
+            if (resumed && currentWallpaper().startsWith("video:")) videoWallpaper.resume()
+        }
+        preview.start()
+    }
+
+    private fun removeVideo(forDark: Boolean, files: List<File>) {
+        showPage(getString(R.string.remove_video), files.map { file ->
+            page(wallpaperName("video:${file.name}")) {
+                showPage(getString(R.string.delete_photo, wallpaperName("video:${file.name}")), listOf(
+                    page(getString(R.string.cancel)) { removeVideo(forDark, files) },
+                    page(getString(R.string.delete)) {
+                        val choice = "video:${file.name}"
+                        prefs.edit().apply {
+                            if (prefs.getString("wp_light", null) == choice) remove("wp_light")
+                            if (prefs.getString("wp_dark", null) == choice) remove("wp_dark")
+                        }.apply()
+                        videoWallpaper.clear()
+                        file.delete()
+                        loadWallpaper()
+                        pickVideoWallpaper(forDark)
+                    },
+                )) { removeVideo(forDark, files) }
+            }
+        }) { pickVideoWallpaper(forDark) }
     }
 
     private fun setWallpaper(forDark: Boolean, choice: String) {
@@ -1541,12 +1667,14 @@ class MainActivity : Activity() {
     private fun uploadWallpaper(forDark: Boolean) {
         val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
         val dir = wallpaperDir() ?: return
+        val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_photo), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File(cacheDir, "upload.tmp")) { file ->
+            UploadServer((1000..9999).random().toString(), File.createTempFile("photo-upload-", ".tmp", cacheDir)) { file ->
+                if (!active.get()) return@UploadServer null
                 val saved = importWallpaper(file, dir) ?: return@UploadServer null
                 ui.post {
-                    if (isDestroyed) return@post
+                    if (isDestroyed || !active.get()) { saved.delete(); return@post }
                     setWallpaper(forDark, "file:${saved.name}")
                     status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
                 }
@@ -1572,9 +1700,46 @@ class MainActivity : Activity() {
         }
         showPage(getString(R.string.add_from_your_phone), listOf(page(getString(R.string.done)) { pickWallpaper(forDark) }), top = box) { pickWallpaper(forDark) }
         pageExit = {
+            active.set(false)
             server.stop()
             if (upload === server) upload = null
         }
+    }
+
+    private fun uploadVideoWallpaper(forDark: Boolean) {
+        val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
+        val dir = wallpaperDir() ?: return
+        val active = AtomicBoolean(true)
+        val status = label(getString(R.string.waiting_video), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
+        val server = try {
+            UploadServer((1000..9999).random().toString(), File.createTempFile("video-upload-", ".tmp", cacheDir), video = true) { file ->
+                if (!active.get()) return@UploadServer null
+                val saved = importVideoWallpaper(file, dir) ?: return@UploadServer null
+                ui.post {
+                    if (isDestroyed || !active.get()) { saved.delete(); return@post }
+                    status.text = getString(R.string.video_added, saved.nameWithoutExtension)
+                    previewVideo(forDark, saved)
+                }
+                saved.nameWithoutExtension
+            }
+        } catch (_: IOException) {
+            return toast(getString(R.string.upload_failed), long = true)
+        }
+        upload = server
+        val url = "http://$ip:${server.port}/${server.code}"
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(4), 0, dp(12))
+            addView(ImageView(this@MainActivity).apply { setImageBitmap(qrBitmap(url, dp(200))) })
+            addView(label(url, 14f).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(4)) })
+            addView(label(getString(R.string.scan_hint), 12f).apply { gravity = Gravity.CENTER; maxLines = 3 })
+            addView(status.apply { setPadding(0, dp(12), 0, 0) })
+        }
+        showPage(getString(R.string.add_video_from_phone), listOf(page(getString(R.string.done)) { pickVideoWallpaper(forDark) }), top = box) {
+            pickVideoWallpaper(forDark)
+        }
+        pageExit = { active.set(false); server.stop(); if (upload === server) upload = null }
     }
 
     /** The TV's own address on the home network (IPv4: easy to read and type). */
