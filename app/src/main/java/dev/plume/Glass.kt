@@ -146,6 +146,12 @@ internal class GlassLayer(context: Context) : View(context) {
     private var shader: BitmapShader? = null
     var blur: Bitmap? = null // the blurred wallpaper, for the surfaces that paint it themselves (GlassBox)
         private set
+    /** A flat colour under each tile when there is no blur (a video wallpaper): 0 for none. */
+    var tint = 0
+        set(v) {
+            field = v
+            invalidate()
+        }
     private var until = 0L // keeps redrawing for a moment after a scroll or a focus change, which move the tiles
 
     fun add(v: View, radius: Float) {
@@ -186,10 +192,14 @@ internal class GlassLayer(context: Context) : View(context) {
     }
 
     override fun onDraw(c: Canvas) {
-        val s = shader ?: return
-        matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
-        s.setLocalMatrix(matrix)
+        val s = shader
+        if (s == null && tint == 0) return
+        if (s != null) {
+            matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
+            s.setLocalMatrix(matrix)
+        } else paint.color = tint
         paint.shader = s
+        val full = if (s != null) 255 else tint ushr 24 // a tint keeps its own alpha, then fades with the tile
         getLocationInWindow(at)
         val ox = at[0]
         val oy = at[1]
@@ -213,7 +223,7 @@ internal class GlassLayer(context: Context) : View(context) {
             v.getLocationInWindow(at)
             // Where the tile is drawn, lift and row scale included; what a scroll view cuts off stays cut off.
             rect.set(at[0] - ox.toFloat(), at[1] - oy.toFloat(), at[0] - ox + v.width * sx, at[1] - oy + v.height * sy)
-            paint.alpha = alpha
+            paint.alpha = alpha * full / 255
             c.save()
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
             c.drawRoundRect(rect, t.radius * sx, t.radius * sy, paint)

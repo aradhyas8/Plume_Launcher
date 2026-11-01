@@ -946,6 +946,7 @@ class MainActivity : Activity() {
         for (v in topIcons()) v.setColorFilter(if (v.isFocused) fg else iconInk)
         watchInk = fg
         glassShown = glassActive()
+        glass.tint = videoTint()
     }
 
     // ---------- text over the wallpaper ----------
@@ -1053,8 +1054,15 @@ class MainActivity : Activity() {
 
     private fun glassOn() = glassStyle() != null
 
-    /** Glass needs a picture to blur: with a plain background the tiles stay as they are. */
-    private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:") && !currentWallpaper().startsWith("video:")
+    /** Glass needs something behind it: with a plain background the tiles stay as they are. */
+    private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:")
+
+    /**
+     * A video moves, so a blur of it is always out of date: the tiles sit on a flat tint of the style's wash instead.
+     * Capturing frames to blur fails on TVs that play video on a hardware overlay, and redrawing costs memory and frames.
+     */
+    private fun videoTint() = glassStyle()?.takeIf { glassActive() && currentWallpaper().startsWith("video:") }
+        ?.let { if (dark) it.washDark else it.washLight } ?: 0
 
     /** The name of the current style, for the settings row. */
     private fun glassName() = when (glassStyle()) {
@@ -1100,6 +1108,7 @@ class MainActivity : Activity() {
 
     /** The one blur, for the layer and for the surfaces that paint it themselves. */
     private fun applyGlassBlur(px: IntArray?) {
+        glass.tint = videoTint()
         glass.setBlur(px)
         glassSurfaces.forEach { it.get()?.setBlur(glass.blur) } // menus and cards that are open, and the panel
         if (settingsScrim.visibility == View.VISIBLE) showPanelGlass() // a wallpaper picked from the panel itself
@@ -1194,7 +1203,7 @@ class MainActivity : Activity() {
             // The fades are drawn over your photos: the frost must carry them too, or the bottom tiles punch
             // a bright, unfaded rectangle through the dark fade.
             val fades = own != null && !choice.startsWith("res:")
-            val blur = if (bmp != null && glassActive()) glassPixels(bmp, ground, dark, if (fades) ::paintFades else null) else null
+            val blur = if (bmp != null && !video && glassActive()) glassPixels(bmp, ground, dark, if (fades) ::paintFades else null) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
             // Nothing reads the pixels from here on: keep the picture in graphics memory only, not once more in the process.
             val shown = bmp?.let { b ->
