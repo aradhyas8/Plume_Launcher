@@ -53,10 +53,26 @@ internal object RemoteBattery {
     /** Whether [level] is at or under the alert [threshold]; a threshold of 0 is "off". */
     fun isLow(level: Int?, threshold: Int) = threshold > 0 && level != null && level <= threshold
 
-    fun allowed(c: Context) = c.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+    /** The permission that reading a device needs: BLUETOOTH_CONNECT from Android 12 (API 31), BLUETOOTH before, which is granted at install. */
+    fun permission(sdk: Int = android.os.Build.VERSION.SDK_INT) =
+        if (sdk >= 31) Manifest.permission.BLUETOOTH_CONNECT else Manifest.permission.BLUETOOTH
+
+    /** Whether Plume must ask for [permission]: only from Android 12, where it is a runtime permission. */
+    fun asksFirst(sdk: Int = android.os.Build.VERSION.SDK_INT) = sdk >= 31
+
+    fun allowed(c: Context) = c.checkSelfPermission(permission()) == PackageManager.PERMISSION_GRANTED
+
+    /** After this long without a reading the icon shows a dash: the remote may be gone. */
+    const val STALE_MS = 3 * FRESH_MS
 
     /** Whether a reading made at [at] is still good at [now]. */
     fun fresh(at: Long, now: Long) = at > 0 && now - at in 0 until FRESH_MS
+
+    /** The level to show: the last reading, or null (a dash) when it is older than [STALE_MS] or there is none. */
+    fun shown(level: Int?, at: Long, now: Long) = level?.takeIf { at > 0 && now - at in 0 until STALE_MS }
+
+    /** Whether a read is in progress. */
+    fun isBusy() = busy
 
     /** One remote and its level. */
     class Reading(val name: String, val level: Int)
@@ -69,7 +85,7 @@ internal object RemoteBattery {
 
     /**
      * Reads every connected remote or controller and calls [done] on the main thread with what could be read (empty when
-     * nothing answered). Devices are tried one after the other.
+     * nothing answered). Devices are tried one after the other; a paired device that is away fails at the timeout.
      */
     @SuppressLint("MissingPermission")
     fun read(c: Context, done: (List<Reading>) -> Unit) {
@@ -77,7 +93,7 @@ internal object RemoteBattery {
         if (!allowed(c)) return done(emptyList())
         val adapter = (c.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
         val devices = try {
-            adapter?.bondedDevices.orEmpty().filter { isRemote(it) && connected(it) }
+            adapter?.bondedDevices.orEmpty().filter { isRemote(it) }
         } catch (e: SecurityException) {
             emptyList()
         }
@@ -108,13 +124,6 @@ internal object RemoteBattery {
         d.bluetoothClass?.majorDeviceClass == android.bluetooth.BluetoothClass.Device.Major.PERIPHERAL ||
             (d.bluetoothClass == null && d.type == BluetoothDevice.DEVICE_TYPE_LE)
 
-    /** Whether the device is connected now: Bluetooth's own call, which apps reach by reflection. A device that cannot be asked counts as connected. */
-    private fun connected(d: BluetoothDevice) = try {
-        BluetoothDevice::class.java.getMethod("isConnected").invoke(d) as? Boolean ?: true
-    } catch (e: Exception) {
-        true
-    }
-
     /** The two answers that need no connection: Bluetooth's level (-1 when it does not know), then the input device's battery. */
     @SuppressLint("MissingPermission")
     private fun quickLevel(c: Context, d: BluetoothDevice, name: String): Int? {
@@ -140,8 +149,10 @@ internal object RemoteBattery {
     private fun readOne(c: Context, d: BluetoothDevice, done: (Int?) -> Unit) {
         val finished = java.util.concurrent.atomic.AtomicBoolean(false)
         var gatt: BluetoothGatt? = null
+        lateinit var timeout: Runnable
         fun end(level: Int?) {
             if (!finished.compareAndSet(false, true)) return
+            main.removeCallbacks(timeout)
             try {
                 gatt?.close()
             } catch (e: Exception) {
@@ -149,7 +160,7 @@ internal object RemoteBattery {
             }
             done(level)
         }
-        val timeout = Runnable { end(null) }
+        timeout = Runnable { end(null) }
         main.postDelayed(timeout, TIMEOUT_MS)
         val cb = object : BluetoothGattCallback() {
             override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
@@ -170,14 +181,12 @@ internal object RemoteBattery {
             override fun onCharacteristicRead(g: BluetoothGatt, ch: BluetoothGattCharacteristic, value: ByteArray, status: Int) = got(status, value)
 
             private fun got(status: Int, value: ByteArray?) {
-                main.removeCallbacks(timeout)
                 end(if (status == BluetoothGatt.GATT_SUCCESS) value?.firstOrNull()?.toInt()?.and(255)?.takeIf { it in 0..100 } else null)
             }
         }
         try {
             gatt = d.connectGatt(c, false, cb, BluetoothDevice.TRANSPORT_LE)
         } catch (e: Exception) {
-            main.removeCallbacks(timeout)
             end(null)
         }
     }
@@ -188,11 +197,15 @@ internal object RemoteBattery {
  * from the alert level down. It takes the bar's ink as a colour filter like the other icons.
  */
 internal class RemoteBatteryIcon(private val density: Float, private val level: Int?, private val low: Boolean) : Drawable() {
-    private val ink = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Typeface.DEFAULT_BOLD
+        textSize = density * 11f
+    }
     private val red = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE53935.toInt() }
     private fun dp(v: Float) = v * density
 
-    override fun getIntrinsicWidth() = dp(46f).toInt()
+    // The battery, a gap, then the widest label ("100%"), measured, so the bar does not clip it and does not move with the level.
+    override fun getIntrinsicWidth() = (dp(20f) + dp(5f) + ink.measureText(RemoteBattery.label(100))).toInt() + 1
     override fun getIntrinsicHeight() = dp(20f).toInt()
 
     override fun draw(c: Canvas) {
@@ -212,13 +225,12 @@ internal class RemoteBatteryIcon(private val density: Float, private val level: 
             inner.right = inner.left + inner.width() * level.coerceIn(0, 100) / 100f
             c.drawRoundRect(inner, dp(1f), dp(1f), if (low) red else ink)
         }
-        ink.typeface = Typeface.DEFAULT_BOLD
-        ink.textSize = dp(11f)
         c.drawText(RemoteBattery.label(level), left + w + dp(5f), b.exactCenterY() + ink.textSize * 0.36f, ink)
     }
 
     override fun setAlpha(a: Int) {
         ink.alpha = a
+        red.alpha = a
     }
 
     override fun setColorFilter(f: ColorFilter?) {

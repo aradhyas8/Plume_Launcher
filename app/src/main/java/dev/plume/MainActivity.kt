@@ -1703,7 +1703,8 @@ class MainActivity : Activity() {
 
     // ---------- the remote's battery in the top bar (see RemoteBattery) ----------
 
-    private fun remoteLevel() = prefs.getInt("rb_level", -1).takeIf { it >= 0 }
+    /** The last level read, or null when there is none or it is old (see RemoteBattery.STALE_MS). */
+    private fun remoteLevel() = RemoteBattery.shown(prefs.getInt("rb_level", -1).takeIf { it >= 0 }, prefs.getLong("rb_at", 0), System.currentTimeMillis())
 
     /** The low-battery alert: 20 % (the default), 15 %, or 0 for off. The icon turns red from there, and a message shows once a day. */
     private fun lowAt() = prefs.getInt("rb_low", 20).takeIf { it in RemoteBattery.LOWS } ?: 20
@@ -1712,21 +1713,25 @@ class MainActivity : Activity() {
 
     private fun updateBatteryIcon() {
         val level = remoteLevel()
-        findViewById<ImageView>(R.id.batteryButton).setImageDrawable(RemoteBatteryIcon(resources.displayMetrics.density, level, RemoteBattery.isLow(level, lowAt())))
+        val button = findViewById<ImageView>(R.id.batteryButton)
+        button.setImageDrawable(RemoteBatteryIcon(resources.displayMetrics.density, level, RemoteBattery.isLow(level, lowAt())))
+        button.contentDescription = if (level == null) getString(R.string.remote_battery) else getString(R.string.remote_battery_value, RemoteBattery.label(level))
     }
 
     /**
      * Reads the remote's level when its icon is on the bar. Selecting the icon reads it now, and asks for the Bluetooth
-     * permission the first time (Android 12 and newer: reading a device's services needs it).
+     * permission the first time on Android 12 and newer. Before that the permission is granted at install.
      */
     private fun refreshRemoteBattery(force: Boolean = false) {
         if (R.id.batteryButton !in shownTop()) return
         if (!RemoteBattery.allowed(this)) {
             updateBatteryIcon()
-            if (force) requestPermissions(arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT), BLUETOOTH_REQUEST)
+            if (force && RemoteBattery.asksFirst()) requestPermissions(arrayOf(RemoteBattery.permission()), BLUETOOTH_REQUEST)
             return
         }
+        if (force && RemoteBattery.isBusy()) return toast(getString(R.string.remote_reading))
         if (!force && RemoteBattery.fresh(prefs.getLong("rb_at", 0), System.currentTimeMillis())) return
+        if (force) toast(getString(R.string.remote_reading))
         RemoteBattery.read(this) { readings ->
             if (isDestroyed) return@read
             val lowest = RemoteBattery.lowest(readings)
