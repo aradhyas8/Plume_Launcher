@@ -1090,6 +1090,9 @@ class MainActivity : Activity() {
         if (glassSurfaces.none { it.get() === g }) glassSurfaces.add(java.lang.ref.WeakReference(g)) // the panel is styled again and again
     }
 
+    /** The shown picture, sharp, for Clear's lens ([glassSharp]); null unless Clear was the style when it loaded. */
+    private var sharpPixels: Bitmap? = null
+
     /** The shown picture (a video's first frame) as [glassScreen] pixels, not blurred; null for a plain background. */
     private var glassPixels: IntArray? = null
 
@@ -1114,9 +1117,11 @@ class MainActivity : Activity() {
         // matches what its tiles were built for.
         glass.lens = look.lens
         glass.grain = look.active?.grain == true
+        if (look.active != GlassStyle.CLEAR) sharpPixels = null // 2 MB, kept only for Clear
         if (was != null && was.first == look && was.second === px) return
         glassShown = look to px
         val shown = px?.takeIf { look.active != null }
+        glass.setSharp(sharpPixels?.takeIf { look.active == GlassStyle.CLEAR })
         glass.setBlur(shown?.let { glassBlur(it, look.active!!.radius, look.dark) })
         val frost = GlassStyle.FROSTED.radius
         surfaceBlur = if (look.active?.radius == frost) glass.blur
@@ -1225,6 +1230,7 @@ class MainActivity : Activity() {
             // Kept even with glass off, so turning it on needs no second decode.
             // A video is frosted from its first frame (own); never from the default picture shown when that failed.
             val screen = if (bmp != null && (!video || own != null)) glassScreen(bmp, ground, if (fades) ::paintFades else null) else null
+            val sharp = if (bmp != null && !video && glassStyle() == GlassStyle.CLEAR) glassSharp(bmp, ground, if (fades) ::paintFades else null) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
             // Nothing reads the pixels from here on: keep the picture in graphics memory only, not once more in the process.
             val shown = bmp?.let { b ->
@@ -1244,6 +1250,7 @@ class MainActivity : Activity() {
                 val old = view.drawable
                 if (old == null || shown == null) {
                     glassPixels = screen
+                    sharpPixels = sharp
                     applyGlass()
                     view.setImageBitmap(shown)
                     if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
@@ -1257,6 +1264,7 @@ class MainActivity : Activity() {
                     if (isDestroyed || load != wallpaperLoad) return@postDelayed
                     if (view.drawable === fade) view.setImageBitmap(shown)
                     glassPixels = screen
+                    sharpPixels = sharp
                     applyGlass() // the frost changes with the picture, when the crossfade lands
                 }, 900)
                 if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
@@ -2194,7 +2202,9 @@ class MainActivity : Activity() {
             },
             R.string.glass to { d ->
                 prefs.edit().putString("glass_style", GLASS_STYLES.step(glassStyle(), d)?.key ?: "off").apply()
-                applyGlass()
+                // Clear's sharp picture is made only while Clear is the style: load the wallpaper again to make it.
+                if (glassStyle() == GlassStyle.CLEAR && sharpPixels == null && Backdrop.of(currentWallpaper()) == Backdrop.PICTURE) loadWallpaper()
+                else applyGlass()
                 renderSettings(R.string.glass)
             },
         )

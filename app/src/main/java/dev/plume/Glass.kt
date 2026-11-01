@@ -113,7 +113,7 @@ internal enum class GlassStyle(
     val grain: Boolean,
 ) {
     FROSTED("frosted", 0x38, 0x6B, 0.35f, 0x55, 5, 1f, true),
-    CLEAR("clear", 0x0D, 0x40, 0.25f, 0x40, 2, 1.04f, false);
+    CLEAR("clear", 0x0D, 0x40, 0.25f, 0x40, 2, 1.1f, false);
 
     companion object {
         /** The style a stored choice means; null is off. Before the choice, Glass was a switch ([oldOn]). */
@@ -196,6 +196,45 @@ internal fun glassScreen(wallpaper: Bitmap, ground: Int, fades: ((Canvas, Float,
     return px
 }
 
+/**
+ * The wallpaper as the screen shows it, sharp, for Clear's lens: three times the frost's size (960x540, 2 MB), kept
+ * only while Clear is the style. Done once when a wallpaper loads, off the UI thread.
+ */
+internal fun glassSharp(wallpaper: Bitmap, ground: Int, fades: ((Canvas, Float, Float) -> Unit)? = null): Bitmap {
+    val k = 3
+    val sharp = Bitmap.createBitmap(GLASS_W * k, GLASS_H * k, Bitmap.Config.ARGB_8888)
+    val c = Canvas(sharp)
+    c.drawColor(ground or (0xFF shl 24))
+    val at = glassCrop(wallpaper.width, wallpaper.height)
+    c.drawBitmap(wallpaper, null, RectF(at[0] * k, at[1] * k, at[2] * k, at[3] * k), Paint(Paint.FILTER_BITMAP_FLAG))
+    fades?.invoke(c, sharp.width.toFloat(), sharp.height.toFloat())
+    // In graphics memory once, so the lens samples it each frame without an upload, and the process holds no copy.
+    return try {
+        sharp.copy(Bitmap.Config.HARDWARE, false)?.also { sharp.recycle() } ?: sharp
+    } catch (e: Exception) {
+        sharp
+    }
+}
+
+/**
+ * Clear's lens on Android 13+, one shader per tile (the way Android's liquid glass libraries do it): the middle
+ * magnifies [LENS_MAG] times and toward the rim the picture runs outward, up to [LENS_BEND] beyond the tile's edge,
+ * so the rim shows what is just outside, bent in, as the thick edge of real glass does. [box] is the tile.
+ */
+internal const val LENS_AGSL = """
+uniform shader picture;
+uniform float4 box;
+uniform float mag;
+uniform float bend;
+half4 main(float2 p) {
+    float2 c = (box.xy + box.zw) * 0.5;
+    float2 u = (p - c) / ((box.zw - box.xy) * 0.5);
+    float e = max(abs(u.x), abs(u.y));
+    return picture.eval(c + (p - c) * (1.0 + bend * e * e * e * e) / mag);
+}"""
+internal const val LENS_MAG = 1.25f
+internal const val LENS_BEND = 0.5f
+
 /** The frost for [glassScreen] pixels: about a millisecond, so it is redone on the UI thread when the look changes. */
 internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius, passes = 3), dark)
 
@@ -238,6 +277,38 @@ internal class GlassLayer(context: Context) : View(context) {
             if (field != v) invalidate()
             field = v
         }
+    // Clear's sharp picture: through the lens shader on Android 13+; before that magnified evenly by [lens], which
+    // is what Android 12 and older can do in one draw. ponytail: no bent rim below 13; a mesh draw doubled the jank.
+    private var sharpShader: BitmapShader? = null
+    private var sharpSize = 1f to 1f
+    private val sharpBase = Matrix()
+    private val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val lens13: android.graphics.RuntimeShader? =
+        if (android.os.Build.VERSION.SDK_INT >= 33) android.graphics.RuntimeShader(LENS_AGSL).apply {
+            setFloatUniform("mag", LENS_MAG)
+            setFloatUniform("bend", LENS_BEND)
+        } else null
+
+    /** The sharp wallpaper for Clear ([glassSharp]), or null when Clear is not shown. */
+    fun setSharp(b: Bitmap?) {
+        sharpShader = b?.let { BitmapShader(it, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP) }
+        if (b != null) sharpSize = b.width.toFloat() to b.height.toFloat()
+        bindSharp()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = bindSharp()
+
+    /** Maps the sharp picture onto this view (the whole screen) and hands it to the lens. */
+    private fun bindSharp() {
+        val sh = sharpShader
+        sharpBase.setScale(width / sharpSize.first, height / sharpSize.second)
+        sh?.setLocalMatrix(sharpBase)
+        val r = lens13
+        if (r != null && sh != null) r.setInputShader("picture", sh)
+        lensPaint.shader = if (sh == null) null else r ?: sh
+        invalidate()
+    }
+
     var grain = false // see GlassStyle.grain
         set(v) {
             if (field != v) invalidate()
@@ -330,7 +401,18 @@ internal class GlassLayer(context: Context) : View(context) {
             shadow(c, rx, ry, alpha, lit, scroller, ox)
             c.save()
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
-            if (s != null) {
+            val sh = sharpShader
+            if (sh != null) {
+                val r = lens13
+                if (r != null) r.setFloatUniform("box", rect.left, rect.top, rect.right, rect.bottom)
+                else {
+                    matrix.set(sharpBase)
+                    matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
+                    sh.setLocalMatrix(matrix)
+                }
+                lensPaint.alpha = alpha
+                c.drawRoundRect(rect, rx, ry, lensPaint)
+            } else if (s != null) {
                 matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
                 matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
                 s.setLocalMatrix(matrix)
