@@ -174,6 +174,7 @@ class HomeWatchTest {
         val xiaomi = "com.mitv.tvhome"
         w.opened("dev.plume", "dev.plume.MainActivity", 1_000)
         assertEquals(0L, w.opened(xiaomi, "com.mitv.tvhome.MainActivityUserMode", 2_000))
+        assertEquals(HomeWatch.KEEP, w.opened(xiaomi, "com.mitv.tvhome.MainActivityUserMode", 2_100)) // sent twice per press
         assertNull(w.opened(xiaomi, "com.mitv.tvhome.SomeOtherActivity", 3_000))
     }
 }
