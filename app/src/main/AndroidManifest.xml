@@ -43,6 +43,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:directBootAware="true"
             android:exported="true"
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
