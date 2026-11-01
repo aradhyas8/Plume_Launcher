@@ -14,8 +14,8 @@
     <string name="time_left_hm">Quedan %1$d h %2$d min</string>
     <string name="time_left_m">Quedan %1$d min</string>
     <string name="folder_name">Carpeta: %1$s</string>
-    <string name="wp_rockies_day">Montañas Rocosas (día)</string>
-    <string name="wp_rockies_dusk">Montañas Rocosas (atardecer)</string>
+    <string name="wp_mist_day">Niebla (día)</string>
+    <string name="wp_peak_dusk">Cumbre (atardecer)</string>
     <string name="wp_pure_black">Negro puro</string>
     <string name="wp_soft_white">Blanco suave</string>
     <string name="every_1">Cada minuto</string>

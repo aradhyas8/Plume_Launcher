@@ -32,8 +32,8 @@
     <string name="time_left_hm">%1$d hr %2$d min left</string>
     <string name="time_left_m">%1$d min left</string>
     <string name="folder_name">Folder: %1$s</string>
-    <string name="wp_rockies_day">Rockies (day)</string>
-    <string name="wp_rockies_dusk">Rockies (dusk)</string>
+    <string name="wp_mist_day">Mist (day)</string>
+    <string name="wp_peak_dusk">Peak (dusk)</string>
     <string name="wp_pure_black">Pure black</string>
     <string name="wp_soft_white">Soft white</string>
     <string name="every_1">Every minute</string>

@@ -13,8 +13,8 @@
     <string name="time_left_hm">%1$d sa %2$d dk kaldı</string>
     <string name="time_left_m">%1$d dk kaldı</string>
     <string name="folder_name">Klasör: %1$s</string>
-    <string name="wp_rockies_day">Kayalık Dağlar (gündüz)</string>
-    <string name="wp_rockies_dusk">Kayalık Dağlar (alacakaranlık)</string>
+    <string name="wp_mist_day">Sis (gündüz)</string>
+    <string name="wp_peak_dusk">Zirve (alacakaranlık)</string>
     <string name="wp_pure_black">Saf siyah</string>
     <string name="wp_soft_white">Yumuşak beyaz</string>
     <string name="every_1">Her dakika</string>
