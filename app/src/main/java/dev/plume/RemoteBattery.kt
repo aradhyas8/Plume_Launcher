@@ -54,6 +54,7 @@ internal object RemoteBattery {
     fun isLow(level: Int?, threshold: Int) = threshold > 0 && level != null && level <= threshold
 
     /** The permission that reading a device needs: BLUETOOTH_CONNECT from Android 12 (API 31), BLUETOOTH before, which is granted at install. */
+    @SuppressLint("InlinedApi") // BLUETOOTH_CONNECT is only read from Android 12
     fun permission(sdk: Int = android.os.Build.VERSION.SDK_INT) =
         if (sdk >= 31) Manifest.permission.BLUETOOTH_CONNECT else Manifest.permission.BLUETOOTH
 
