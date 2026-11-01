@@ -51,6 +51,8 @@
     <string name="fade_top">Fondu en haut</string>
     <string name="fade_bottom">Fondu en bas</string>
     <string name="glass">Verre dépoli</string>
+    <string name="glass_frosted">Dépoli</string>
+    <string name="glass_clear">Transparent</string>
     <string name="sort_apps">Trier les applis</string>
     <string name="manual">Manuel</string>
     <string name="most_used">Les plus utilisées</string>

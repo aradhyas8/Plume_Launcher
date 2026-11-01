@@ -51,6 +51,8 @@
     <string name="fade_top">Degradado superior</string>
     <string name="fade_bottom">Degradado inferior</string>
     <string name="glass">Cristal</string>
+    <string name="glass_frosted">Esmerilado</string>
+    <string name="glass_clear">Transparente</string>
     <string name="sort_apps">Orden</string>
     <string name="manual">Manual</string>
     <string name="most_used">Más usadas</string>

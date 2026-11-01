@@ -32,17 +32,46 @@ class GlassTest {
         assertTrue(pic.contentEquals(copy))
     }
 
-    @Test fun darkModeKeepsTheColoursAndLightModeLightensThem() {
+    @Test fun theFrostKeepsTheColoursRicherAndLightModeLiftsThem() {
         val pic = intArrayOf(px(200, 100, 50))
-        assertEquals(pic[0], glassTone(pic, dark = true)[0])
-        assertEquals(px(211, 131, 91), glassTone(pic, dark = false)[0])
+        assertEquals("15% more saturation", px(211, 97, 39), glassTone(pic, dark = true)[0])
+        assertEquals("and a tenth of the way to white", px(215, 112, 60), glassTone(pic, dark = false)[0])
+        val grey = intArrayOf(px(120, 120, 120))
+        assertEquals("grey stays grey", grey[0], glassTone(grey, dark = true)[0])
+    }
+
+    @Test fun theMeanColourIsTheAverage() {
+        assertEquals(px(100, 50, 150), meanColour(intArrayOf(px(0, 0, 100), px(200, 100, 200))))
+        assertEquals(GLASS_GREY, meanColour(IntArray(0)))
+    }
+
+    private fun luma(c: Int) = ((c shr 16 and 0xFF) * 299 + (c shr 8 and 0xFF) * 587 + (c and 0xFF) * 114) / 1000
+
+    @Test fun theTintKeepsTheWallpapersHue() {
+        val green = px(40, 160, 60)
+        val darkTint = glassHue(green, dark = true, alpha = 0x80)
+        assertEquals(0x80, darkTint ushr 24)
+        assertTrue("dark tint is dark", luma(darkTint) < 60)
+        assertTrue("and still green", (darkTint shr 8 and 0xFF) > (darkTint shr 16 and 0xFF))
+        val light = glassHue(green, dark = false, alpha = 0xFF)
+        assertTrue("light tint is light", luma(light) > 200)
+        assertTrue("and still green", (light shr 8 and 0xFF) > (light shr 16 and 0xFF))
+    }
+
+    @Test fun tilesAndPanelsTakeTheWallpapersColour() {
+        val hue = px(40, 160, 60)
+        val look = GlassLook(GlassStyle.FROSTED, dark = true, backdrop = Backdrop.PICTURE, hue = hue)
+        assertEquals(glassHue(hue, true, GlassStyle.FROSTED.tintRest), look.tile(lit = false))
+        assertEquals(glassHue(hue, true, GlassStyle.FROSTED.tintLit), look.tile(lit = true))
+        assertEquals("panels are as strong in both styles", look.wash(), look.copy(style = GlassStyle.CLEAR).wash())
+        assertEquals("off: no tint", 0, look.copy(style = null).tile(lit = true))
     }
 
     @Test fun aSurfaceFindsItsPlaceInTheBlur() {
-        // On a 1920x1080 screen the 120x68 blur is scaled by 16 and 15.88; a view at (300, 200) shifts it back.
+        // The blur is 16:9 (320x180), so on a 1920x1080 screen it scales by 6 both ways; a view at (300, 200) shifts it back.
         val m = glassMapping(1920, 1080, 300, 200)
-        assertEquals(16f, m[0], 0.001f)
-        assertEquals(1080f / 68, m[1], 0.001f)
+        assertEquals(6f, m[0], 0.001f)
+        assertEquals(6f, m[1], 0.001f)
         assertEquals(-300f, m[2], 0.001f)
         assertEquals(-200f, m[3], 0.001f)
     }
@@ -66,6 +95,49 @@ class GlassTest {
             assertEquals(GLASS_W / 2f, (r[0] + r[2]) / 2, 0.01f)
             assertEquals(GLASS_H / 2f, (r[1] + r[3]) / 2, 0.01f)
             assertTrue(r[0] <= 0.01f && r[1] <= 0.01f && r[2] >= GLASS_W - 0.01f && r[3] >= GLASS_H - 0.01f) // always covers
+        }
+    }
+
+    @Test fun clearGlassLetsMoreOfTheWallpaperThrough() {
+        val frosted = GlassStyle.FROSTED
+        val clear = GlassStyle.CLEAR
+        assertTrue("tiles let more through", clear.tintRest < frosted.tintRest)
+        assertTrue("a lit tile lets more through", clear.tintLit < frosted.tintLit)
+        assertTrue("less blur", clear.radius < frosted.radius)
+        assertTrue("a lens makes it look like glass", clear.lens > 1f && frosted.lens == 1f)
+        assertTrue("only frost has grain", frosted.grain && !clear.grain)
+    }
+
+    @Test fun onlyAPictureGetsALens() {
+        assertEquals(GlassStyle.CLEAR.lens, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.PICTURE).lens, 0f)
+        assertEquals(1f, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.VIDEO).lens, 0f)
+        assertEquals(1f, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.PLAIN).lens, 0f)
+    }
+
+    @Test fun theOldGlassSwitchStillMeansSomething() {
+        assertEquals(GlassStyle.FROSTED, GlassStyle.of(null, oldOn = true))
+        assertTrue(GlassStyle.of(null, oldOn = false) == null)
+        assertEquals(GlassStyle.CLEAR, GlassStyle.of("clear", oldOn = true))
+        assertTrue(GlassStyle.of("off", oldOn = true) == null)
+    }
+
+    @Test fun theWallpaperChoiceNamesItsBackdrop() {
+        assertEquals(Backdrop.PLAIN, Backdrop.of("plain:Pure black"))
+        assertEquals(Backdrop.VIDEO, Backdrop.of("video:apple_yosemite.mp4"))
+        assertEquals(Backdrop.PICTURE, Backdrop.of("res:Rockies (day)"))
+        assertEquals(Backdrop.PICTURE, Backdrop.of("folder:12:Photos"))
+    }
+
+    /** Every style, theme and backdrop: nothing over a plain colour, and Clear over a video is Frosted. */
+    @Test fun eachLookShowsOneStyle() {
+        for (style in listOf(null, GlassStyle.FROSTED, GlassStyle.CLEAR)) for (dark in listOf(false, true)) for (b in Backdrop.entries) {
+            val look = GlassLook(style, dark, b)
+            val expected = when {
+                style == null || b == Backdrop.PLAIN -> null
+                b == Backdrop.VIDEO -> GlassStyle.FROSTED
+                else -> style
+            }
+            assertEquals("$look active", expected, look.active)
         }
     }
 }

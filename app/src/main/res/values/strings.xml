@@ -51,6 +51,7 @@
     <string name="home_off_hint">Turn off \"Plume: Home button\" in Settings → System → Accessibility</string>
     <string name="home_on_hint">Turn on \"Plume: Home button\" in Settings → System → Accessibility</string>
     <string name="dark_wallpaper">Dark wallpaper</string>
+    <string name="wallpaper">Wallpaper</string>
     <string name="light_wallpaper">Light wallpaper</string>
     <string name="folder_photo_changes">Change photo every</string>
     <string name="no_photos">No photos found. Copy some to the TV or plug in a USB drive with photos.</string>
@@ -70,6 +71,8 @@
     <string name="fade_top">Top fade</string>
     <string name="fade_bottom">Bottom fade</string>
     <string name="glass">Glass</string>
+    <string name="glass_frosted">Frosted</string>
+    <string name="glass_clear">Clear</string>
     <string name="sort_apps">Order</string>
     <string name="manual">Manual</string>
     <string name="most_used">Most used</string>
@@ -185,6 +188,7 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_auto">Auto</string>
+    <string name="glass_clear_video">Clear glass needs a still wallpaper. With a video, Plume uses Frosted.</string>
     <string name="auto_note_sun">Auto is light from sunrise to sunset in %1$s. Today: %2$s to %3$s.</string>
     <string name="auto_note_up">Auto stays light today: the sun does not set in %1$s.</string>
     <string name="auto_note_down">Auto stays dark today: the sun does not rise in %1$s.</string>
