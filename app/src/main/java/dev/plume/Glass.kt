@@ -304,7 +304,7 @@ internal class GlassLayer(context: Context) : View(context) {
         sharpBase.setScale(width / sharpSize.first, height / sharpSize.second)
         sh?.setLocalMatrix(sharpBase)
         val r = lens13
-        if (r != null && sh != null) r.setInputShader("picture", sh)
+        if (android.os.Build.VERSION.SDK_INT >= 33 && r != null && sh != null) r.setInputShader("picture", sh)
         lensPaint.shader = if (sh == null) null else r ?: sh
         invalidate()
     }
@@ -404,7 +404,7 @@ internal class GlassLayer(context: Context) : View(context) {
             val sh = sharpShader
             if (sh != null) {
                 val r = lens13
-                if (r != null) r.setFloatUniform("box", rect.left, rect.top, rect.right, rect.bottom)
+                if (android.os.Build.VERSION.SDK_INT >= 33 && r != null) r.setFloatUniform("box", rect.left, rect.top, rect.right, rect.bottom)
                 else {
                     matrix.set(sharpBase)
                     matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
