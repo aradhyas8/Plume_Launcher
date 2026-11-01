@@ -39,10 +39,10 @@ class GlassTest {
     }
 
     @Test fun aSurfaceFindsItsPlaceInTheBlur() {
-        // The blur is 16:9 (128x72), so on a 1920x1080 screen it scales by 15 both ways; a view at (300, 200) shifts it back.
+        // The blur is 16:9 (320x180), so on a 1920x1080 screen it scales by 6 both ways; a view at (300, 200) shifts it back.
         val m = glassMapping(1920, 1080, 300, 200)
-        assertEquals(15f, m[0], 0.001f)
-        assertEquals(15f, m[1], 0.001f)
+        assertEquals(6f, m[0], 0.001f)
+        assertEquals(6f, m[1], 0.001f)
         assertEquals(-300f, m[2], 0.001f)
         assertEquals(-200f, m[3], 0.001f)
     }
@@ -78,6 +78,15 @@ class GlassTest {
         assertTrue("a lit tile lets more through", (clear.tileLit[0] ushr 24) < (frosted.tileLit[0] ushr 24))
         assertTrue("dark tiles let more through", clear.darkTileRest < frosted.darkTileRest)
         assertTrue("a lit dark tile lets more through", clear.darkTileLit < frosted.darkTileLit)
+        assertTrue("less blur", clear.radius < frosted.radius)
+        assertTrue("a lens and a rim make it look like glass", clear.lens > 1f && clear.rim > 0)
+        assertTrue("frosted has neither", frosted.lens == 1f && frosted.rim == 0)
+    }
+
+    @Test fun onlyAPictureGetsALens() {
+        assertEquals(GlassStyle.CLEAR.lens, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.PICTURE).lens, 0f)
+        assertEquals(1f, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.VIDEO).lens, 0f)
+        assertEquals(0, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.PLAIN).rim)
     }
 
     @Test fun theOldGlassSwitchStillMeansSomething() {

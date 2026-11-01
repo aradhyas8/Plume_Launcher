@@ -13,9 +13,12 @@ import android.os.SystemClock
 import android.view.View
 import java.lang.ref.WeakReference
 
-/** The blurred wallpaper is this many pixels across: 128x72 is 16:9 and ~36 KB. */
-internal const val GLASS_W = 128
-internal const val GLASS_H = 72
+/**
+ * The blurred wallpaper is this many pixels across: 320x180 is 16:9 and ~230 KB. A 128x72 one scaled 15 times to the
+ * screen was mush however little it was blurred, so Clear could not show the wallpaper's shapes.
+ */
+internal const val GLASS_W = 320
+internal const val GLASS_H = 180
 
 /** A blur of [px] (opaque ARGB, [w]x[h]): [passes] box blurs of radius [radius], horizontal then vertical each time. */
 internal fun boxBlur(px: IntArray, w: Int, h: Int, radius: Int, passes: Int = 2): IntArray {
@@ -64,6 +67,8 @@ internal fun glassTone(px: IntArray, dark: Boolean): IntArray = IntArray(px.size
  * Both share the one blur, so a style change needs no decode, no second bitmap and no extra memory.
  * [tileRest] and [tileLit] are the light-mode card colours, [darkTileRest] and [darkTileLit] the dark-mode alphas;
  * [dim] and [scrim] are the settings overlays; [radius] is the blur's, so Clear shows more of the wallpaper's shapes.
+ * [lens] magnifies the picture under a tile around its centre, so its edges look bent like a lens; [rim] is the alpha
+ * of the 1 dp light on a tile's top edge (with a faint 1 dp edge all round), the recipe Alder's glass uses.
  */
 internal enum class GlassStyle(
     val key: String,
@@ -76,11 +81,13 @@ internal enum class GlassStyle(
     val dim: Float,
     val scrim: Int,
     val radius: Int,
+    val lens: Float,
+    val rim: Int,
 ) {
     FROSTED("frosted", 0x8C000000.toInt(), 0xA8FFFFFF.toInt(),
-        intArrayOf(0x6EE2E5E9, 0x6ED8DCE1), intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()), 0x40, 0x66, 0.35f, 0x55, 2),
+        intArrayOf(0x6EE2E5E9, 0x6ED8DCE1), intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()), 0x40, 0x66, 0.35f, 0x55, 5, 1f, 0),
     CLEAR("clear", 0x4D000000.toInt(), 0x66FFFFFF.toInt(),
-        intArrayOf(0x3DE2E5E9, 0x3DD8DCE1), intArrayOf(0x8CFFFFFF.toInt(), 0x8CFFFFFF.toInt()), 0x26, 0x4D, 0.25f, 0x40, 1);
+        intArrayOf(0x29E2E5E9, 0x29D8DCE1), intArrayOf(0x73FFFFFF, 0x73FFFFFF), 0x1A, 0x40, 0.25f, 0x40, 2, 1.04f, 0x4D);
 
     companion object {
         /** The style a stored choice means; null is off. Before the choice, Glass was a switch ([oldOn]). */
@@ -121,6 +128,11 @@ internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val bac
      */
     val tint: Int get() = active?.takeIf { backdrop == Backdrop.VIDEO }
         ?.let { (if (dark) it.washDark else it.washLight).let { w -> w and 0xFFFFFF or ((w ushr 25) shl 24) } } ?: 0
+
+    /** A lens needs a picture under the tile; a flat tint looks the same however it is scaled. */
+    val lens: Float get() = if (blurs) active!!.lens else 1f
+
+    val rim: Int get() = active?.rim ?: 0
 }
 
 /**
@@ -173,6 +185,12 @@ internal class GlassLayer(context: Context) : View(context) {
     private val tiles = ArrayList<Tile>()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val matrix = Matrix()
+    // The glass's edge: a faint 1 dp line all round, and a 1 dp sliver of light along the top that follows the corners.
+    private val onePx = context.resources.displayMetrics.density
+    private val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = onePx }
+    private val shinePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val shine = android.graphics.Path()
+    private val below = android.graphics.Path()
     private val visible = Rect()
     private val row = Rect()
     private val rect = RectF()
@@ -183,6 +201,16 @@ internal class GlassLayer(context: Context) : View(context) {
         private set
     /** A flat colour under each tile when there is no blur (a video wallpaper): 0 for none. */
     var tint = 0
+        set(v) {
+            field = v
+            invalidate()
+        }
+    var lens = 1f // see GlassStyle.lens
+        set(v) {
+            field = v
+            invalidate()
+        }
+    var rim = 0 // the alpha of the light on each tile's edge, 0 for none
         set(v) {
             field = v
             invalidate()
@@ -228,7 +256,7 @@ internal class GlassLayer(context: Context) : View(context) {
 
     override fun onDraw(c: Canvas) {
         val s = shader
-        if (s == null && tint == 0) return
+        if (s == null && tint == 0 && rim == 0) return
         if (s != null) {
             matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
             s.setLocalMatrix(matrix)
@@ -259,9 +287,30 @@ internal class GlassLayer(context: Context) : View(context) {
             // Where the tile is drawn, lift and row scale included; what a scroll view cuts off stays cut off.
             rect.set(at[0] - ox.toFloat(), at[1] - oy.toFloat(), at[0] - ox + v.width * sx, at[1] - oy + v.height * sy)
             paint.alpha = alpha * full / 255
+            if (s != null && lens != 1f) {
+                matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
+                matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
+                s.setLocalMatrix(matrix)
+            }
             c.save()
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
-            c.drawRoundRect(rect, t.radius * sx, t.radius * sy, paint)
+            if (s != null || tint != 0) c.drawRoundRect(rect, t.radius * sx, t.radius * sy, paint)
+            if (rim != 0) {
+                val rx = t.radius * sx
+                val ry = t.radius * sy
+                shine.reset()
+                shine.addRoundRect(rect, rx, ry, android.graphics.Path.Direction.CW)
+                below.reset()
+                rect.offset(0f, onePx)
+                below.addRoundRect(rect, rx, ry, android.graphics.Path.Direction.CW)
+                rect.offset(0f, -onePx)
+                shine.op(below, android.graphics.Path.Op.DIFFERENCE)
+                shinePaint.color = rim * alpha / 255 shl 24 or 0xFFFFFF
+                c.drawPath(shine, shinePaint)
+                edgePaint.color = 0x24 * alpha / 255 shl 24 or 0xFFFFFF
+                rect.inset(onePx / 2, onePx / 2)
+                c.drawRoundRect(rect, rx, ry, edgePaint)
+            }
             c.restore()
         }
         if (SystemClock.uptimeMillis() < until) postInvalidateOnAnimation()

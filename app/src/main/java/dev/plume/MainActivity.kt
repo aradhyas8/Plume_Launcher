@@ -1081,13 +1081,19 @@ class MainActivity : Activity() {
         g.wash = if (dark) style.washDark else style.washLight
         g.rim = if (dark) 0x33FFFFFF else 0x1F000000
         g.highlight = if (dark) 0x14FFFFFF else 0x66FFFFFF
-        g.setBlur(glass.blur)
+        g.setBlur(surfaceBlur)
         glassSurfaces.removeAll { it.get() == null }
         if (glassSurfaces.none { it.get() === g }) glassSurfaces.add(java.lang.ref.WeakReference(g)) // the panel is styled again and again
     }
 
     /** The shown picture as [glassScreen] pixels, not blurred; null for a plain background or a video. */
     private var glassPixels: IntArray? = null
+
+    /**
+     * The blur for menus, dialogs and the panel: always Frosted's, because text over Clear's sharper picture is hard to
+     * read. With Frosted it is the tiles' own bitmap; with Clear, a second one (230 KB).
+     */
+    private var surfaceBlur: Bitmap? = null
 
     /** The look and the pixels that glass was last drawn for. */
     private var glassShown: Pair<GlassLook, IntArray?>? = null
@@ -1103,8 +1109,14 @@ class MainActivity : Activity() {
         if (was != null && was.first == look && was.second === px) return
         glassShown = look to px
         glass.tint = look.tint
-        glass.setBlur(px?.takeIf { look.blurs }?.let { glassBlur(it, look.active!!.radius, look.dark) })
-        glassSurfaces.forEach { it.get()?.setBlur(glass.blur) } // menus and cards that are open, and the panel
+        glass.lens = look.lens
+        glass.rim = look.rim
+        val shown = px?.takeIf { look.blurs }
+        glass.setBlur(shown?.let { glassBlur(it, look.active!!.radius, look.dark) })
+        val frost = GlassStyle.FROSTED.radius
+        surfaceBlur = if (look.active?.radius == frost) glass.blur
+            else shown?.let { Bitmap.createBitmap(glassBlur(it, frost, look.dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
+        glassSurfaces.forEach { it.get()?.setBlur(surfaceBlur) } // menus and cards that are open, and the panel
         if (was?.first != look) { // the card tints and which tiles get frost follow the look
             applyTheme()
             baked.clear()
