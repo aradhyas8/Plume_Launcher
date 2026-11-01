@@ -302,6 +302,7 @@
     <string name="act_power">Power menu</string>
     <string name="act_settings">Android settings</string>
     <string name="act_network">Network settings</string>
+    <string name="act_all_apps">Plume All apps</string>
     <plurals name="n_keys">
         <item quantity="one">%d key</item>
         <item quantity="other">%d keys</item>

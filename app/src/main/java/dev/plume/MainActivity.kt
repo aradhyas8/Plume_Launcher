@@ -885,6 +885,11 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == UPDATE_STATUS) return installStatus(intent)
+        if (intent.action == Remap.OPEN_ALL_APPS) { // a remote key mapped to "All apps" (see [Remap])
+            if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
+            if (allApps.visibility != View.VISIBLE) openAllApps()
+            return
+        }
         if (fakeSetup(intent)) return
         if (homeTest != 0 && intent.hasCategory(Intent.CATEGORY_HOME)) { // the Home press reached us: setup works
             homeTest = 0

@@ -59,10 +59,13 @@ object Remap {
         "power" to (AccessibilityService.GLOBAL_ACTION_POWER_DIALOG to R.string.act_power),
     )
 
+    const val OPEN_ALL_APPS = "dev.plume.OPEN_ALL_APPS"
+
     /** Places in Android's Settings that a key can open, though Settings is not in the apps list. */
     val OPEN = linkedMapOf(
         "settings" to (Settings.ACTION_SETTINGS to R.string.act_settings),
         "network" to (Settings.ACTION_WIFI_SETTINGS to R.string.act_network),
+        "allapps" to (OPEN_ALL_APPS to R.string.act_all_apps), // Plume's own All apps, not Android's
     )
 
     /** A key's identity: its Android code, or its scan code for keys Android has no code for. */
@@ -149,7 +152,10 @@ object Remap {
                 "sys" -> SYS[arg]?.let { (code, _) ->
                     if (code == AccessibilityService.GLOBAL_ACTION_POWER_DIALOG) powerMenu(s) else s.performGlobalAction(code)
                 }
-                "open" -> OPEN[arg]?.let { (action, _) -> s.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                "open" -> OPEN[arg]?.let { (action, _) ->
+                    val intent = if (arg == "allapps") Intent(s, MainActivity::class.java).setAction(action) else Intent(action)
+                    s.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
             }
         } catch (e: Exception) {
             // An app that's gone, or an input that's unplugged: the key just does nothing.
