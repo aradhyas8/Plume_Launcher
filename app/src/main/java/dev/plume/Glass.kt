@@ -60,6 +60,35 @@ internal fun glassTone(px: IntArray, dark: Boolean): IntArray = IntArray(px.size
 }
 
 /**
+ * The look of glass. [FROSTED] is the original; [CLEAR] uses lighter tints so more of the wallpaper shows through.
+ * Both share the one blur, so a style change needs no decode, no second bitmap and no extra memory.
+ * [tileRest] and [tileLit] are the light-mode card colours; [dim] and [scrim] are the settings overlays.
+ */
+internal enum class GlassStyle(
+    val key: String,
+    val washDark: Int,
+    val washLight: Int,
+    val tileRest: IntArray,
+    val tileLit: IntArray,
+    val dim: Float,
+    val scrim: Int,
+) {
+    FROSTED("frosted", 0x8C000000.toInt(), 0xA8FFFFFF.toInt(),
+        intArrayOf(0x6EE2E5E9, 0x6ED8DCE1), intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()), 0.35f, 0x55),
+    CLEAR("clear", 0x4D000000.toInt(), 0x66FFFFFF.toInt(),
+        intArrayOf(0x3DE2E5E9, 0x3DD8DCE1), intArrayOf(0x8CFFFFFF.toInt(), 0x8CFFFFFF.toInt()), 0.25f, 0x40);
+
+    companion object {
+        /** The style a stored choice means; null is off. Before the choice, Glass was a switch ([oldOn]). */
+        fun of(stored: String?, oldOn: Boolean): GlassStyle? = when (stored) {
+            null -> if (oldOn) FROSTED else null
+            "off" -> null
+            else -> entries.firstOrNull { it.key == stored } ?: FROSTED
+        }
+    }
+}
+
+/**
  * Where a [w]x[h] picture lands on the [GLASS_W]x[GLASS_H] screen, as the wallpaper view's centerCrop puts it: scaled by
  * the larger of the two ratios and centred. Left, top, right, bottom; a photo that is not 16:9 spills over the edges.
  */

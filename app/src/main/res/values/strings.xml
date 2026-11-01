@@ -70,6 +70,8 @@
     <string name="fade_top">Top fade</string>
     <string name="fade_bottom">Bottom fade</string>
     <string name="glass">Glass</string>
+    <string name="glass_frosted">Frosted</string>
+    <string name="glass_clear">Clear</string>
     <string name="sort_apps">Order</string>
     <string name="manual">Manual</string>
     <string name="most_used">Most used</string>

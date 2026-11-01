@@ -68,4 +68,20 @@ class GlassTest {
             assertTrue(r[0] <= 0.01f && r[1] <= 0.01f && r[2] >= GLASS_W - 0.01f && r[3] >= GLASS_H - 0.01f) // always covers
         }
     }
+
+    @Test fun clearGlassLetsMoreOfTheWallpaperThrough() {
+        val frosted = GlassStyle.FROSTED
+        val clear = GlassStyle.CLEAR
+        assertTrue("dark tint is lighter", (clear.washDark ushr 24) < (frosted.washDark ushr 24))
+        assertTrue("light tint is lighter", (clear.washLight ushr 24) < (frosted.washLight ushr 24))
+        assertTrue("tiles let more through", (clear.tileRest[0] ushr 24) < (frosted.tileRest[0] ushr 24))
+        assertTrue("a lit tile lets more through", (clear.tileLit[0] ushr 24) < (frosted.tileLit[0] ushr 24))
+    }
+
+    @Test fun theOldGlassSwitchStillMeansSomething() {
+        assertEquals(GlassStyle.FROSTED, GlassStyle.of(null, oldOn = true))
+        assertTrue(GlassStyle.of(null, oldOn = false) == null)
+        assertEquals(GlassStyle.CLEAR, GlassStyle.of("clear", oldOn = true))
+        assertTrue(GlassStyle.of("off", oldOn = true) == null)
+    }
 }

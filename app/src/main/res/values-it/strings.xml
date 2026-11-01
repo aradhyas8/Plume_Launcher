@@ -52,6 +52,8 @@
     <string name="fade_top">Sfumatura in alto</string>
     <string name="fade_bottom">Sfumatura in basso</string>
     <string name="glass">Effetto vetro</string>
+    <string name="glass_frosted">Smerigliato</string>
+    <string name="glass_clear">Trasparente</string>
     <string name="sort_apps">Ordine</string>
     <string name="manual">Manuale</string>
     <string name="most_used">Più usate</string>

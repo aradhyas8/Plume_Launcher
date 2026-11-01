@@ -827,7 +827,7 @@ class MainActivity : Activity() {
     /** A card in the middle of the screen over the dimmed home screen, in the hold menus' colours. */
     private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>) {
         setupDialog?.let { setupDialog = null; it.dismiss() } // replaced, not closed: the dismiss listener leaves the flow alone
-        val card: LinearLayout = if (frosted()) glassSurface(dp(20).toFloat()) else LinearLayout(this).apply {
+        val card: LinearLayout = if (glassActive()) glassSurface(dp(20).toFloat()) else LinearLayout(this).apply {
             background = if (dark) rimCard(dp(16), false, solid = true) else GradientDrawable().apply {
                 cornerRadius = dp(16).toFloat()
                 setColor(0xFFF7F8FA.toInt())
@@ -853,7 +853,7 @@ class MainActivity : Activity() {
         dialog.window?.run {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setLayout(dp(if (extra != null) 600 else 480), ViewGroup.LayoutParams.WRAP_CONTENT)
-            setDimAmount(if (frosted()) 0.35f else 0.6f) // glass shows what is behind, so it needs less dimming
+            setDimAmount(glassStyle()?.takeIf { glassActive() }?.dim ?: 0.6f) // glass shows what is behind, so it needs less dimming
         }
         dialog.setOnDismissListener {
             if (setupDialog !== dialog) return@setOnDismissListener
@@ -918,12 +918,12 @@ class MainActivity : Activity() {
     private fun applyTheme() {
         dark = wantDark()
         fg = if (dark) DARK_TEXT else 0xFF111214.toInt()
-        // Cards are see-through, so the wallpaper shows through them like frosted glass: dark ones are rimCard()s at
+        // Cards are see-through, so the wallpaper shows through them like glass: dark ones are rimCard()s at
         // 70%, light ones frosted grey at 78%, and focus lifts them to 80% and 95%.
-        // Over a blur the light tiles need less colour of their own (43% at rest, 75% selected).
-        val glassy = glassActive()
-        cardRest = if (dark) DARK_CARD else if (glassy) intArrayOf(0x6EE2E5E9, 0x6ED8DCE1) else intArrayOf(0xC8E2E5E9.toInt(), 0xC8D8DCE1.toInt())
-        cardLit = if (dark) DARK_CARD_LIT else if (glassy) intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()) else intArrayOf(0xF2FFFFFF.toInt(), 0xF2FFFFFF.toInt())
+        // Over a blur the light tiles need less colour of their own (43% at rest, 75% selected; Clear is lighter).
+        val glassy = glassStyle()?.takeIf { glassActive() }
+        cardRest = if (dark) DARK_CARD else glassy?.tileRest ?: intArrayOf(0xC8E2E5E9.toInt(), 0xC8D8DCE1.toInt())
+        cardLit = if (dark) DARK_CARD_LIT else glassy?.tileLit ?: intArrayOf(0xF2FFFFFF.toInt(), 0xF2FFFFFF.toInt())
         // Must match the colour each wallpaper fades into, or the bottom edge shows a seam.
         ground = if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
@@ -1033,25 +1033,35 @@ class MainActivity : Activity() {
     private fun currentWallpaper(forDark: Boolean = dark) =
         prefs.getString(if (forDark) "wp_dark" else "wp_light", null) ?: defaultWallpaper(forDark)
 
-    /** Glass: the tiles are see-through over a blur of the wallpaper (a setting, on by default since 1.6). */
-    private fun glassOn() = prefs.getBoolean("glass", true)
+    /**
+     * Glass: the tiles are see-through over a blur of the wallpaper (a setting, on by default since 1.6).
+     * The stored style is Frosted or Clear; the old on/off switch is read until a style is picked.
+     */
+    private fun glassStyle() = GlassStyle.of(prefs.getString("glass_style", null), prefs.getBoolean("glass", true))
+
+    private fun glassOn() = glassStyle() != null
 
     /** Glass needs a picture to blur: with a plain background the tiles stay as they are. */
     private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:") && !currentWallpaper().startsWith("video:")
 
-    /** The menus, the cards and the settings panel are glass too when Glass is on. */
-    private fun frosted() = glassActive()
+    /** The name of the current style, for the settings row. */
+    private fun glassName() = when (glassStyle()) {
+        null -> R.string.off
+        GlassStyle.CLEAR -> R.string.glass_clear
+        else -> R.string.glass_frosted
+    }
 
     /** The glass surfaces that are on screen, so that a wallpaper change (or a blur that arrives late) reaches them. */
     private val glassSurfaces = ArrayList<java.lang.ref.WeakReference<GlassDrawable>>()
 
-    /** A frosted surface in this theme: the blurred wallpaper under it, a tint, a hairline rim and a little light on top. */
+    /** A glass surface in this theme: the blurred wallpaper under it, a tint, a hairline rim and a little light on top. */
     private fun glassSurface(round: Float, flatRight: Boolean = false): GlassBox = GlassBox(this).also { styleGlass(it.glass, round, flatRight) }
 
     private fun styleGlass(g: GlassDrawable, round: Float, flatRight: Boolean = false) {
+        val style = glassStyle() ?: GlassStyle.FROSTED
         g.round = round
         g.flatRight = flatRight
-        g.wash = if (dark) 0x8C000000.toInt() else 0xA8FFFFFF.toInt() // 55% black, or 66% white
+        g.wash = if (dark) style.washDark else style.washLight
         g.rim = if (dark) 0x33FFFFFF else 0x1F000000
         g.highlight = if (dark) 0x14FFFFFF else 0x66FFFFFF
         g.setBlur(glass.blur)
@@ -1068,7 +1078,7 @@ class MainActivity : Activity() {
      * ([system]): the pill would stay behind that screen and nobody would see it.
      */
     private fun toast(text: CharSequence, long: Boolean = false, system: Boolean = false) {
-        if (system || !frosted()) return Toast.makeText(this, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        if (system || !glassActive()) return Toast.makeText(this, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
         val root = findViewById<FrameLayout>(R.id.root)
         noteHide?.let { ui.removeCallbacks(it) }
         noteView?.let { root.removeView(it) }
@@ -1094,7 +1104,7 @@ class MainActivity : Activity() {
     }
 
     /** Supporting text in dark mode: dim grey on black, lighter on glass, where it sits over a photo. */
-    private fun text2() = if (frosted()) 0xFFCCCCCC.toInt() else DARK_TEXT_2
+    private fun text2() = if (glassActive()) 0xFFCCCCCC.toInt() else DARK_TEXT_2
 
     private fun wallpaperName(choice: String) = when {
         choice == Bing.CHOICE -> getString(R.string.bing_daily)
@@ -1989,7 +1999,7 @@ class MainActivity : Activity() {
     /** The panel is frosted glass over the wallpaper when Glass is on, and the plain surface otherwise. */
     private fun showPanelGlass() {
         val panel = findViewById<GlassBox>(R.id.settingsPanel)
-        if (frosted()) {
+        if (glassActive()) {
             panel.background = null
             panel.setWillNotDraw(false)
             styleGlass(panel.glass, dp(22).toFloat(), flatRight = true)
@@ -2078,15 +2088,16 @@ class MainActivity : Activity() {
                 showWatchNext(watchList)
                 renderSettings(R.string.show_icons)
             },
-            R.string.glass to { _ ->
-                val next = !glassOn()
-                prefs.edit().putBoolean("glass", next).apply()
+            R.string.glass to { d ->
+                val before = glassStyle()
+                val after = GLASS_STYLES.step(before, d)
+                prefs.edit().putString("glass_style", after?.key ?: "off").apply()
                 applyTheme()
                 baked.clear()
                 glass.clearTiles()
-                if (next) {
+                if (after != null && before == null) {
                     loadWallpaper()
-                } else {
+                } else if (after == null) {
                     glass.setBlur(null)
                     glassSurfaces.forEach { it.get()?.setBlur(null) }
                 }
@@ -2104,7 +2115,7 @@ class MainActivity : Activity() {
             },
             R.string.light_wallpaper to Triple(getString(R.string.light_wallpaper), wallpaperName(currentWallpaper(false))) { pickWallpaper(false) },
             R.string.dark_wallpaper to Triple(getString(R.string.dark_wallpaper), wallpaperName(currentWallpaper(true))) { pickWallpaper(true) },
-            R.string.glass to Triple(getString(R.string.glass), toggle(glassOn())) {
+            R.string.glass to Triple(getString(R.string.glass), getString(glassName())) {
                 steps[R.string.glass]!!(1)
             },
             // Select steps up like Right, and past 100% starts again at 0%.
@@ -2530,7 +2541,7 @@ class MainActivity : Activity() {
             }
         }
 
-        private val scrimAlpha get() = if (frosted()) 0x55 else SCRIM_ALPHA
+        private val scrimAlpha get() = glassStyle()?.takeIf { glassActive() }?.scrim ?: SCRIM_ALPHA
 
         override fun draw(c: Canvas) {
             val dim = scrimAlpha shl 24
@@ -3370,7 +3381,7 @@ class MainActivity : Activity() {
 
     /** A small Plume-styled menu just above [anchor] (under it when [below]); Back closes it. [rows] builds its rows. */
     private fun popupMenu(anchor: View, below: Boolean = false, rows: (dismiss: () -> Unit) -> List<View>) {
-        val list: LinearLayout = if (frosted()) glassSurface(dp(14).toFloat()) else LinearLayout(this).apply {
+        val list: LinearLayout = if (glassActive()) glassSurface(dp(14).toFloat()) else LinearLayout(this).apply {
             background = if (dark) rimCard(dp(12), false, solid = true) else GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
                 setColor(0xFFF7F8FA.toInt())
@@ -4868,6 +4879,8 @@ class MainActivity : Activity() {
         const val ROW_TILES = 8
         /** Icon style setting -> its name. */
         val ICON_STYLES = linkedMapOf(ICON_STYLE_KEYS[0] to R.string.monochrome, ICON_STYLE_KEYS[1] to R.string.colour, ICON_STYLE_KEYS[2] to R.string.banner, ICON_STYLE_KEYS[3] to R.string.banner_mono)
+        /** Glass setting -> its styles in cycling order; null is off. */
+        val GLASS_STYLES: List<GlassStyle?> = listOf(null, GlassStyle.FROSTED, GlassStyle.CLEAR)
         const val GRID_GAP = 16 // dp; shared by the apps row and the cards so their columns line up
         /** Shown names for the wallpaper keys saved in prefs (the keys stay English). */
         val WALLPAPER_NAMES = mapOf(
