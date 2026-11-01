@@ -70,7 +70,7 @@ internal class VideoWallpaper(private val surface: SurfaceView, private val onFr
     private fun release() { player?.release(); player = null }
 }
 
-/** Reject mislabeled files and codecs that the first version does not support. */
+/** Reject mislabeled files and videos outside the TV wallpaper size limit. */
 internal fun validVideo(file: File): Boolean {
     if (!file.isFile || file.length() !in 1..VIDEO_LIMIT) return false
     val extractor = MediaExtractor()
@@ -78,7 +78,7 @@ internal fun validVideo(file: File): Boolean {
         extractor.setDataSource(file.path)
         (0 until extractor.trackCount).any { index ->
             val format = extractor.getTrackFormat(index)
-            format.getString(android.media.MediaFormat.KEY_MIME) == "video/avc" &&
+            format.getString(android.media.MediaFormat.KEY_MIME) in setOf("video/avc", "video/hevc") &&
                 format.getInteger(android.media.MediaFormat.KEY_WIDTH) <= 1920 &&
                 format.getInteger(android.media.MediaFormat.KEY_HEIGHT) <= 1080
         }
@@ -87,19 +87,25 @@ internal fun validVideo(file: File): Boolean {
 
 internal const val VIDEO_LIMIT = 120L * 1024 * 1024
 
-internal data class EarthVideo(val name: String, val file: String) {
-    val url: String get() = "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/$file"
-}
+internal data class VideoScene(val name: String, val source: String, val file: String, val url: String)
 
-internal val EARTH_VIDEOS = listOf(
-    EarthVideo("Whole Earth at night", "wholeEarthNight_1080.mp4"),
-    EarthVideo("Whole Earth in daylight", "wholeEarthDay_1080.mp4"),
-    EarthVideo("Asia at night", "earthAtNightAsia_1080.mp4"),
-    EarthVideo("South America at night", "earthAtNightSAmerica_1080.mp4"),
+internal val VIDEO_SCENES = listOf(
+    VideoScene("Whole Earth at night", "NASA Earth", "nasa_wholeEarthNight_1080.mp4", "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/wholeEarthNight_1080.mp4"),
+    VideoScene("Whole Earth in daylight", "NASA Earth", "nasa_wholeEarthDay_1080.mp4", "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/wholeEarthDay_1080.mp4"),
+    VideoScene("Asia at night", "NASA Earth", "nasa_earthAtNightAsia_1080.mp4", "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/earthAtNightAsia_1080.mp4"),
+    VideoScene("South America at night", "NASA Earth", "nasa_earthAtNightSAmerica_1080.mp4", "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/earthAtNightSAmerica_1080.mp4"),
+    VideoScene("Antarctica", "Apple Aerial", "apple_antarctica.mp4", "https://sylvan.apple.com/itunes-assets/Aerials116/v4/97/e9/06/97e90616-1227-c670-6118-bd5ae991b43b/comp_GMT110_112NC_364D_1054_AURORA_ANTARTICA__COMP_FINAL_v34_PS_SDR_20181107_SDR_2K_AVC.mov"),
+    VideoScene("China", "Apple Aerial", "apple_china.mp4", "https://sylvan.apple.com/itunes-assets/Aerials116/v4/97/e9/06/97e90616-1227-c670-6118-bd5ae991b43b/comp_GMT329_113NC_396B_1105_CHINA_v04_SDR_FINAL_20180706_F900F2700_SDR_2K_AVC.mov"),
+    VideoScene("Italy to Asia", "Apple Aerial", "apple_italy_asia.mp4", "https://sylvan.apple.com/itunes-assets/Aerials116/v4/97/e9/06/97e90616-1227-c670-6118-bd5ae991b43b/comp_GMT329_113NC_396B_1105_ITALY_v03_SDR_FINAL_20180706_SDR_2K_AVC.mov"),
+    VideoScene("Iran and Afghanistan", "Apple Aerial", "apple_iran_afghanistan.mp4", "https://sylvan.apple.com/itunes-assets/Aerials116/v4/97/e9/06/97e90616-1227-c670-6118-bd5ae991b43b/comp_A083_C002_1130KZ_v04_SDR_PS_FINAL_20180725_SDR_2K_AVC.mov"),
+    VideoScene("Magdalena Bay Sunset", "Amazon Fire TV", "amazon_magdalena_sunset.mp4", "https://aebcs-cdn-prod-na.services.firetv.amazon.dev/content/FHD/content-82f845c1-85ae-4eba-b57a-7860f1e8e998.mp4"),
+    VideoScene("Northern Fjords of Norway", "Amazon Fire TV", "amazon_norway_fjords.mp4", "https://aebcs-cdn-prod-na.services.firetv.amazon.dev/content/FHD/content-aa6726c3-9b24-4e1b-8e74-46a061385087.mp4"),
+    VideoScene("Morning Mist", "Amazon Fire TV", "amazon_morning_mist.mp4", "https://aebcs-cdn-prod-na.services.firetv.amazon.dev/content/FHD/content-8dd41619-4b4d-4077-aa02-5ad62a658f7d.mp4"),
+    VideoScene("Beach from Above", "Amazon Fire TV", "amazon_beach_above.mp4", "https://aebcs-cdn-prod-na.services.firetv.amazon.dev/content/FHD/content-daf38cfa-0974-4c64-b332-8812cf8c831c.mp4"),
 )
 
 /** Download on selection only. A partial or oversized file never replaces a saved video. */
-internal fun downloadEarthVideo(item: EarthVideo, destination: File, cancelled: AtomicBoolean, progress: (Int) -> Unit): Boolean {
+internal fun downloadVideoScene(item: VideoScene, destination: File, cancelled: AtomicBoolean, progress: (Int) -> Unit): Boolean {
     val part = File(destination.parentFile, destination.name + ".part")
     var connection: HttpURLConnection? = null
     return try {

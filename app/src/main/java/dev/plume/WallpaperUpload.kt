@@ -89,7 +89,7 @@ internal class UploadServer(val code: String, private val temp: File, private va
                     temp.delete()
                 }
                 if (name != null) reply(out, 200, "text/plain", "Added \"$name\" to your TV.")
-                else reply(out, 415, "text/plain", if (video) "Use an H.264 MP4 video up to 1080p." else "That doesn't look like a photo the TV can open.")
+                else reply(out, 415, "text/plain", if (video) "Use an H.264 or HEVC MP4 video up to 1080p." else "That doesn't look like a photo the TV can open.")
             }
             else -> reply(out, 405, "text/plain", "Not allowed")
         }
@@ -148,7 +148,7 @@ internal class UploadServer(val code: String, private val temp: File, private va
             </script></body></html>
         """.trimIndent()
         val VIDEO_PAGE = PAGE.replace("Pick a photo. It shows on your TV a moment after you upload it.",
-            "Pick an H.264 MP4 video up to 1080p and 120 MB. Preview it on your TV after upload.")
+            "Pick an H.264 or HEVC MP4 video up to 1080p and 120 MB. Preview it on your TV after upload.")
             .replace("accept=\"image/*\"", "accept=\"video/mp4\"")
             .replace("Choose photo", "Choose video")
     }
