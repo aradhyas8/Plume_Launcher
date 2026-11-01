@@ -1913,7 +1913,6 @@ class MainActivity : Activity() {
             panel.background = null
             panel.setWillNotDraw(false)
             styleGlass(panel.glass, dp(22).toFloat(), flatRight = true)
-            settingsScrim.setBackgroundColor(0x55000000)
         } else {
             panel.setWillNotDraw(true)
             panel.background = if (!dark) ColorDrawable(0xFFF7F8FA.toInt())
@@ -1921,8 +1920,10 @@ class MainActivity : Activity() {
                     setLayerGravity(1, Gravity.START or Gravity.FILL_VERTICAL)
                     setLayerWidth(1, 1)
                 }
-            settingsScrim.setBackgroundColor(0x99000000.toInt())
         }
+        panel.invalidate()
+        if (settingsScrim.background === spotlight) spotlight.invalidateSelf()
+        settingsScrim.invalidate()
     }
 
     private fun closeLauncherSettings() {
@@ -1997,6 +1998,24 @@ class MainActivity : Activity() {
                 showWatchNext(watchList)
                 renderSettings(R.string.show_icons)
             },
+            R.string.glass to { _ ->
+                val next = !glassOn()
+                prefs.edit().putBoolean("glass", next).apply()
+                applyTheme()
+                baked.clear()
+                glass.clearTiles()
+                if (next) {
+                    loadWallpaper()
+                } else {
+                    glass.setBlur(null)
+                    glassSurfaces.forEach { it.get()?.setBlur(null) }
+                }
+                renderApps()
+                watchKey = null
+                showWatchNext(watchList)
+                showPanelGlass()
+                renderSettings(R.string.glass)
+            },
         )
         val rows = linkedMapOf<Int, Triple<String, String, () -> Unit>>(
             R.string.edit_apps_row to Triple(getString(R.string.edit_apps_row), "") { closeLauncherSettings(); startEdit(grab = null) },
@@ -2006,8 +2025,7 @@ class MainActivity : Activity() {
             R.string.light_wallpaper to Triple(getString(R.string.light_wallpaper), wallpaperName(currentWallpaper(false))) { pickWallpaper(false) },
             R.string.dark_wallpaper to Triple(getString(R.string.dark_wallpaper), wallpaperName(currentWallpaper(true))) { pickWallpaper(true) },
             R.string.glass to Triple(getString(R.string.glass), toggle(glassOn())) {
-                prefs.edit().putBoolean("glass", !glassOn()).putBoolean("reopen_settings", true).apply()
-                recreate() // tile colours are applied once per activity; reopen the panel after
+                steps[R.string.glass]!!(1)
             },
             // Select steps up like Right, and past 100% starts again at 0%.
             R.string.fade_top to Triple(getString(R.string.fade_top), "$SLIDER${fade("fade_top")}") { steps[R.string.fade_top]!!(if (fade("fade_top") == 100) -100 / FADE_STEP else 1) },
@@ -2432,8 +2450,10 @@ class MainActivity : Activity() {
             }
         }
 
+        private val scrimAlpha get() = if (frosted()) 0x55 else SCRIM_ALPHA
+
         override fun draw(c: Canvas) {
-            val dim = SCRIM_ALPHA shl 24
+            val dim = scrimAlpha shl 24
             if (open == 0f) return c.drawColor(dim)
             path.reset()
             path.addRoundRect(hole, dp(16).toFloat(), dp(16).toFloat(), Path.Direction.CW)
@@ -2443,7 +2463,7 @@ class MainActivity : Activity() {
             c.restore()
             c.save()
             c.clipPath(path)
-            c.drawColor((SCRIM_ALPHA * (1 - open)).toInt() shl 24) // the window clears as it opens
+            c.drawColor((scrimAlpha * (1 - open)).toInt() shl 24) // the window clears as it opens
             c.restore()
         }
 
