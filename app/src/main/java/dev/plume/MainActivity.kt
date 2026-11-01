@@ -16,6 +16,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.database.ContentObserver
 import android.content.pm.PackageInstaller
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -139,6 +140,25 @@ internal val PHOTOS: Uri by lazy { // lazy: unit tests load this file without An
 internal fun folderPhotos(cr: ContentResolver, choice: String): List<Long> =
     cr.query(PHOTOS, arrayOf(MediaStore.Images.Media._ID), "${MediaStore.Images.Media.BUCKET_ID} = ?", arrayOf(choice.split(':')[1]), null)
         ?.use { c -> List(c.count) { c.moveToNext(); c.getLong(0) } } ?: emptyList()
+
+/** Picks the current or next photo from [ids], preserving [deck] if the media scan is still pending. */
+internal fun pickFolderPhoto(
+    ids: List<Long>,
+    currentSaved: Long?,
+    deck: ArrayDeque<Long>,
+    shuffle: (List<Long>) -> List<Long> = { it.shuffled() }
+): Long? {
+    if (ids.isEmpty()) return null
+    val all = ids.toHashSet()
+    if (currentSaved != null && currentSaved in all) return currentSaved
+    deck.removeAll { it !in all }
+    if (deck.isEmpty()) deck.addAll(shuffle(ids))
+    return deck.removeFirstOrNull()
+}
+
+/** Whether the Google TV launcher package is active (not debloated or disabled). */
+internal fun isGoogleTvLauncher(enabled: Boolean, setting: Int): Boolean =
+    enabled && (setting == PackageManager.COMPONENT_ENABLED_STATE_DEFAULT || setting == PackageManager.COMPONENT_ENABLED_STATE_ENABLED)
 
 /**
  * Sort key of a Watch Next row: what you started comes before suggestions (types other than 0, "continue"), then
@@ -397,12 +417,17 @@ class MainActivity : Activity() {
         } else if (prefs.getBoolean("reopen_settings", false)) {
             prefs.edit().remove("reopen_settings").apply()
             ui.post { openLauncherSettings(R.string.theme) }
-        } else if (!homeServiceOn() && !prefs.getBoolean("setup_shown", false)) {
+        } else if (!homeSetUp() && !prefs.getBoolean("setup_shown", false)) {
             // Fresh install: walk through making Home land on Plume, the one step that has to happen by hand.
             prefs.edit().putBoolean("setup_shown", true).apply()
             ui.post { startHomeSetup() }
         } else if (notesUnseen()) {
             ui.post { whatsNewCard() } // after an update; the self-updater reopens Plume, so it's seen right away
+        }
+
+        try {
+            contentResolver.registerContentObserver(PHOTOS, true, photoObserver)
+        } catch (e: Exception) {
         }
 
         registerReceiver(packageReceiver, IntentFilter().apply {
@@ -507,6 +532,11 @@ class MainActivity : Activity() {
         applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
         getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
         upload?.stop()
+        try {
+            contentResolver.unregisterContentObserver(photoObserver)
+        } catch (e: Exception) {
+        }
+        ui.removeCallbacks(folderRetryTask)
         ui.removeCallbacksAndMessages(null) // the clocks and the posts still queued must not use the pools below
         io.shutdownNow()
         posterIo.shutdownNow()
@@ -583,8 +613,11 @@ class MainActivity : Activity() {
         return false
     }
 
-    private fun isDefaultHome() = Build.VERSION.SDK_INT >= 29 &&
-        getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)
+    private fun isDefaultHome(): Boolean {
+        if (Build.VERSION.SDK_INT >= 29 && getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_HOME) == true) return true
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        return packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == packageName
+    }
 
     /**
      * Asks Android to make us the default home app (its own confirmation dialog). On Google TV the system
@@ -617,9 +650,10 @@ class MainActivity : Activity() {
 
     /** Google TV takes the home role but its own launcher still gets Home, so only the service works there. */
     private fun googleTv() = fakeDevice?.let { it == "google" } ?: try {
-        packageManager.getPackageInfo(HomeWatch.GOOGLE_TV, 0)
-        true
-    } catch (e: PackageManager.NameNotFoundException) {
+        val app = packageManager.getApplicationInfo(HomeWatch.GOOGLE_TV, 0)
+        val setting = packageManager.getApplicationEnabledSetting(HomeWatch.GOOGLE_TV)
+        isGoogleTvLauncher(app.enabled, setting)
+    } catch (e: Exception) {
         false
     }
 
@@ -783,9 +817,12 @@ class MainActivity : Activity() {
             })
     }
 
-    private fun donePopup() = homePopup(0, getString(R.string.setup_done_title),
-        getString(if (homeServiceOn() && !fireTv()) R.string.setup_done_body_service else R.string.setup_done_body), null,
-        getString(R.string.setup_done) to { setupDialog?.dismiss() })
+    private fun donePopup(): Unit {
+        prefs.edit().putBoolean("setup_shown", true).apply()
+        homePopup(0, getString(R.string.setup_done_title),
+            getString(if (homeServiceOn() && !fireTv()) R.string.setup_done_body_service else R.string.setup_done_body), null,
+            getString(R.string.setup_done) to { setupDialog?.dismiss() })
+    }
 
     /** A card in the middle of the screen over the dimmed home screen, in the hold menus' colours. */
     private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>) {
@@ -1092,6 +1129,20 @@ class MainActivity : Activity() {
             } catch (e: OutOfMemoryError) { // a picture on a TV short of memory: show the default instead of crashing
                 null
             }
+            if (choice.startsWith("folder:")) {
+                if (own == null) {
+                    folderPending = true
+                    ui.post { scheduleFolderRetry() }
+                } else {
+                    folderPending = false
+                    folderRetries = 0
+                    ui.post { ui.removeCallbacks(folderRetryTask) }
+                }
+            } else {
+                folderPending = false
+                folderRetries = 0
+                ui.post { ui.removeCallbacks(folderRetryTask) }
+            }
             val bmp = own ?: decodeWallpaper(fallback)
             val blur = if (bmp != null && glassActive()) glassPixels(bmp, ground, dark) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
@@ -1128,6 +1179,36 @@ class MainActivity : Activity() {
     }
 
     private var wallpaperLoad = 0
+    private var folderPending = false
+    private var folderRetries = 0
+
+    private val folderRetryTask = Runnable {
+        if (!isDestroyed && folderPending && currentWallpaper().startsWith("folder:")) {
+            loadWallpaper()
+        }
+    }
+
+    private val photoObserver by lazy {
+        object : ContentObserver(ui) {
+            override fun onChange(selfChange: Boolean) {
+                if (!isDestroyed && folderPending && currentWallpaper().startsWith("folder:")) {
+                    loadWallpaper()
+                }
+            }
+        }
+    }
+
+    private fun scheduleFolderRetry() {
+        if (folderRetries >= 5 || isDestroyed) return
+        val delay = when (folderRetries++) {
+            0 -> 2_000L
+            1 -> 4_000L
+            2 -> 8_000L
+            else -> 15_000L
+        }
+        ui.removeCallbacks(folderRetryTask)
+        ui.postDelayed(folderRetryTask, delay)
+    }
 
     private fun decodeWallpaper(choice: String): Bitmap? {
         BUNDLED_WALLPAPERS[choice.removePrefix("res:")]?.let { res ->
@@ -1717,11 +1798,10 @@ class MainActivity : Activity() {
     /** The folder's photo on show now, or the next one in this round's shuffle. Runs on the io thread. */
     private fun folderPhoto(choice: String): Long? {
         val ids = folderPhotos(contentResolver, choice)
-        val all = ids.toHashSet()
-        prefs.getLong(photoKey(), -1).takeIf { it in all }?.let { return it }
-        deck.removeAll { it !in all } // deleted, or another folder's
-        if (deck.isEmpty()) deck.addAll(ids.shuffled())
-        return deck.removeFirstOrNull()?.also { prefs.edit().putLong(photoKey(), it).apply() }
+        val saved = prefs.getLong(photoKey(), -1).takeIf { it >= 0 }
+        val picked = pickFolderPhoto(ids, saved, deck)
+        if (picked != null && picked != saved) prefs.edit().putLong(photoKey(), picked).apply()
+        return picked
     }
 
     /** Every folder with photos in it, internal storage and USB drives alike: (bucket id, name, photo count). */
