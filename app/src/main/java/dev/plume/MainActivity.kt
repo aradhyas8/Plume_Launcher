@@ -1011,10 +1011,13 @@ class MainActivity : Activity() {
         return inkFor(sum / n)
     }
 
-    /** Text colour plus a soft shadow in the opposite colour, so it holds on busy photos too. */
+    /**
+     * Text colour plus a shadow in the opposite colour. Plume never darkens the picture, so on a busy one this shadow
+     * is what keeps the text readable: wider and stronger than a plain drop shadow.
+     */
     private fun ink(v: TextView, color: Int, fade: Boolean = false) {
         if (wpThumb == null) v.setShadowLayer(0f, 0f, 0f, 0)
-        else v.setShadowLayer(dp(4).toFloat(), 0f, dp(1).toFloat(), if (color == Color.WHITE) 0x80000000.toInt() else 0x80FFFFFF.toInt())
+        else v.setShadowLayer(dp(7).toFloat(), 0f, dp(1).toFloat(), if (color == Color.WHITE) 0xCC000000.toInt() else 0xB3FFFFFF.toInt())
         if (!fade || v.currentTextColor == color) return v.setTextColor(color)
         ValueAnimator.ofArgb(v.currentTextColor, color).apply {
             duration = 800 // with the wallpaper's crossfade
