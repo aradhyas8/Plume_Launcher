@@ -1,14 +1,17 @@
 package dev.plume
 
+import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaPlayer
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.zip.GZIPInputStream
 
 /** Videos stay in Plume's wallpaper folder; no player runs after the home screen stops. */
 internal class VideoWallpaper(private val surface: SurfaceView, private val onFrame: () -> Unit, private val onError: () -> Unit) : SurfaceHolder.Callback {
@@ -70,7 +73,7 @@ internal class VideoWallpaper(private val surface: SurfaceView, private val onFr
     private fun release() { player?.release(); player = null }
 }
 
-/** Reject mislabeled files and codecs that the first version does not support. */
+/** Reject mislabeled files and videos outside the TV wallpaper size limit. */
 internal fun validVideo(file: File): Boolean {
     if (!file.isFile || file.length() !in 1..VIDEO_LIMIT) return false
     val extractor = MediaExtractor()
@@ -78,28 +81,43 @@ internal fun validVideo(file: File): Boolean {
         extractor.setDataSource(file.path)
         (0 until extractor.trackCount).any { index ->
             val format = extractor.getTrackFormat(index)
-            format.getString(android.media.MediaFormat.KEY_MIME) == "video/avc" &&
+            format.getString(android.media.MediaFormat.KEY_MIME) in setOf("video/avc", "video/hevc") &&
                 format.getInteger(android.media.MediaFormat.KEY_WIDTH) <= 1920 &&
                 format.getInteger(android.media.MediaFormat.KEY_HEIGHT) <= 1080
         }
     } catch (_: Exception) { false } finally { extractor.release() }
 }
 
-internal const val VIDEO_LIMIT = 120L * 1024 * 1024
+internal const val VIDEO_LIMIT = 350L * 1024 * 1024
 
-internal data class EarthVideo(val name: String, val file: String) {
-    val url: String get() = "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/$file"
+internal data class VideoScene(val source: String, val category: String, val name: String, val file: String, val url: String)
+
+private var cachedScenes: List<VideoScene>? = null
+
+internal fun parseVideoScenes(input: InputStream): List<VideoScene> {
+    val list = mutableListOf<VideoScene>()
+    GZIPInputStream(input).bufferedReader(Charsets.UTF_8).useLines { lines ->
+        for (line in lines) {
+            val parts = line.split('\t')
+            if (parts.size >= 5) {
+                list.add(VideoScene(parts[0], parts[1], parts[2], parts[3], parts[4]))
+            }
+        }
+    }
+    return list
 }
 
-internal val EARTH_VIDEOS = listOf(
-    EarthVideo("Whole Earth at night", "wholeEarthNight_1080.mp4"),
-    EarthVideo("Whole Earth in daylight", "wholeEarthDay_1080.mp4"),
-    EarthVideo("Asia at night", "earthAtNightAsia_1080.mp4"),
-    EarthVideo("South America at night", "earthAtNightSAmerica_1080.mp4"),
-)
+internal fun videoScenes(context: Context): List<VideoScene> {
+    cachedScenes?.let { return it }
+    val list = try {
+        context.resources.openRawResource(R.raw.video_scenes).use { parseVideoScenes(it) }
+    } catch (_: Exception) { emptyList() }
+    cachedScenes = list
+    return list
+}
 
 /** Download on selection only. A partial or oversized file never replaces a saved video. */
-internal fun downloadEarthVideo(item: EarthVideo, destination: File, cancelled: AtomicBoolean, progress: (Int) -> Unit): Boolean {
+internal fun downloadVideoScene(item: VideoScene, destination: File, cancelled: AtomicBoolean, progress: (Int) -> Unit): Boolean {
     val part = File(destination.parentFile, destination.name + ".part")
     var connection: HttpURLConnection? = null
     return try {
@@ -109,6 +127,8 @@ internal fun downloadEarthVideo(item: EarthVideo, destination: File, cancelled: 
             instanceFollowRedirects = false
         }
         if (connection.responseCode != 200 || connection.contentLengthLong !in 1..VIDEO_LIMIT) return false
+        val needed = connection.contentLengthLong + 20L * 1024 * 1024
+        if (destination.parentFile?.let { it.usableSpace < needed } == true) return false
         var count = 0L
         var lastPercent = -1
         connection.inputStream.use { input ->
