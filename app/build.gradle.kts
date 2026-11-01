@@ -27,6 +27,22 @@ android {
 
     buildFeatures {
         resValues = true
+        buildConfig = true
+    }
+
+    // github: the APK on GitHub releases, which updates itself. play: the Google Play build, which Play updates,
+    // so it has no self-updater and no install permission, and explains the Home button service before it opens.
+    flavorDimensions += "store"
+    productFlavors {
+        create("github") {
+            dimension = "store"
+            buildConfigField("boolean", "PLAY", "false")
+        }
+        create("play") {
+            dimension = "store"
+            versionCode = 10
+            buildConfigField("boolean", "PLAY", "true")
+        }
     }
 
     // CI fails on new lint errors only; the ones already here are listed in lint-baseline.xml

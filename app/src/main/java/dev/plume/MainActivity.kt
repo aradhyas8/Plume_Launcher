@@ -551,6 +551,7 @@ class MainActivity : Activity() {
     private fun ensureHomeService() {
         if (homeServiceOn()) return prefs.edit().remove("home_off").apply() // what Android says wins
         if (prefs.getBoolean("home_off", false) || checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED) return
+        if (BuildConfig.PLAY && !prefs.getBoolean("a11y_agreed", false)) return // not before the user said yes (see disclose)
         val me = ComponentName(this, HomeOverride::class.java).flattenToString()
         val on = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
         Settings.Secure.putString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, if (on.isEmpty()) me else "$on:$me")
@@ -584,10 +585,10 @@ class MainActivity : Activity() {
     }
 
     /** The Home key service is an accessibility service, which Android only lets the user switch on. */
-    private fun turnOnHomeButton() {
+    private fun turnOnHomeButton(): Unit = disclose {
         prefs.edit().remove("home_off").apply()
         ensureHomeService() // works where the adb permission was granted
-        if (homeServiceOn()) return renderSettings(R.string.home_button)
+        if (homeServiceOn()) return@disclose renderSettings(R.string.home_button)
         // The written path is the safety net: some Google TVs (a Xiaomi stick) answer the Accessibility link
         // with "You don't have an app that can do this", which we can't detect from here.
         toast(getString(R.string.home_on_hint), long = true, system = true)
@@ -691,7 +692,7 @@ class MainActivity : Activity() {
     /** Service still off after Accessibility: on Android 13+ a sideloaded app's toggle is greyed until App info allows it. */
     private fun serviceStillOff() = if (sdk() >= 33 && !restrictedTried) restrictedPopup() else adbPopup()
 
-    private fun tryHomeService() {
+    private fun tryHomeService(): Unit = disclose {
         prefs.edit().remove("home_off").apply()
         ensureHomeService() // works where the adb permission was granted
         if (homeServiceOn()) testPopup(2) else servicePopup()
@@ -731,13 +732,30 @@ class MainActivity : Activity() {
 
     private fun servicePopup() = homePopup(2, getString(R.string.setup_service_title), getString(R.string.setup_service_body), null,
         getString(R.string.setup_open_accessibility) to {
-            setupStep = 2
-            if (!openHomeServiceSettings()) {
-                setupStep = 0
-                adbPopup()
+            disclose {
+                setupStep = 2
+                if (!openHomeServiceSettings()) {
+                    setupStep = 0
+                    adbPopup()
+                }
             }
         },
         getString(R.string.setup_not_now) to { setupDialog?.dismiss() })
+
+    /**
+     * Play build: Google Play asks apps to say what their accessibility service does, and get a yes, before
+     * sending people to switch it on. Asked once; the GitHub build goes straight on.
+     */
+    private fun disclose(then: () -> Unit) {
+        if (!BuildConfig.PLAY || prefs.getBoolean("a11y_agreed", false)) return then()
+        homePopup(0, getString(R.string.a11y_disclosure_title), getString(R.string.a11y_disclosure_body), null,
+            getString(R.string.a11y_agree) to {
+                prefs.edit().putBoolean("a11y_agreed", true).apply()
+                setupDialog?.dismiss()
+                then()
+            },
+            getString(R.string.setup_not_now) to { setupDialog?.dismiss() })
+    }
 
     /** Android 13+ "restricted settings": App info has "Allow restricted settings", as a row or under ⋮, on TVs that show it. */
     private fun restrictedPopup() {
@@ -2219,6 +2237,7 @@ class MainActivity : Activity() {
                 checking -> getString(R.string.checking)
                 availableUpdate() != null -> getString(R.string.update_available_row, availableUpdate())
                 notesUnseen() -> getString(R.string.whats_new_title, myVersion())
+                BuildConfig.PLAY -> getString(R.string.play_updates_row, myVersion())
                 else -> getString(R.string.up_to_date_row, myVersion())
             }) { showUpdates() },
             R.string.lock_layout to Triple(getString(R.string.lock_layout), toggle(lockOn())) {
@@ -2306,7 +2325,7 @@ class MainActivity : Activity() {
                 Triple(key, page(getString(key), "›") { renderSettings(keys[0]) }, RowStyle(SECTION_ICONS[key], value, help = ROW_HELP[key]?.let { getString(it) }, area = SECTION_AREAS[key]))
             } +
             Triple(R.string.updates, rows[R.string.updates]!!.let { (t, v, a) -> page(t, "›", a) },
-                RowStyle(R.drawable.ic_update, rows[R.string.updates]!!.second, help = getString(R.string.help_updates))) +
+                RowStyle(R.drawable.ic_update, rows[R.string.updates]!!.second, help = getString(if (BuildConfig.PLAY) R.string.help_updates_play else R.string.help_updates))) +
             listOfNotNull(if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) null
                 else Triple(R.string.preview_home_setup, page(getString(R.string.preview_home_setup)) { closeLauncherSettings(); previewHomeSetup() }, null))
         val hint = label(getString(R.string.top_bar_hint), 13f).apply {
@@ -3933,6 +3952,7 @@ class MainActivity : Activity() {
     private fun availableUpdate() = prefs.getString("upd_ver", null)?.takeIf { newerVersion(it, myVersion()) }
 
     private fun checkUpdate(force: Boolean) {
+        if (BuildConfig.PLAY) return // Play updates the Play build
         if (checking || !force && System.currentTimeMillis() - prefs.getLong("upd_time", 0) < 24 * 3600_000L) return
         checking = true
         if (force) renderSettings(R.string.updates)
@@ -3966,7 +3986,8 @@ class MainActivity : Activity() {
         updateBadge()
         val ver = availableUpdate()
         showPage(getString(R.string.whats_new_title, myVersion()), listOf(
-            if (ver != null) page(getString(R.string.install_update, ver)) { installUpdate(ver) }
+            if (BuildConfig.PLAY) page(getString(R.string.open_play_store)) { openPlayStore() }
+            else if (ver != null) page(getString(R.string.install_update, ver)) { installUpdate(ver) }
             else page(getString(R.string.check_updates)) { checkUpdate(force = true) },
         ), back = { renderSettings(R.string.updates) })
         // Focusable, lit on focus, so Down walks through notes longer than the panel and it scrolls along.
@@ -4023,8 +4044,15 @@ class MainActivity : Activity() {
         icon.overlay.add(badge)
     }
 
+    /** Plume's page in the Play Store app, or on the web where the TV has no Play Store. */
+    private fun openPlayStore() = try {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")))
+    } catch (e: Exception) {
+        openSettings(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
+    }
+
     private fun installUpdate(ver: String) {
-        if (updating) return
+        if (BuildConfig.PLAY || updating) return
         if (!packageManager.canRequestPackageInstalls()) {
             toast(getString(R.string.allow_installs), long = true, system = true)
             return openSettings(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))

@@ -198,6 +198,12 @@
     <string name="help_remote_home">Make Home open Plume, and change what the buttons on your remote do.</string>
     <string name="help_lock">A PIN that stops other people from changing your home screen.</string>
     <string name="help_updates">Plume checks for a new version once a day. Install it here.</string>
+    <string name="help_updates_play">The Play Store updates Plume. This shows what is new in your version.</string>
+    <string name="play_updates_row">Version %1$s · from the Play Store</string>
+    <string name="open_play_store">Open in Play Store</string>
+    <string name="a11y_disclosure_title">Before you turn on the Home button</string>
+    <string name="a11y_disclosure_body">Plume uses an Android accessibility service for one job: to open Plume when you press Home, and to do what you set for your remote keys. It does not read what is on the screen, and it does not collect or send any data.</string>
+    <string name="a11y_agree">Agree and continue</string>
     <string name="help_finish_setup">Home still opens the TV\'s own home screen. Set it to open Plume.</string>
     <string name="help_fade_top">Makes the top of your own photos darker, so the clock and the icons stay easy to read. Press Left or Right to change it.</string>
     <string name="help_fade_bottom">Fades the bottom of your own photos into the background, behind the apps and the Shows row. Press Left or Right to change it.</string>
