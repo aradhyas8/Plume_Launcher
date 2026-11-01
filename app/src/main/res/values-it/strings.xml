@@ -196,7 +196,7 @@
     <string name="help_home_button">Home apre Plume. Tieni premuto Home per la dashboard della TV.</string>
     <string name="help_default_launcher">Su Android TV, Plume può essere la schermata Home. Google TV tiene la sua, quindi usa il pulsante Home.</string>
     <string name="help_run_setup">Ripeti la configurazione del pulsante Home.</string>
-    <string name="help_smooth_volume">Tenendo premuto Volume, continua a cambiarlo. Home mostra poi Google TV per circa un secondo prima di aprire Plume. Spento se sono impostati i tasti del telecomando.</string>
+    <string name="help_smooth_volume">Tenendo premuto Volume, continua a cambiarlo. Home mostra poi la schermata Home della TV per circa un secondo prima di aprire Plume. Spento se sono impostati i tasti del telecomando.</string>
     <string name="help_remote_keys">Cambia cosa fa un tasto del telecomando quando lo premi o lo tieni premuto.</string>
     <!-- Stagione ed episodio su una scheda Continua a guardare, per esempio "S1 E3". -->
     <string name="season_episode">S%1$s E%2$s</string>

@@ -216,7 +216,7 @@
     <string name="help_home_button">Home opens Plume. Hold Home to open the TV\'s own dashboard.</string>
     <string name="help_default_launcher">On Android TV, Plume can be the home screen. Google TV keeps its own, so use the Home button.</string>
     <string name="help_run_setup">Go through the Home button setup again.</string>
-    <string name="help_smooth_volume">Holding Volume keeps changing it. Home then shows Google TV for about a second before Plume opens. Off while remote keys are set.</string>
+    <string name="help_smooth_volume">Holding Volume keeps changing it. Home then shows the TV\'s own home screen for about a second before Plume opens. Off while remote keys are set.</string>
     <string name="help_remote_keys">Change what a button on your remote does when you press it or hold it.</string>
     <!-- Season and episode on a Continue Watching card, for example "S1 E3". -->
     <string name="season_episode">S%1$s E%2$s</string>

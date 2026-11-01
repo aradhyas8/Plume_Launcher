@@ -37,7 +37,7 @@ class HomeOverride : AccessibilityService() {
     /**
      * Seeing keys costs volume its hold on TVs: Android acts on Volume before any service sees it and the key never
      * repeats. So Smooth volume turns key filtering off, unless remote keys need it (set, or one being learned).
-     * Home is then caught by the Google TV window watcher below, which shows Google TV for about a second.
+     * Home is then caught by the window watcher below, which shows the TV's own home for about a second.
      * Fire OS never passes remote keys to us, so there filtering is always off.
      */
     fun applyKeyFilter() {
