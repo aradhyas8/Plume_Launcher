@@ -88,7 +88,7 @@ internal fun validVideo(file: File): Boolean {
     } catch (_: Exception) { false } finally { extractor.release() }
 }
 
-internal const val VIDEO_LIMIT = 120L * 1024 * 1024
+internal const val VIDEO_LIMIT = 350L * 1024 * 1024
 
 internal data class VideoScene(val source: String, val category: String, val name: String, val file: String, val url: String)
 
@@ -127,6 +127,8 @@ internal fun downloadVideoScene(item: VideoScene, destination: File, cancelled: 
             instanceFollowRedirects = false
         }
         if (connection.responseCode != 200 || connection.contentLengthLong !in 1..VIDEO_LIMIT) return false
+        val needed = connection.contentLengthLong + 20L * 1024 * 1024
+        if (destination.parentFile?.let { it.usableSpace < needed } == true) return false
         var count = 0L
         var lastPercent = -1
         connection.inputStream.use { input ->

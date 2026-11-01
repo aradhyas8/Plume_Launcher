@@ -148,7 +148,7 @@ internal class UploadServer(val code: String, private val temp: File, private va
             </script></body></html>
         """.trimIndent()
         val VIDEO_PAGE = PAGE.replace("Pick a photo. It shows on your TV a moment after you upload it.",
-            "Pick an H.264 or HEVC MP4 video up to 1080p and 120 MB. Preview it on your TV after upload.")
+            "Pick an H.264 or HEVC MP4 video up to 1080p and 350 MB. Preview it on your TV after upload.")
             .replace("accept=\"image/*\"", "accept=\"video/mp4\"")
             .replace("Choose photo", "Choose video")
     }

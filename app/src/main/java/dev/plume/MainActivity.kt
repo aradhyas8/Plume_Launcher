@@ -72,6 +72,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.view.ViewOutlineProvider
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -1254,6 +1255,18 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun cleanUnusedVideoWallpapers(dir: File) {
+        val light = prefs.getString("wp_light", null)
+        val dark = prefs.getString("wp_dark", null)
+        val catalogFiles = videoScenes(this).map { it.file }.toSet()
+        dir.listFiles { f -> f.extension.equals("mp4", true) }?.forEach { file ->
+            val choice = "video:${file.name}"
+            if (file.name in catalogFiles && choice != light && choice != dark) {
+                file.delete()
+            }
+        }
+    }
+
     private fun pickVideoWallpaper(forDark: Boolean) {
         val dir = wallpaperDir() ?: return
         val current = currentWallpaper(forDark)
@@ -1261,6 +1274,7 @@ class MainActivity : Activity() {
         val currentScene = allScenes.firstOrNull { "video:${it.file}" == current }
         val files = dir.listFiles { f -> f.extension.equals("mp4", true) }?.sortedBy { it.name } ?: emptyList()
         val own = files.filterNot { file -> allScenes.any { it.file == file.name } }
+        val keepOne = prefs.getBoolean("video_keep_one", false)
 
         val nasaScenes = allScenes.filter { it.source == "NASA Earth" }
         val appleScenes = allScenes.filter { it.source == "Apple Aerial" }
@@ -1275,19 +1289,31 @@ class MainActivity : Activity() {
                     else downloadVideo(forDark, randomItem, file) { pickVideoWallpaper(forDark) }
                 }
             },
-            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else "${nasaScenes.size}") {
+            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else getString(R.string.n_scenes, nasaScenes.size)) {
                 pickVideoScenesList(forDark, getString(R.string.nasa_earth), nasaScenes) { pickVideoWallpaper(forDark) }
             },
-            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else "${appleScenes.size}") {
+            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else getString(R.string.n_scenes, appleScenes.size)) {
                 pickSourceCategories(forDark, getString(R.string.apple_aerial), appleScenes) { pickVideoWallpaper(forDark) }
             },
-            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else "${amazonScenes.size}") {
+            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else getString(R.string.n_scenes, amazonScenes.size)) {
                 pickSourceCategories(forDark, getString(R.string.amazon_fire_tv), amazonScenes) { pickVideoWallpaper(forDark) }
             },
             page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) },
         ) + own.map { file ->
             page(file.nameWithoutExtension, if (current == "video:${file.name}") CHOSEN else "") { previewVideo(forDark, file) }
-        } + if (files.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_video)) { removeVideo(forDark, files) })
+        } + listOf(
+            page(getString(R.string.video_keep_one), toggle(keepOne)) {
+                val next = !keepOne
+                prefs.edit().putBoolean("video_keep_one", next).apply()
+                if (next) cleanUnusedVideoWallpapers(dir)
+                pickVideoWallpaper(forDark)
+            }
+        ) + if (files.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_video)) { removeVideo(forDark, files) })
+
+        val styles = rows.map { r ->
+            if (r.first == getString(R.string.video_keep_one)) RowStyle(sub = getString(R.string.video_keep_one_desc))
+            else null
+        }
 
         val initialIndex = when {
             currentScene?.source == "NASA Earth" -> 1
@@ -1297,8 +1323,8 @@ class MainActivity : Activity() {
             else -> 0
         }
 
-        showPage(getString(R.string.video_wallpapers), rows, initialIndex,
-            top = label(getString(R.string.video_sources_credit), 12f).apply { maxLines = 3; setPadding(dp(14), dp(4), dp(14), dp(8)) }) {
+        showPage(getString(R.string.video_wallpapers), rows, initialIndex, styles = styles,
+            top = label(getString(R.string.video_sources_credit), 13f).apply { maxLines = 2; setPadding(dp(14), dp(4), dp(14), dp(12)) }) {
             pickWallpaper(forDark)
         }
     }
@@ -1309,13 +1335,13 @@ class MainActivity : Activity() {
         val categories = sourceScenes.map { it.category }.distinct()
         val rows = categories.map { category ->
             val catScenes = sourceScenes.filter { it.category == category }
-            page(category, if (currentScene?.category == category) CHOSEN else "${catScenes.size}") {
+            page(category, if (currentScene?.category == category) CHOSEN else getString(R.string.n_scenes, catScenes.size)) {
                 pickVideoScenesList(forDark, category, catScenes) { pickSourceCategories(forDark, source, sourceScenes, onBack) }
             }
         }
         val initialIndex = currentScene?.let { sc -> categories.indexOf(sc.category).coerceAtLeast(0) } ?: 0
         showPage(source, rows, initialIndex,
-            top = label(getString(R.string.video_sources_credit), 12f).apply { maxLines = 3; setPadding(dp(14), dp(4), dp(14), dp(8)) }) {
+            top = label(getString(R.string.video_sources_credit), 13f).apply { maxLines = 2; setPadding(dp(14), dp(4), dp(14), dp(12)) }) {
             onBack()
         }
     }
@@ -1338,14 +1364,37 @@ class MainActivity : Activity() {
 
     private fun downloadVideo(forDark: Boolean, item: VideoScene, file: File, onBack: () -> Unit) {
         val cancelled = AtomicBoolean(false)
-        val status = label(getString(R.string.video_downloading, 0), 18f).apply { gravity = Gravity.CENTER }
-        showPage(item.name, listOf(page(getString(R.string.cancel)) { onBack() }), top = status) {
+        val status = label(getString(R.string.video_downloading, 0), 16f).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(24), 0, dp(12))
+        }
+        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(4)).apply {
+                setMargins(dp(14), 0, dp(14), dp(24))
+            }
+            max = 100
+            progress = 0
+            isIndeterminate = false
+            progressDrawable = progressBarDrawable()
+        }
+        val topBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(status)
+            addView(progressBar)
+        }
+        showPage(item.name, listOf(page(getString(R.string.cancel)) { onBack() }), top = topBox) {
             onBack()
         }
         pageExit = { cancelled.set(true) }
         io.execute {
             val ok = downloadVideoScene(item, file, cancelled) { pct ->
-                ui.post { if (!cancelled.get()) status.text = getString(R.string.video_downloading, pct) }
+                ui.post {
+                    if (!cancelled.get()) {
+                        status.text = getString(R.string.video_downloading, pct)
+                        progressBar.progress = pct
+                    }
+                }
             }
             ui.post {
                 if (cancelled.get() || isDestroyed) return@post
@@ -1359,7 +1408,15 @@ class MainActivity : Activity() {
         videoWallpaper.pause()
         findViewById<ImageView>(R.id.wallpaper).alpha = 1f
         val preview = VideoView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(230))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(182)).apply {
+                setMargins(dp(14), dp(4), dp(14), dp(14))
+            }
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(v: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, v.width, v.height, dp(14).toFloat())
+                }
+            }
+            clipToOutline = true
             setVideoPath(file.path)
             setOnPreparedListener { player -> player.isLooping = true; player.setVolume(0f, 0f); start() }
             setOnErrorListener { _, _, _ -> toast(getString(R.string.video_cannot_play), long = true); true }
@@ -1409,6 +1466,9 @@ class MainActivity : Activity() {
         if (choice == ShowsWall.CHOICE) {
             prefs.edit().remove("wp_show_key").putLong("wp_show_at", 0).apply()
             refreshShows()
+        }
+        if (prefs.getBoolean("video_keep_one", false)) {
+            wallpaperDir()?.let { cleanUnusedVideoWallpapers(it) }
         }
         updateFeatured()
         if (forDark == dark) loadWallpaper()

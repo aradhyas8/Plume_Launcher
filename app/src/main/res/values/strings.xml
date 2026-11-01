@@ -13,7 +13,10 @@
     <string name="video_added">Added \"%1$s\". Choose Use this video to apply it.</string>
     <string name="use_video">Use this video</string>
     <string name="remove_video">Remove a video…</string>
-    <string name="video_sources_credit">Videos: NASA Goddard Space Flight Center Scientific Visualization Studio and Earth Observatory, Apple Aerial, and Amazon Fire TV. Downloads start when you select a scene.</string>
+    <string name="video_sources_credit">Choose a moving scene for your home screen. Downloads start on selection.</string>
+    <string name="n_scenes">%1$d scenes</string>
+    <string name="video_keep_one">Keep only current video</string>
+    <string name="video_keep_one_desc">Delete previous video to save TV storage</string>
     <string name="video_downloading">Downloading video: %1$d%%</string>
     <string name="video_download_failed">Could not download or play this video. Check the network and storage.</string>
     <string name="video_cannot_play">This TV cannot play this video. Choose another wallpaper.</string>
