@@ -16,6 +16,10 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Softer photo fade.** The top and bottom fades start lower and end softer, so more of the picture shows.
+- **The fades work on every wallpaper.** **Top fade** and **Bottom fade** change the two bundled pictures too. Before, they changed only your own photos.
+- **New bundled wallpapers.** **Mist (day)** and **Peak (dusk)** replace the two Rockies pictures. The fades are no longer part of the picture.
+- The **Glass** setting changes tiles, cards and the settings panel live without restarting Plume.
 - In light mode with **Glass** off, the Plume settings panel is light again. Before, it was black.
 
 - **Shows wallpaper.** Select **Plume settings → Appearance → Light wallpaper** or **Dark wallpaper**, then **Shows from your apps**. The picture of a show that your apps publish becomes the wallpaper. It comes from Watch Next, or from the channels that you choose in **Wallpaper from**. It changes as often as a folder of photos does. Only wide pictures count. **Featured: …** shows under the weather. Plume fetches nothing until you select it.
@@ -27,6 +31,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
 - **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.
 - **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.
+- On Fire TV, Plume comes back when you press **Home** on the Plume home screen or in the Plume settings. Before, Amazon's home stayed on the screen.
 - On Google TV, Plume covers the app that you watch only when the Google TV home screen opens. Before, a notice or a sign-in screen from the Google TV launcher also brought Plume to the front.
 - On Xiaomi TVs, **Plume settings → Updates → Install** opens the TV's installer. Before, Plume closed.
 - **Remote battery.** Hold OK on a top-bar icon, select **Add icon**, then **Remote battery**. The icon shows the battery level of your Bluetooth remote and turns red at 20 % or less. Hold OK on it to choose the low-battery alert: 20 % (the default), 15 % or off. At or under that level a message shows once a day. Select it to read the level now. The first time, Android asks to allow Bluetooth: Plume needs it to read the level from the remote. It reads at most once in ten minutes while the icon is on the bar, and not at all when it is off.

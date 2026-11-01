@@ -93,6 +93,22 @@ This lets Plume:
 
 Everything else works without it.
 
+### Set up over adb with one command
+
+[`tools/plume-install.sh`](tools/plume-install.sh) does the adb steps for you. Turn on ADB debugging on the TV, then run it from a computer on the same network:
+
+```sh
+./plume-install.sh 192.168.1.20      # your TV's address; add -a plume.apk to install Plume first
+```
+
+It finds out what the TV is (Fire TV and its Fire OS version, Google TV, or Android TV), tells you what it found and what it is going to change, and asks before it changes anything. Then it gives Plume the `WRITE_SECURE_SETTINGS` grant, switches on the Home button service and waits until the TV says the service is running. It checks each change on the TV after it makes it, and it stops with a message when one did not work. On a Fire TV with Android 9 to 11 it also looks whether Plume has set the alarm timing that removes the 5-second wait (see [Fire TV](#fire-tv)). A Plume without the alarm change leaves it, and Home then takes about 5 seconds. `-n` only shows the plan.
+
+Before each change, the script writes a line about it in a recovery record on the TV (`/data/local/tmp/plume-install.state`), and it does not make the change if it cannot write and read back that line. `./plume-install.sh --undo` puts back what the record lists and nothing else: it turns the Home button service off only if the script turned it on, waits until Plume has put its alarm setting back, and takes the grant back only if the script gave it. A service that was on already stays on. `--undo` does not uninstall Plume, also when `-a` installed it: remove it in **Settings → Apps**.
+
+The script never turns off the TV's own launcher unless you add `--disable-stock-launcher`, which works on a Fire TV only (it can stop other TVs from starting). It turns the launcher off last, after the recovery record is written and Plume's service runs. Then it opens Settings and presses Home to see that Plume answers. If the service does not run or Home does not open Plume, it turns the launcher on again. `--undo` also turns that launcher on again.
+
+The script is tested against a fake `adb`, with no TV: `sh tools/plume-install-test/run.sh`. It covers the TVs it knows (Fire OS 7, 8 and 14, Google TV), a service that was on already, commands that fail, a recovery record that cannot be written, and the stock launcher with its recovery.
+
 ### Home button on Android 13 and newer
 
 Android 13 and newer grey out the Accessibility switch for apps installed outside the Play Store, and most Google TV builds hide the **Allow restricted settings** menu that would unlock it. If Plume's setup reaches the ADB step, unlock it once from a computer (or a phone ADB app) on the same network:
@@ -150,6 +166,8 @@ Back, OK, the arrows, Home, Power and the volume keys can't be changed, so the r
 
 ### Custom wallpapers
 
+For moving wallpaper, open **Video wallpapers** under Light wallpaper or Dark wallpaper. Choose a NASA, Apple Aerial, or Amazon Fire TV scene to download and preview it, then select **Use this video**. Pick **Surprise me** for a random scene, or browse the catalog by source and category: [NASA Scientific Visualization Studio](https://svs.gsfc.nasa.gov/4019) (4 scenes), [Apple Aerial](https://github.com/theothernt/AerialViews/blob/master/app/src/main/res/raw/tvos26.json) (139 scenes), and [Amazon Fire TV](https://github.com/theothernt/AerialViews/blob/master/app/src/main/res/raw/fireos8.json) (112 scenes). NASA credit: NASA Goddard Space Flight Center Scientific Visualization Studio and Earth Observatory. You can also choose **Add your video from phone…** and upload an H.264 or HEVC MP4 file up to 1080p and 350 MB. Plume mutes and loops the video on the home screen and stops playback when you leave it. Downloads and uploads need free space on the TV. Each theme has its own wallpaper choice.
+
 Open **Plume settings → Wallpaper & theme → Light wallpaper** or **Dark wallpaper** and choose **Add from phone…**. Scan the QR code with your phone (it must be on the same Wi-Fi as the TV), pick a photo and upload it. It becomes the wallpaper straight away. The TV turns it upright, crops it to the screen around its centre and saves a small copy. The upload page only works while that screen is open. **Remove a photo…** in the same list deletes one.
 
 You can also copy `.jpg`, `.png` or `.webp` files to `Android/data/dev.plume/files/wallpapers/` yourself:
@@ -181,9 +199,12 @@ Plume has no analytics, no ads and no account. It only connects to the internet 
 - check this repository's GitHub releases for a new version, once a day, and download it when you choose to update
 - download the Gallery paintings from this repository, **only if you choose that screensaver**
 - get the Bing picture of the day (about 300 KB), **only if you choose it as your wallpaper**. Plume sends a request to [bing.com](https://www.bing.com) when the home screen opens: once a day, or once an hour until the picture has changed that day, because Bing changes it at a set time for each country. Bing sees the TV's IP address and its language and country, which Plume sends to get the picture for your country. Plume keeps one picture and deletes it when you choose another wallpaper.
+- download one NASA Earth video from [svs.gsfc.nasa.gov](https://svs.gsfc.nasa.gov/4019), **only when you select that scene**. NASA sees the TV's IP address. Plume stores the video on the TV.
+- download an Apple Aerial video from [sylvan.apple.com](https://sylvan.apple.com) or an Amazon Fire TV video from [Amazon's Fire TV CDN](https://aebcs-cdn-prod-na.services.firetv.amazon.dev), **only when you select that scene**. The source sees the TV's IP address. Plume stores the video on the TV.
 - fetch the weather, **only if you turn it on**. It looks up your approximate location from your IP address via [ipwho.is](https://ipwho.is), then gets the forecast from [Open-Meteo](https://open-meteo.com). The Auto theme uses the same location to work out sunrise and sunset on the TV, with no extra request. Plume keeps the location on the TV after you turn the weather off, so Auto still follows the sun; clearing Plume's data removes it.
 
 **Add from phone…** runs a small upload page on the TV itself, reachable only on your home network and only while that screen is open. Photos go straight from your phone to the TV and nowhere else.
+**Add your video from phone…** uses the same local upload page. Videos stay on the TV.
 
 ## Troubleshooting
 
@@ -226,7 +247,7 @@ Bug reports, design ideas, translations and pull requests are welcome. Plume sta
   - Ivan Shishkin: *Rye*
   - Jasper Francis Cropsey: *Autumn on the Hudson River*
   - Martin Johnson Heade: *Thunder Storm on Narragansett Bay*
-- **Wallpapers:** "Canada" by Thomas Curryer, via [Unsplash](https://unsplash.com/@tawc20) (CC0)
+- **Wallpapers:** "The Lonely Tree, Garda Lake" by [Giuseppe Milo](https://commons.wikimedia.org/wiki/File:The_Lonely_Tree_Garda_Lake_Italy_Fine_Art_Photography_(188093893).jpeg) (CC BY 3.0), and "Mountain Peak, Alaska" by [Godot13](https://commons.wikimedia.org/wiki/File:Mountain_Peak,_Alaska_(1999).jpg) (CC BY-SA 4.0), via Wikimedia Commons
 - **App logos:** [Simple Icons](https://simpleicons.org) (CC0). All trademarks belong to their respective owners.
 - **HDMI input and settings icons:** [Material Symbols](https://fonts.google.com/icons) by Google (Apache 2.0)
 

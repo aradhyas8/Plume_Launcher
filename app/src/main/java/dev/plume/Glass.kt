@@ -115,6 +115,11 @@ internal class GlassLayer(context: Context) : View(context) {
         if (tiles.none { it.view.get() === v }) tiles += Tile(WeakReference(v), radius)
     }
 
+    fun clearTiles() {
+        tiles.clear()
+        invalidate()
+    }
+
     /** The blurred wallpaper, or null for none (a plain background has nothing to blur). */
     fun setBlur(px: IntArray?) {
         blur = px?.let { Bitmap.createBitmap(it, GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
@@ -196,6 +201,10 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
     var wash = 0
     var rim = 0
     var highlight = 0 // white at the top edge, fading out: the light of the glass
+        set(v) {
+            field = v
+            updateGloss()
+        }
 
     /** The blur to paint, or null for a plain solid [wash] (a plain background has nothing to blur). */
     fun setBlur(b: Bitmap?) {
@@ -205,7 +214,12 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
     }
 
     override fun onBoundsChange(r: Rect) {
-        gloss = android.graphics.LinearGradient(0f, 0f, 0f, minOf(r.height().toFloat(), 120f * host.resources.displayMetrics.density), highlight, 0, Shader.TileMode.CLAMP)
+        updateGloss()
+    }
+
+    private fun updateGloss() {
+        val h = minOf(bounds.height().toFloat(), 120f * host.resources.displayMetrics.density)
+        gloss = if (h > 0f) android.graphics.LinearGradient(0f, 0f, 0f, h, highlight, 0, Shader.TileMode.CLAMP) else null
     }
 
     override fun draw(c: Canvas) {

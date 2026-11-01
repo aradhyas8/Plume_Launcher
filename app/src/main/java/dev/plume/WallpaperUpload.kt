@@ -21,19 +21,21 @@ import java.net.Socket
  * The page sends the photo as the raw request body, so there's no multipart parsing.
  * [onPhoto] runs on the server thread with the uploaded file and returns the new wallpaper's name, or null.
  */
-internal class UploadServer(val code: String, private val temp: File, private val onPhoto: (File) -> String?) {
+internal class UploadServer(val code: String, private val temp: File, private val video: Boolean = false,
+                            private val onPhoto: (File) -> String?) {
     private val socket = try {
         ServerSocket(8080)
     } catch (e: IOException) {
         ServerSocket(0) // 8080 taken: any free port (it's in the QR code either way)
     }
     val port get() = socket.localPort
+    @Volatile private var client: Socket? = null
 
     init {
         Thread(::serve, "wallpaper-upload").start()
     }
 
-    fun stop() = socket.close()
+    fun stop() { socket.close(); client?.close() }
 
     private fun serve() {
         while (!socket.isClosed) {
@@ -42,10 +44,15 @@ internal class UploadServer(val code: String, private val temp: File, private va
             } catch (e: IOException) {
                 return // closed
             }
+            client = s
             try {
+                if (socket.isClosed) s.close()
                 s.use { handle(it) }
             } catch (e: Exception) {
                 android.util.Log.w("Plume", "upload request failed ($e)")
+            } finally {
+                client = null
+                temp.delete()
             }
         }
     }
@@ -61,10 +68,11 @@ internal class UploadServer(val code: String, private val temp: File, private va
         val path = request.substringAfter(' ').substringBefore(' ')
         when {
             path != "/$code" -> reply(out, 404, "text/plain", "Not found. Scan the code on the TV again.")
-            method == "GET" -> reply(out, 200, "text/html; charset=utf-8", PAGE)
+            method == "GET" -> reply(out, 200, "text/html; charset=utf-8", if (video) VIDEO_PAGE else PAGE)
             method == "POST" -> {
                 val length = headers["content-length"]?.toLongOrNull() ?: -1
-                if (length !in 1..MAX_BYTES) return reply(out, 413, "text/plain", "That file is too big (25 MB at most).")
+                val max = if (video) VIDEO_LIMIT else MAX_BYTES
+                if (length !in 1..max) return reply(out, 413, "text/plain", "That file is too big (${max / 1024 / 1024} MB at most).")
                 temp.outputStream().use { file ->
                     val buf = ByteArray(64 * 1024)
                     var left = length
@@ -81,7 +89,7 @@ internal class UploadServer(val code: String, private val temp: File, private va
                     temp.delete()
                 }
                 if (name != null) reply(out, 200, "text/plain", "Added \"$name\" to your TV.")
-                else reply(out, 415, "text/plain", "That doesn't look like a photo the TV can open.")
+                else reply(out, 415, "text/plain", if (video) "Use an H.264 or HEVC MP4 video up to 1080p." else "That doesn't look like a photo the TV can open.")
             }
             else -> reply(out, 405, "text/plain", "Not allowed")
         }
@@ -139,6 +147,10 @@ internal class UploadServer(val code: String, private val temp: File, private va
               };
             </script></body></html>
         """.trimIndent()
+        val VIDEO_PAGE = PAGE.replace("Pick a photo. It shows on your TV a moment after you upload it.",
+            "Pick an H.264 or HEVC MP4 video up to 1080p and 350 MB. Preview it on your TV after upload.")
+            .replace("accept=\"image/*\"", "accept=\"video/mp4\"")
+            .replace("Choose photo", "Choose video")
     }
 }
 
@@ -187,6 +199,14 @@ internal fun importWallpaper(src: File, dir: File): File? {
     val file = generateSequence(1) { it + 1 }.map { File(dir, "Photo $it.jpg") }.first { !it.exists() }
     file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 85, it) }
     out.recycle()
+    return file
+}
+
+internal fun importVideoWallpaper(src: File, dir: File): File? {
+    if (!validVideo(src)) return null
+    dir.mkdirs()
+    val file = generateSequence(1) { it + 1 }.map { File(dir, "Video $it.mp4") }.first { !it.exists() }
+    src.copyTo(file)
     return file
 }
 
