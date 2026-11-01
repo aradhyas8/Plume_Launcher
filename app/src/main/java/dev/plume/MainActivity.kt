@@ -1061,7 +1061,7 @@ class MainActivity : Activity() {
     private fun wallpaperName(choice: String) = when {
         choice == Bing.CHOICE -> getString(R.string.bing_daily)
         choice == ShowsWall.CHOICE -> getString(R.string.shows_wallpaper)
-        choice.startsWith("video:") -> VIDEO_SCENES.firstOrNull { "video:${it.file}" == choice }?.name
+        choice.startsWith("video:") -> videoScenes(this).firstOrNull { "video:${it.file}" == choice }?.name
             ?: choice.removePrefix("video:").substringBeforeLast('.')
         choice.startsWith("folder:") -> getString(R.string.folder_name, choice.substringAfter(':').substringAfter(':'))
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
@@ -1257,30 +1257,90 @@ class MainActivity : Activity() {
     private fun pickVideoWallpaper(forDark: Boolean) {
         val dir = wallpaperDir() ?: return
         val current = currentWallpaper(forDark)
+        val allScenes = videoScenes(this)
+        val currentScene = allScenes.firstOrNull { "video:${it.file}" == current }
         val files = dir.listFiles { f -> f.extension.equals("mp4", true) }?.sortedBy { it.name } ?: emptyList()
-        val own = files.filterNot { file -> VIDEO_SCENES.any { it.file == file.name } }
-        val rows = listOf(page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) }) +
-            VIDEO_SCENES.map { item ->
-                val file = File(dir, item.file)
-                page(item.name, if (current == "video:${file.name}") CHOSEN else item.source) {
+        val own = files.filterNot { file -> allScenes.any { it.file == file.name } }
+
+        val nasaScenes = allScenes.filter { it.source == "NASA Earth" }
+        val appleScenes = allScenes.filter { it.source == "Apple Aerial" }
+        val amazonScenes = allScenes.filter { it.source == "Amazon Fire TV" }
+
+        val rows = listOf(
+            page(getString(R.string.surprise_me), getString(R.string.random_scene)) {
+                if (allScenes.isNotEmpty()) {
+                    val randomItem = allScenes.random()
+                    val file = File(dir, randomItem.file)
                     if (file.isFile && validVideo(file)) previewVideo(forDark, file)
-                    else downloadVideo(forDark, item, file)
+                    else downloadVideo(forDark, randomItem, file) { pickVideoWallpaper(forDark) }
                 }
-            } + own.map { file ->
-                page(file.nameWithoutExtension, if (current == "video:${file.name}") CHOSEN else "") { previewVideo(forDark, file) }
-            } + if (files.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_video)) { removeVideo(forDark, files) })
-        showPage(getString(R.string.video_wallpapers), rows,
-            if (current.startsWith("video:")) rows.indexOfFirst { it.first == wallpaperName(current) }.coerceAtLeast(0) else 0,
+            },
+            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else "${nasaScenes.size}") {
+                pickVideoScenesList(forDark, getString(R.string.nasa_earth), nasaScenes) { pickVideoWallpaper(forDark) }
+            },
+            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else "${appleScenes.size}") {
+                pickSourceCategories(forDark, getString(R.string.apple_aerial), appleScenes) { pickVideoWallpaper(forDark) }
+            },
+            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else "${amazonScenes.size}") {
+                pickSourceCategories(forDark, getString(R.string.amazon_fire_tv), amazonScenes) { pickVideoWallpaper(forDark) }
+            },
+            page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) },
+        ) + own.map { file ->
+            page(file.nameWithoutExtension, if (current == "video:${file.name}") CHOSEN else "") { previewVideo(forDark, file) }
+        } + if (files.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_video)) { removeVideo(forDark, files) })
+
+        val initialIndex = when {
+            currentScene?.source == "NASA Earth" -> 1
+            currentScene?.source == "Apple Aerial" -> 2
+            currentScene?.source == "Amazon Fire TV" -> 3
+            current.startsWith("video:") -> rows.indexOfFirst { it.first == wallpaperName(current) }.coerceAtLeast(0)
+            else -> 0
+        }
+
+        showPage(getString(R.string.video_wallpapers), rows, initialIndex,
             top = label(getString(R.string.video_sources_credit), 12f).apply { maxLines = 3; setPadding(dp(14), dp(4), dp(14), dp(8)) }) {
             pickWallpaper(forDark)
         }
     }
 
-    private fun downloadVideo(forDark: Boolean, item: VideoScene, file: File) {
+    private fun pickSourceCategories(forDark: Boolean, source: String, sourceScenes: List<VideoScene>, onBack: () -> Unit) {
+        val current = currentWallpaper(forDark)
+        val currentScene = sourceScenes.firstOrNull { "video:${it.file}" == current }
+        val categories = sourceScenes.map { it.category }.distinct()
+        val rows = categories.map { category ->
+            val catScenes = sourceScenes.filter { it.category == category }
+            page(category, if (currentScene?.category == category) CHOSEN else "${catScenes.size}") {
+                pickVideoScenesList(forDark, category, catScenes) { pickSourceCategories(forDark, source, sourceScenes, onBack) }
+            }
+        }
+        val initialIndex = currentScene?.let { sc -> categories.indexOf(sc.category).coerceAtLeast(0) } ?: 0
+        showPage(source, rows, initialIndex,
+            top = label(getString(R.string.video_sources_credit), 12f).apply { maxLines = 3; setPadding(dp(14), dp(4), dp(14), dp(8)) }) {
+            onBack()
+        }
+    }
+
+    private fun pickVideoScenesList(forDark: Boolean, title: String, scenes: List<VideoScene>, onBack: () -> Unit) {
+        val dir = wallpaperDir() ?: return
+        val current = currentWallpaper(forDark)
+        val rows = scenes.map { item ->
+            val file = File(dir, item.file)
+            page(item.name, if (current == "video:${file.name}") CHOSEN else "") {
+                if (file.isFile && validVideo(file)) previewVideo(forDark, file)
+                else downloadVideo(forDark, item, file) { pickVideoScenesList(forDark, title, scenes, onBack) }
+            }
+        }
+        val initialIndex = if (current.startsWith("video:")) rows.indexOfFirst { it.first == wallpaperName(current) }.coerceAtLeast(0) else 0
+        showPage(title, rows, initialIndex) {
+            onBack()
+        }
+    }
+
+    private fun downloadVideo(forDark: Boolean, item: VideoScene, file: File, onBack: () -> Unit) {
         val cancelled = AtomicBoolean(false)
         val status = label(getString(R.string.video_downloading, 0), 18f).apply { gravity = Gravity.CENTER }
-        showPage(item.name, listOf(page(getString(R.string.cancel)) { pickVideoWallpaper(forDark) }), top = status) {
-            pickVideoWallpaper(forDark)
+        showPage(item.name, listOf(page(getString(R.string.cancel)) { onBack() }), top = status) {
+            onBack()
         }
         pageExit = { cancelled.set(true) }
         io.execute {
@@ -1290,7 +1350,7 @@ class MainActivity : Activity() {
             ui.post {
                 if (cancelled.get() || isDestroyed) return@post
                 if (ok) previewVideo(forDark, file)
-                else { toast(getString(R.string.video_download_failed), long = true); pickVideoWallpaper(forDark) }
+                else { toast(getString(R.string.video_download_failed), long = true); onBack() }
             }
         }
     }

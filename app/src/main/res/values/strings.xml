@@ -3,6 +3,11 @@
     <string name="delete_photo">Delete \"%1$s\"?</string>
     <string name="photo_added">Added \"%1$s\". Send another, or press Done.</string>
     <string name="video_wallpapers">Video wallpapers</string>
+    <string name="surprise_me">Surprise me</string>
+    <string name="random_scene">Random scene</string>
+    <string name="nasa_earth">NASA Earth</string>
+    <string name="apple_aerial">Apple Aerial</string>
+    <string name="amazon_fire_tv">Amazon Fire TV</string>
     <string name="add_video_from_phone">Add your video from phone…</string>
     <string name="waiting_video">Waiting for a video…</string>
     <string name="video_added">Added \"%1$s\". Choose Use this video to apply it.</string>

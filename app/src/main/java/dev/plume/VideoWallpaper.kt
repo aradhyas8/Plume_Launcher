@@ -1,14 +1,17 @@
 package dev.plume
 
+import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaPlayer
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.zip.GZIPInputStream
 
 /** Videos stay in Plume's wallpaper folder; no player runs after the home screen stops. */
 internal class VideoWallpaper(private val surface: SurfaceView, private val onFrame: () -> Unit, private val onError: () -> Unit) : SurfaceHolder.Callback {
@@ -87,22 +90,31 @@ internal fun validVideo(file: File): Boolean {
 
 internal const val VIDEO_LIMIT = 120L * 1024 * 1024
 
-internal data class VideoScene(val name: String, val source: String, val file: String, val url: String)
+internal data class VideoScene(val source: String, val category: String, val name: String, val file: String, val url: String)
 
-internal val VIDEO_SCENES = listOf(
-    VideoScene("Whole Earth at night", "NASA Earth", "nasa_wholeEarthNight_1080.mp4", "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/wholeEarthNight_1080.mp4"),
-    VideoScene("Whole Earth in daylight", "NASA Earth", "nasa_wholeEarthDay_1080.mp4", "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/wholeEarthDay_1080.mp4"),
-    VideoScene("Asia at night", "NASA Earth", "nasa_earthAtNightAsia_1080.mp4", "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/earthAtNightAsia_1080.mp4"),
-    VideoScene("South America at night", "NASA Earth", "nasa_earthAtNightSAmerica_1080.mp4", "https://svs.gsfc.nasa.gov/vis/a000000/a004000/a004019/earthAtNightSAmerica_1080.mp4"),
-    VideoScene("Antarctica", "Apple Aerial", "apple_antarctica.mp4", "https://sylvan.apple.com/itunes-assets/Aerials116/v4/97/e9/06/97e90616-1227-c670-6118-bd5ae991b43b/comp_GMT110_112NC_364D_1054_AURORA_ANTARTICA__COMP_FINAL_v34_PS_SDR_20181107_SDR_2K_AVC.mov"),
-    VideoScene("China", "Apple Aerial", "apple_china.mp4", "https://sylvan.apple.com/itunes-assets/Aerials116/v4/97/e9/06/97e90616-1227-c670-6118-bd5ae991b43b/comp_GMT329_113NC_396B_1105_CHINA_v04_SDR_FINAL_20180706_F900F2700_SDR_2K_AVC.mov"),
-    VideoScene("Italy to Asia", "Apple Aerial", "apple_italy_asia.mp4", "https://sylvan.apple.com/itunes-assets/Aerials116/v4/97/e9/06/97e90616-1227-c670-6118-bd5ae991b43b/comp_GMT329_113NC_396B_1105_ITALY_v03_SDR_FINAL_20180706_SDR_2K_AVC.mov"),
-    VideoScene("Iran and Afghanistan", "Apple Aerial", "apple_iran_afghanistan.mp4", "https://sylvan.apple.com/itunes-assets/Aerials116/v4/97/e9/06/97e90616-1227-c670-6118-bd5ae991b43b/comp_A083_C002_1130KZ_v04_SDR_PS_FINAL_20180725_SDR_2K_AVC.mov"),
-    VideoScene("Magdalena Bay Sunset", "Amazon Fire TV", "amazon_magdalena_sunset.mp4", "https://aebcs-cdn-prod-na.services.firetv.amazon.dev/content/FHD/content-82f845c1-85ae-4eba-b57a-7860f1e8e998.mp4"),
-    VideoScene("Northern Fjords of Norway", "Amazon Fire TV", "amazon_norway_fjords.mp4", "https://aebcs-cdn-prod-na.services.firetv.amazon.dev/content/FHD/content-aa6726c3-9b24-4e1b-8e74-46a061385087.mp4"),
-    VideoScene("Morning Mist", "Amazon Fire TV", "amazon_morning_mist.mp4", "https://aebcs-cdn-prod-na.services.firetv.amazon.dev/content/FHD/content-8dd41619-4b4d-4077-aa02-5ad62a658f7d.mp4"),
-    VideoScene("Beach from Above", "Amazon Fire TV", "amazon_beach_above.mp4", "https://aebcs-cdn-prod-na.services.firetv.amazon.dev/content/FHD/content-daf38cfa-0974-4c64-b332-8812cf8c831c.mp4"),
-)
+private var cachedScenes: List<VideoScene>? = null
+
+internal fun parseVideoScenes(input: InputStream): List<VideoScene> {
+    val list = mutableListOf<VideoScene>()
+    GZIPInputStream(input).bufferedReader(Charsets.UTF_8).useLines { lines ->
+        for (line in lines) {
+            val parts = line.split('\t')
+            if (parts.size >= 5) {
+                list.add(VideoScene(parts[0], parts[1], parts[2], parts[3], parts[4]))
+            }
+        }
+    }
+    return list
+}
+
+internal fun videoScenes(context: Context): List<VideoScene> {
+    cachedScenes?.let { return it }
+    val list = try {
+        context.resources.openRawResource(R.raw.video_scenes).use { parseVideoScenes(it) }
+    } catch (_: Exception) { emptyList() }
+    cachedScenes = list
+    return list
+}
 
 /** Download on selection only. A partial or oversized file never replaces a saved video. */
 internal fun downloadVideoScene(item: VideoScene, destination: File, cancelled: AtomicBoolean, progress: (Int) -> Unit): Boolean {
