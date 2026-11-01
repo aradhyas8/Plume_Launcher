@@ -1046,10 +1046,17 @@ class MainActivity : Activity() {
     // Light gets a soft white (the light ground colour), not #FFFFFF: pure white glares on a TV.
     private fun plainWallpaper(forDark: Boolean) = if (forDark) "plain:Pure black" else "plain:Soft white"
 
-    private fun defaultWallpaper(forDark: Boolean) = "res:Rockies (day)"
+    private fun defaultWallpaper(forDark: Boolean) = if (forDark) "res:Peak (dusk)" else "res:Mist (day)"
 
     private fun currentWallpaper(forDark: Boolean = dark) =
-        prefs.getString(if (forDark) "wp_dark" else "wp_light", null) ?: defaultWallpaper(forDark)
+        prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it) } ?: defaultWallpaper(forDark)
+
+    /** The two bundled pictures were replaced: an old choice keeps working, on the picture that took its place. */
+    private fun movedWallpaper(choice: String) = when (choice) {
+        "res:Rockies (day)" -> "res:Mist (day)"
+        "res:Rockies (dusk)" -> "res:Peak (dusk)"
+        else -> choice
+    }
 
     /**
      * Glass: the tiles are see-through over a blur of the wallpaper (a setting, on by default since 1.6).
@@ -1226,11 +1233,10 @@ class MainActivity : Activity() {
             val bmp = own ?: decodeWallpaper(fallback)
             // The fades are drawn over your photos: the frost must carry them too, or the bottom tiles punch
             // a bright, unfaded rectangle through the dark fade.
-            val fades = own != null && !choice.startsWith("res:")
             // Kept even with glass off, so turning it on needs no second decode.
             // A video is frosted from its first frame (own); never from the default picture shown when that failed.
-            val screen = if (bmp != null && (!video || own != null)) glassScreen(bmp, ground, if (fades) ::paintFades else null) else null
-            val sharp = if (bmp != null && !video && glassStyle() == GlassStyle.CLEAR) glassSharp(bmp, ground, if (fades) ::paintFades else null) else null
+            val screen = if (bmp != null && (!video || own != null)) glassScreen(bmp, ground, ::paintFades) else null
+            val sharp = if (bmp != null && !video && glassStyle() == GlassStyle.CLEAR) glassSharp(bmp, ground, ::paintFades) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
             // Nothing reads the pixels from here on: keep the picture in graphics memory only, not once more in the process.
             val shown = bmp?.let { b ->
@@ -1245,7 +1251,7 @@ class MainActivity : Activity() {
                 wpRaw = thumb
                 // The glass is tinted with the wallpaper's mean colour; kept, so the next start has it before the picture.
                 thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
-                fadesOn = video || own != null && !choice.startsWith("res:")
+                fadesOn = video || thumb != null
                 refreshFades()
                 val old = view.drawable
                 if (old == null || shown == null) {
@@ -1382,7 +1388,7 @@ class MainActivity : Activity() {
     // ---------- fades over your own photos ----------
     // Drawn as a layer over the wallpaper, not into it, so the sliders in settings change them live.
 
-    private var fadesOn = false // the wallpaper shown is your own photo (bundled ones have their fade baked in)
+    private var fadesOn = false // the wallpaper is a picture, so the fades are drawn over it (videos have their own)
     private var wpRaw: Bitmap? = null // wpThumb before the fades are painted onto it
 
     private val fades by lazy {
@@ -1411,19 +1417,18 @@ class MainActivity : Activity() {
         }
         val base = ground and 0x00FFFFFF
         val paint = Paint().apply { isDither = true }
-        // Photos rarely have the bundled ones' empty sky: a soft veil behind the clock and top-bar icons keeps them readable.
-        // Strong over the clock and icons (top ~20%), gone by 30% so the photo still shows above the apps.
-        fade("fade_top").takeIf { it > 0 }?.let { pct ->
-            paint.shader = LinearGradient(0f, 0f, 0f, h * 0.3f, intArrayOf(base or 0xC0000000.toInt(), base or 0xA0000000.toInt(), base),
-                floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
-            paint.alpha = pct * 255 / 100
-            c.drawRect(0f, 0f, w, h * 0.3f, paint)
-        }
-        // Same fade as the bundled ones: clear above 28% height, into the background colour by 50%.
-        fade("fade_bottom").takeIf { it > 0 }?.let { pct ->
-            paint.shader = LinearGradient(0f, h * 0.28f, 0f, h * 0.5f, base, base or 0xE6000000.toInt(), Shader.TileMode.CLAMP)
-            paint.alpha = pct * 255 / 100
-            c.drawRect(0f, h * 0.28f, w, h, paint)
+        val top = fade("fade_top") / 100f
+        val bottom = fade("fade_bottom") / 100f
+        if (top <= 0f && bottom <= 0f) return
+        // Eased, so the picture dissolves into the ground instead of stopping at a line: a veil behind the clock and
+        // the top-bar icons, and a bed under the Shows row and its labels. Drawn here, so the sliders reach every
+        // picture, the bundled ones included.
+        val rows = h.toInt().coerceAtLeast(1)
+        for (y in 0 until rows) {
+            val a = maxOf(Fades.topAlpha(y, rows) * top, Fades.bottomAlpha(y, rows) * bottom).toInt()
+            if (a <= 0) continue
+            paint.color = base or (a shl 24)
+            c.drawRect(0f, y.toFloat(), w, (y + 1).toFloat(), paint)
         }
     }
 
@@ -4998,12 +5003,12 @@ class MainActivity : Activity() {
         const val GRID_GAP = 16 // dp; shared by the apps row and the cards so their columns line up
         /** Shown names for the wallpaper keys saved in prefs (the keys stay English). */
         val WALLPAPER_NAMES = mapOf(
-            "Rockies (day)" to R.string.wp_rockies_day, "Rockies (dusk)" to R.string.wp_rockies_dusk,
+            "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,
             "Pure black" to R.string.wp_pure_black, "Soft white" to R.string.wp_soft_white,
         )
         val BUNDLED_WALLPAPERS = linkedMapOf(
-            "Rockies (day)" to R.drawable.wallpaper,
-            "Rockies (dusk)" to R.drawable.wallpaper_dark,
+            "Mist (day)" to R.drawable.wallpaper,
+            "Peak (dusk)" to R.drawable.wallpaper_dark,
         )
         val PIN_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
