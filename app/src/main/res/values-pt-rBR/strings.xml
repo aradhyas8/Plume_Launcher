@@ -287,7 +287,7 @@
     <string name="sources_hint">Segure OK para fixar uma entrada na fileira.</string>
     <string name="bing_daily">Foto do dia</string>
     <!-- Teclas do controle: muda o que um botão do controle faz -->
-    <string name="section_clock_weather">Clima</string>
+    <string name="section_clock_weather">Relógio e clima</string>
     <string name="section_remote_home">Início e controle</string>
     <string name="section_lock">Bloqueio por PIN</string>
     <string name="lock_note">Um PIN protege as configurações do Plume, o Wi-Fi e as configurações do Android, e mudanças na tela inicial. Os apps continuam abrindo.</string>
@@ -359,4 +359,18 @@
     <string name="help_built_in">As imagens que vêm com o Plume, e uma cor lisa.</string>
     <string name="theme_wallpaper">Papel de parede</string>
     <string name="help_theme_wallpaper">Papel de parede escolhe claro ou escuro a partir da sua imagem, e o vidro assume as cores dela.</string>
+    <string name="get_wallpaper_pack">Mais fotos (%1$s)</string>
+    <string name="downloading_wallpapers">Baixando papéis de parede (%1$s)…</string>
+    <string name="wallpapers_failed">Não foi possível baixar os papéis de parede. Verifique a conexão e tente de novo.</string>
+    <string name="help_wallpaper_pack">Seis fotos escolhidas para ficar bonitas atrás do vidro Transparente e Fosco. O download só começa quando você pressiona OK. Os créditos estão no README do Plume.</string>
+    <string name="clock_style">Estilo do relógio</string>
+    <string name="clock_light">Leve</string>
+    <string name="clock_bold">Negrito</string>
+    <string name="clock_serif">Serifado</string>
+    <string name="help_clock_style">A aparência dos números do relógio.</string>
+    <string name="clock_size">Tamanho do relógio</string>
+    <string name="clock_small">Pequeno</string>
+    <string name="clock_medium">Médio</string>
+    <string name="clock_large">Grande</string>
+    <string name="help_clock_size">O tamanho do relógio na tela inicial.</string>
 </resources>
