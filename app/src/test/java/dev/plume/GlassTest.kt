@@ -151,9 +151,33 @@ class GlassTest {
         for (count in listOf(1, 8, 40, 100)) for ((width, height) in listOf(188 to 152, 600 to 900, 3840 to 2160)) {
             val (w, h) = clearCacheSize(width, height, count)
             assertTrue("positive dimensions", w > 0 && h > 0)
-            assertTrue("no oversized textures", w <= 128 && h <= 128)
+            assertTrue("never larger than the tile", w <= width && h <= height)
             assertTrue("visible tiles fit 2 MB", w.toLong() * h * count * 4 <= 2 * 1024 * 1024)
         }
+    }
+
+    @Test fun clearCacheKeepsAnAppRowNearFullSize() {
+        val (w, h) = clearCacheSize(408, 321, 5)
+        assertTrue("sharp, not upscaled", w >= 360 && h >= 280)
+    }
+
+    @Test fun clearLensMeshBendsOnlyTheRimAndSmoothly() {
+        val (verts, texs) = clearLensMesh(160, 90, 500f, 300f, 200f, 150f, 0.5f, 0.5f)
+        val n = LENS_GRID + 1
+        val row = LENS_GRID / 2 * n
+        assertEquals(n * n * 2, verts.size)
+        assertEquals(160f, verts[(row + n - 1) * 2], 0.01f)
+        assertEquals("centre samples the tile centre", 250f, texs[(row + LENS_GRID / 2) * 2], 0.01f)
+        assertTrue("rim samples outside the tile", texs[row * 2] < (500f - 200f) * 0.5f)
+        for (i in 1..LENS_GRID) {
+            val ux = verts[(row + i) * 2] / 80f - 1f
+            val x = texs[(row + i) * 2] / 0.5f - 500f
+            assertTrue("monotonic", texs[(row + i) * 2] > texs[(row + i - 1) * 2])
+            // Away from the rim band the picture is evenly magnified, not bulged.
+            if (kotlin.math.abs(ux) < 0.8f) assertEquals(ux * 200f / clearLensScale(0f), x, 0.5f)
+        }
+        assertEquals(LENS_GRID * LENS_GRID * 6, LENS_INDICES.size)
+        assertTrue(LENS_INDICES.all { it in 0 until n * n })
     }
 
     @Test fun clearCacheRefreshWaitsForGeometryInsteadOfTheFocusGlint() {
