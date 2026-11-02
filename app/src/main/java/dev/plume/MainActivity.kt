@@ -4773,6 +4773,7 @@ class MainActivity : Activity() {
 
     private fun refreshWatchNext() {
         if (checkSelfPermission(TV_LISTINGS) != PackageManager.PERMISSION_GRANTED) {
+            android.util.Log.w("Plume", "continue watching: no $TV_LISTINGS")
             showWatchNext(emptyList())
             return
         }
@@ -4780,6 +4781,7 @@ class MainActivity : Activity() {
             val list = try {
                 queryWatchNext()
             } catch (e: Exception) {
+                android.util.Log.w("Plume", "continue watching failed ($e)")
                 emptyList()
             }
             ui.post { if (!isDestroyed) showWatchNext(list) }
@@ -4806,6 +4808,7 @@ class MainActivity : Activity() {
             readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "ch$id")
         }
         val all = watchNext + channels
+        android.util.Log.i("Plume", "continue watching: ${watchNext.size} from Watch Next, ${channels.size} from ${on.size} channels")
         publishingPkgs = all.mapNotNull { it.second.pkg }.toSet()
         val off = prefs.getStringSet("cw_off", emptySet())!!
         return newestPerApp(all.filter { it.second.pkg !in off }.distinctBy { it.second.intent ?: it.second.title }, PER_APP) { it.group }
@@ -4907,7 +4910,9 @@ class MainActivity : Activity() {
     /** Pairs of (sort key, item), see [watchSortKey]; a [group] is a channel, its rows sorted by [channelSortKey] and [byWeight]. */
     private fun readPrograms(uri: Uri, hidden: Set<String>, group: String? = null): List<Pair<Long, Prog>> {
         val out = ArrayList<Triple<Long, Long, Prog>>()
-        contentResolver.query(uri, null, null, null, null)?.use { c ->
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        if (cursor == null) android.util.Log.w("Plume", "no TV provider answer for $uri") // provider hidden from us or missing
+        cursor?.use { c ->
             fun str(col: String) = c.getColumnIndex(col).let { if (it < 0 || c.isNull(it)) null else c.getString(it) }
             fun num(col: String) = c.getColumnIndex(col).let { if (it < 0 || c.isNull(it)) 0L else c.getLong(it) }
             while (c.moveToNext()) {
