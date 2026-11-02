@@ -110,6 +110,26 @@
     <string name="gallery_paintings">لوحات المعرض</string>
     <string name="downloading">جارٍ التنزيل…</string>
     <string name="your_photos">صورك</string>
+    <string name="aerial_views">Aerial Views</string>
+    <string name="use_aerial_views">استخدام Aerial Views</string>
+    <plurals name="aerial_on_disk">
+        <item quantity="zero">لا مشاهد، %2$d ميغابايت</item>
+        <item quantity="one">مشهد واحد، %2$d ميغابايت</item>
+        <item quantity="two">مشهدان، %2$d ميغابايت</item>
+        <item quantity="few">%1$d مشاهد، %2$d ميغابايت</item>
+        <item quantity="many">%1$d مشهدًا، %2$d ميغابايت</item>
+        <item quantity="other">%1$d مشهد، %2$d ميغابايت</item>
+    </plurals>
+    <plurals name="n_scenes">
+        <item quantity="zero">لا مشاهد</item>
+        <item quantity="one">مشهد واحد</item>
+        <item quantity="two">مشهدان</item>
+        <item quantity="few">%1$d مشاهد</item>
+        <item quantity="many">%1$d مشهدًا</item>
+        <item quantity="other">%1$d مشهد</item>
+    </plurals>
+    <string name="aerial_download_first">نزّل مشهدًا أولًا. اختر مشهدًا أدناه.</string>
+    <string name="aerial_in_use">الخلفية تستخدم هذا المشهد. اختر خلفية أخرى أولًا.</string>
     <string name="choose_gallery_hint">اختر \"المعرض\" شاشةً للتوقف هنا</string>
     <string name="paintings_failed">تعذّر تنزيل اللوحات. تحقق من الاتصال وحاول مجددًا.</string>
     <string name="cant_dream">لا يستطيع هذا التلفاز تشغيل شاشة التوقف عند الطلب</string>

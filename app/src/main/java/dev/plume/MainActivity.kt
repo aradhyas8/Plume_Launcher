@@ -488,7 +488,7 @@ class MainActivity : Activity() {
         ui.post(wallpaperTick)
         updateFeatured()
         // Gallery chosen but its paintings missing (updated from a version that bundled them): fetch them.
-        if (galleryOn() && photoScreensaver() == null && !paintingsReady(this)) downloadPaintings {}
+        if (galleryOn() && photoScreensaver() == null && !aerialScreensaverOn() && !paintingsReady(this)) downloadPaintings {}
         checkUpdate(force = false)
         Bing.onChanged = bingChanged
         Bing.refresh(applicationContext, prefs)
@@ -1414,7 +1414,9 @@ class MainActivity : Activity() {
     private fun cleanUnusedVideoWallpapers(dir: File) {
         val light = prefs.getString("wp_light", null)
         val dark = prefs.getString("wp_dark", null)
-        val catalogFiles = videoScenes(this).map { it.file }.toSet()
+        // Scenes the Aerial Views screensaver plays share this folder: keep them while it's on.
+        val screensaver = if (aerialScreensaverOn()) aerialScenes(this).map { it.file }.toSet() else emptySet()
+        val catalogFiles = videoScenes(this).map { it.file }.toSet() - screensaver
         dir.listFiles { f -> f.extension.equals("mp4", true) }?.forEach { file ->
             val choice = "video:${file.name}"
             if (file.name in catalogFiles && choice != light && choice != dark) {
@@ -1445,13 +1447,13 @@ class MainActivity : Activity() {
                     else downloadVideo(forDark, randomItem, file) { pickVideoWallpaper(forDark) }
                 }
             },
-            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else getString(R.string.n_scenes, nasaScenes.size)) {
+            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else resources.getQuantityString(R.plurals.n_scenes, nasaScenes.size, nasaScenes.size)) {
                 pickVideoScenesList(forDark, getString(R.string.nasa_earth), nasaScenes) { pickVideoWallpaper(forDark) }
             },
-            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else getString(R.string.n_scenes, appleScenes.size)) {
+            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else resources.getQuantityString(R.plurals.n_scenes, appleScenes.size, appleScenes.size)) {
                 pickSourceCategories(forDark, getString(R.string.apple_aerial), appleScenes) { pickVideoWallpaper(forDark) }
             },
-            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else getString(R.string.n_scenes, amazonScenes.size)) {
+            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else resources.getQuantityString(R.plurals.n_scenes, amazonScenes.size, amazonScenes.size)) {
                 pickSourceCategories(forDark, getString(R.string.amazon_fire_tv), amazonScenes) { pickVideoWallpaper(forDark) }
             },
             page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) },
@@ -1491,7 +1493,7 @@ class MainActivity : Activity() {
         val categories = sourceScenes.map { it.category }.distinct()
         val rows = categories.map { category ->
             val catScenes = sourceScenes.filter { it.category == category }
-            page(category, if (currentScene?.category == category) CHOSEN else getString(R.string.n_scenes, catScenes.size)) {
+            page(category, if (currentScene?.category == category) CHOSEN else resources.getQuantityString(R.plurals.n_scenes, catScenes.size, catScenes.size)) {
                 pickVideoScenesList(forDark, category, catScenes) { pickSourceCategories(forDark, source, sourceScenes, onBack) }
             }
         }
@@ -2228,6 +2230,7 @@ class MainActivity : Activity() {
             R.string.screensaver to Triple(getString(R.string.screensaver), when {
                 downloading -> getString(R.string.downloading_gallery)
                 !galleryOn() -> screensaverName()
+                aerialScreensaverOn() -> getString(R.string.aerial_views)
                 else -> photoScreensaver()?.let { wallpaperName(it) } ?: getString(R.string.gallery)
             }) { pickScreensaver() },
             R.string.test_screensaver to Triple(getString(R.string.test_screensaver), "") { testScreensaver() },
@@ -3846,10 +3849,12 @@ class MainActivity : Activity() {
     }
 
     /** The folder the Gallery screensaver shows instead of paintings, or null for paintings. */
-    private fun photoScreensaver() = prefs.getString("ss_folder", null)
+    private fun photoScreensaver() = prefs.getString("ss_folder", null)?.takeIf { it != AERIAL_SCREENSAVER }
+
+    private fun aerialScreensaverOn() = galleryOn() && prefs.getString("ss_folder", null) == AERIAL_SCREENSAVER
 
     private fun pickScreensaver(focus: Int = 0) {
-        val paintings = galleryOn() && photoScreensaver() == null
+        val paintings = galleryOn() && photoScreensaver() == null && !aerialScreensaverOn()
         val photos = galleryOn() && photoScreensaver() != null
         val other = if (galleryOn()) prefs.getString("prev_screensaver", "").orEmpty() else currentScreensaver()
         showPage(getString(R.string.screensaver), listOf(
@@ -3857,17 +3862,80 @@ class MainActivity : Activity() {
                 useGallery(null)
                 pickScreensaver(0)
             },
+            page(getString(R.string.aerial_views), if (aerialScreensaverOn()) CHOSEN else aerialFiles(this).size.let { resources.getQuantityString(R.plurals.n_scenes, it, it) }) {
+                pickAerialScenes()
+            },
             page(getString(R.string.your_photos), if (photos) "${wallpaperName(photoScreensaver()!!)} $CHOSEN" else "") {
-                pickFolder({ pickScreensaver(1) }) { choice ->
+                pickFolder({ pickScreensaver(2) }) { choice ->
                     useGallery(choice)
-                    pickScreensaver(1)
+                    pickScreensaver(2)
                 }
             },
             page(screensaverName(other), if (galleryOn()) "" else CHOSEN) {
                 if (galleryOn()) stopGallery()
-                pickScreensaver(2)
+                pickScreensaver(3)
             },
         ), focus) { renderSettings(R.string.screensaver) }
+    }
+
+    @Volatile private var aerialDownload: String? = null // the scene file being fetched, one at a time
+
+    /**
+     * Aerial Views: turn it on, then the Apple scenes. A scene on disk (from here or from the video wallpaper)
+     * plays at once; selecting it offers Remove. A scene not on disk downloads into the shared wallpaper folder.
+     */
+    private fun pickAerialScenes(focus: Int = 0) {
+        val dir = wallpaperDir() ?: return
+        val onDisk = aerialFiles(this)
+        val mb = onDisk.sumOf { it.length() } / (1024 * 1024)
+        val rows = listOf(
+            page(getString(R.string.use_aerial_views), if (aerialScreensaverOn()) CHOSEN else resources.getQuantityString(R.plurals.aerial_on_disk, onDisk.size, onDisk.size, mb)) {
+                if (onDisk.isEmpty()) toast(getString(R.string.aerial_download_first), long = true)
+                else useGallery(AERIAL_SCREENSAVER)
+                pickAerialScenes(0)
+            },
+        ) + aerialScenes(this).mapIndexed { i, scene ->
+            val file = File(dir, scene.file)
+            val value = when {
+                aerialDownload == scene.file -> getString(R.string.downloading)
+                file.isFile -> "${file.length() / (1024 * 1024)} MB"
+                else -> ""
+            }
+            page(scene.name, value) {
+                if (file.isFile) removeAerialScene(scene, file) { pickAerialScenes(i + 1) }
+                else downloadAerialScene(scene, file) { pickAerialScenes(i + 1) }
+            }
+        }
+        showPage(getString(R.string.aerial_views), rows, focus) { pickScreensaver(1) }
+    }
+
+    private fun removeAerialScene(scene: VideoScene, file: File, back: () -> Unit) {
+        showPage(scene.name, listOf(page(getString(R.string.delete)) {
+            val choice = "video:${file.name}"
+            // The wallpaper still uses it: keep it, or Home would lose its picture.
+            if (choice == prefs.getString("wp_light", null) || choice == prefs.getString("wp_dark", null)) {
+                toast(getString(R.string.aerial_in_use), long = true)
+            } else {
+                file.delete()
+                if (aerialScreensaverOn() && aerialFiles(this).isEmpty()) stopGallery()
+            }
+            back()
+        })) { back() }
+    }
+
+    private fun downloadAerialScene(scene: VideoScene, file: File, back: () -> Unit) {
+        if (aerialDownload != null) return toast(getString(R.string.downloading))
+        aerialDownload = scene.file
+        back()
+        io.execute {
+            val ok = downloadVideoScene(scene, file, AtomicBoolean(false)) {}
+            ui.post {
+                aerialDownload = null
+                if (isDestroyed) return@post
+                if (!ok) toast(getString(R.string.video_download_failed), long = true)
+                if (settingsScrim.visibility == View.VISIBLE) back()
+            }
+        }
     }
 
     /** Gallery on, with paintings ([folder] null, downloaded first if needed) or a folder of photos. */
