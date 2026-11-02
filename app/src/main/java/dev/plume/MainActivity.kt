@@ -1078,14 +1078,20 @@ class MainActivity : Activity() {
      * Text colour plus a shadow in the opposite colour. Plume never darkens the picture, so on a busy one this shadow
      * is what keeps the text readable: wider and stronger than a plain drop shadow.
      */
+    /** Text colour, and the same for an icon beside the text (the weather's). */
+    private fun TextView.tint(color: Int) {
+        setTextColor(color)
+        compoundDrawableTintList = ColorStateList.valueOf(color)
+    }
+
     private fun ink(v: TextView, color: Int, fade: Boolean = false) {
         if (wpThumb == null) v.setShadowLayer(0f, 0f, 0f, 0)
         // Tight and light: a wide one is cut off at the view's edges and shows as a dark box behind the text.
         else v.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), if (color == Color.WHITE) 0x73000000 else 0x66FFFFFF)
-        if (!fade || v.currentTextColor == color) return v.setTextColor(color)
+        if (!fade || v.currentTextColor == color) return v.tint(color)
         ValueAnimator.ofArgb(v.currentTextColor, color).apply {
             duration = 800 // with the wallpaper's crossfade
-            addUpdateListener { v.setTextColor(it.animatedValue as Int) }
+            addUpdateListener { v.tint(it.animatedValue as Int) }
             start()
         }
     }
@@ -4637,10 +4643,11 @@ class MainActivity : Activity() {
                 }
                 if (!prefs.contains("geo_lat")) return@execute
                 val now = getJson("https://api.open-meteo.com/v1/forecast?latitude=${prefs.getFloat("geo_lat", 0f)}" +
-                    "&longitude=${prefs.getFloat("geo_lon", 0f)}&current=temperature_2m,weather_code").getJSONObject("current")
+                    "&longitude=${prefs.getFloat("geo_lon", 0f)}&current=temperature_2m,weather_code,is_day").getJSONObject("current")
                 prefs.edit()
                     .putFloat("wx_temp", now.getDouble("temperature_2m").toFloat())
                     .putInt("wx_code", now.getInt("weather_code"))
+                    .putBoolean("wx_day", now.optInt("is_day", 1) == 1)
                     .putLong("wx_time", System.currentTimeMillis()).apply()
                 ui.post { if (!isDestroyed) showWeather() }
             } catch (e: Exception) {
@@ -4748,10 +4755,26 @@ class MainActivity : Activity() {
         }
         val c = prefs.getFloat("wx_temp", 0f)
         val temp = Math.round(if (unit == "f") c * 9 / 5 + 32 else c)
-        // Sits after the date on the same line. The city stays in settings: on Home it is noise.
-        view.text = "  ·  $temp° ${weatherWord(prefs.getInt("wx_code", 0))}".trimEnd()
+        // Sits after the date on the same line: an icon for the sky, then the temperature. The city stays in settings.
+        val code = prefs.getInt("wx_code", 0)
+        view.text = "$temp°"
+        view.contentDescription = "$temp° ${weatherWord(code)}"
+        val icon = getDrawable(weatherIcon(code, prefs.getBoolean("wx_day", true)))!!.mutate().apply { setBounds(0, 0, dp(18), dp(18)) }
+        view.setCompoundDrawablesRelative(icon, null, null, null)
+        view.compoundDrawableTintList = ColorStateList.valueOf(view.currentTextColor)
         view.visibility = View.VISIBLE
         view.post { fitInk() }
+    }
+
+    /** The same WMO codes as icons. Clear and partly cloudy have a night version. */
+    private fun weatherIcon(code: Int, day: Boolean) = when (code) {
+        0 -> if (day) R.drawable.ms_light_mode_fill else R.drawable.ms_dark_mode_fill
+        1, 2 -> if (day) R.drawable.ms_partly_cloudy_day_fill else R.drawable.ms_partly_cloudy_night_fill
+        45, 48 -> R.drawable.ms_foggy_fill
+        in 51..67, in 80..82 -> R.drawable.ms_rainy_fill
+        in 71..77, 85, 86 -> R.drawable.ms_weather_snowy_fill
+        in 95..99 -> R.drawable.ms_thunderstorm_fill
+        else -> R.drawable.ms_cloud_fill
     }
 
     /** WMO weather codes, as Open-Meteo reports them. */

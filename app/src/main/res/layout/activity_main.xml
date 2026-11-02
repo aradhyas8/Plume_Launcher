@@ -56,7 +56,7 @@
                     android:includeFontPadding="false"
                     android:textSize="38sp" />
 
-                <!-- One line: "Mon 2 Nov  ·  14° Cloudy". The weather part is off unless turned on in settings. -->
+                <!-- One line: the date, then a weather icon and the temperature. The weather part is off unless turned on in settings. -->
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -77,6 +77,9 @@
                         android:id="@+id/weather"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:drawablePadding="6dp"
+                        android:gravity="center_vertical"
                         android:fontFamily="sans-serif"
                         android:maxLines="1"
                         android:textSize="15sp"
