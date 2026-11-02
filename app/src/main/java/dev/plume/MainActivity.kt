@@ -1428,35 +1428,35 @@ class MainActivity : Activity() {
         val inUse = { mine: Boolean -> current.takeIf { mine } }
         // Scenes by what they show, whoever filmed them: people look for "the sea", not for a provider.
         val kinds = scenes.groupBy { it.category }.entries.sortedByDescending { it.value.size }.map { (kind, list) ->
-            Tile(kind, icon = SCENE_ICONS[kind] ?: R.drawable.ms_movie) {
+            Tile(kind, icon = SCENE_ICONS[kind] ?: R.drawable.ms_movie, help = R.string.help_scene_kind) {
                 pickVideoScenesList(forDark, kind, list.sortedBy { it.name }) { pickWallpaper(forDark) }
             }
         }
         val groups = listOf(
             R.string.wp_group_yours to listOf(
-                Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) { uploadWallpaper(forDark) },
-                Tile(getString(R.string.choose_from_tv), inUse(current.startsWith("folder:")), R.drawable.ms_folder) { pickFolder(forDark) },
-                Tile(getString(R.string.my_uploads), inUse(uploads.any { it.first == current }), R.drawable.ms_photo_library) { pickUploads(forDark) },
+                Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate, help = R.string.help_add_from_phone) { uploadWallpaper(forDark) },
+                Tile(getString(R.string.choose_from_tv), inUse(current.startsWith("folder:")), R.drawable.ms_folder, R.string.help_folder) { pickFolder(forDark) },
+                Tile(getString(R.string.my_uploads), inUse(uploads.any { it.first == current }), R.drawable.ms_photo_library, R.string.help_my_uploads) { pickUploads(forDark) },
             ),
             R.string.aerial_views to listOfNotNull(
-                Tile(getString(R.string.surprise_me), icon = R.drawable.ms_shuffle) { surpriseVideo(forDark) },
+                Tile(getString(R.string.surprise_me), icon = R.drawable.ms_shuffle, help = R.string.help_surprise) { surpriseVideo(forDark) },
                 scenes.firstOrNull { "video:${it.file}" == current }?.let { Tile(it.name, current) { previewWallpaper(current) } },
-            ) + kinds + Tile(getString(R.string.manage_videos), icon = R.drawable.ms_edit) { pickVideoWallpaper(forDark) },
+            ) + kinds + Tile(getString(R.string.manage_videos), icon = R.drawable.ms_edit, help = R.string.help_manage_videos) { pickVideoWallpaper(forDark) },
             R.string.wp_group_more to listOf(pick(Bing.CHOICE), pick(ShowsWall.CHOICE),
-                Tile(getString(R.string.built_in), inUse(current in builtIns(forDark)) ?: builtIns(forDark).first(), R.drawable.ms_landscape) { pickBuiltIn(forDark) }),
+                Tile(getString(R.string.built_in), inUse(current in builtIns(forDark)) ?: builtIns(forDark).first(), R.drawable.ms_landscape, R.string.help_built_in) { pickBuiltIn(forDark) }),
         )
         // The current wallpaper's own settings first: how often a folder or the shows change, and which shows.
         val extras = listOfNotNull(
             if (current.startsWith("folder:") || current == ShowsWall.CHOICE) settingsRow(getString(R.string.folder_photo_changes),
-                getString(PHOTO_EVERY[photoEvery()]!!) + "  ›", style = RowStyle(R.drawable.ms_schedule)) { pickPhotoEvery() } else null,
+                getString(PHOTO_EVERY[photoEvery()]!!) + "  ›", style = RowStyle(R.drawable.ms_schedule, help = getString(R.string.help_photo_every))) { pickPhotoEvery() } else null,
             if (current == ShowsWall.CHOICE) settingsRow(getString(R.string.wp_sources),
-                getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) + "  ›", style = RowStyle(R.drawable.ms_filter_list)) { pickWpSources() } else null,
+                getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) + "  ›", style = RowStyle(R.drawable.ms_filter_list, help = getString(R.string.help_wp_sources))) { pickWpSources() } else null,
         )
         wallGrid(getString(R.string.wallpaper), groups, forDark, current, focusOn, extras) { renderSettings(WALLPAPER_CARD) }
     }
 
     /** A tile in the wallpaper grid: a [choice]'s picture (for a tile that opens more, the one in use there) or an [icon]. */
-    private class Tile(val name: String, val choice: String? = null, val icon: Int? = null, val action: () -> Unit)
+    private class Tile(val name: String, val choice: String? = null, val icon: Int? = null, val help: Int? = null, val action: () -> Unit)
 
     /** Pages of wallpaper tiles, three across, in titled groups (a null title for none). Focus starts on [focusOn] or the one in use. */
     private fun wallGrid(title: String, groups: List<Pair<Int?, List<Tile>>>, forDark: Boolean, current: String, focusOn: String?,
@@ -1471,7 +1471,8 @@ class MainActivity : Activity() {
                     addView(LinearLayout(context).apply {
                         line.forEach { t ->
                             val chosen = t.choice != null && t.choice == current
-                            val v = wallpaperTile(t.name, t.choice, t.icon, forDark, chosen, t.action)
+                            val help = t.help ?: if (t.icon == null) R.string.help_wp_tile else null
+                            val v = wallpaperTile(t.name, t.choice, t.icon, forDark, chosen, help, t.action)
                             if (focus == null && t.choice != null && t.choice == (focusOn ?: current)) focus = v
                             addView(v, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
                         }
@@ -1522,7 +1523,7 @@ class MainActivity : Activity() {
     }
 
     /** One wallpaper in the grid: its picture (or an icon for an action), its name, and a check on the one in use. */
-    private fun wallpaperTile(name: String, choice: String?, iconRes: Int?, forDark: Boolean, chosen: Boolean, action: () -> Unit): View {
+    private fun wallpaperTile(name: String, choice: String?, iconRes: Int?, forDark: Boolean, chosen: Boolean, help: Int?, action: () -> Unit): View {
         val pic: View = if (choice != null) wallpaperThumb(choice, forDark) else FrameLayout(this).apply {
             background = GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(ink(.07f)); setStroke(1, ink(.14f)) }
             addView(icon(iconRes!!, 26, valueInk()), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
@@ -1544,7 +1545,7 @@ class MainActivity : Activity() {
             addView(frame, LinearLayout.LayoutParams(MATCH_PARENT, dp(62)))
             addView(label, LinearLayout.LayoutParams(MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
             setOnClickListener { action() }
-            panelFocus(this, 12, if (choice != null) getString(R.string.help_wp_tile) else null, AREA_ALL) { f ->
+            panelFocus(this, 12, help?.let { getString(it) }, AREA_ALL) { f ->
                 label.setTextColor(if (f) focusInk() else if (chosen) restInk() else valueInk())
             }
             // The panel turns Left and Right into a row's step (dispatchKeyEvent); in the grid they move between pictures.
@@ -5289,6 +5290,9 @@ class MainActivity : Activity() {
         val ROW_HELP = mapOf(
             R.string.section_style to R.string.help_style, R.string.section_clock_weather to R.string.help_clock_weather,
             R.string.theme to R.string.help_theme, R.string.glass to R.string.help_glass, R.string.app_animations to R.string.help_app_animations,
+            R.string.app_names to R.string.help_app_names, R.string.row_position to R.string.help_row_position, R.string.show_row to R.string.help_show_row,
+            R.string.weather to R.string.help_weather, R.string.weather_units to R.string.help_units, R.string.screensaver to R.string.help_screensaver_pick,
+            R.string.test_screensaver to R.string.help_preview, R.string.folder_photo_changes to R.string.help_photo_every,
             R.string.section_app_row to R.string.help_apps_row, R.string.bottom_row to R.string.help_shows_row,
             R.string.section_screensaver to R.string.help_screensaver, R.string.section_remote_home to R.string.help_remote_home,
             R.string.section_lock to R.string.help_lock,

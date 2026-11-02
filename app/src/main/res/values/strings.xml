@@ -73,7 +73,7 @@
     <string name="size_standard">Standard</string>
     <string name="size_large">Large</string>
     <string name="size_largest">Largest</string>
-    <string name="help_row_size">Makes the apps in the row bigger. Fewer apps fit across the screen. Press ‹ › to try each size.</string>
+    <string name="help_row_size">Bigger apps, and fewer across the screen. Press Left or Right to try each size.</string>
     <string name="manual">Manual</string>
     <string name="most_used">Most used</string>
     <string name="apps_in_row">Choose apps</string>
@@ -204,7 +204,7 @@
     <string name="auto_note_sun">Auto is light from sunrise to sunset in %1$s. Today: %2$s to %3$s.</string>
     <string name="auto_note_up">Auto stays light today: the sun does not set in %1$s.</string>
     <string name="auto_note_down">Auto stays dark today: the sun does not rise in %1$s.</string>
-    <string name="auto_note_clock">Auto is light from %1$s to %2$s. Set a location in Clock &amp; weather to follow sunrise and sunset.</string>
+    <string name="auto_note_clock">Auto is light from %1$s to %2$s. Set a location in Weather to follow sunrise and sunset.</string>
     <string name="your_area">your area</string>
     <string name="help_appearance">Light or dark, and the picture behind your apps.</string>
     <string name="help_clock_weather">The weather under the clock, and the place it is for.</string>
@@ -219,7 +219,7 @@
     <string name="help_rearrange">Move the apps in the row. You can also hold OK on an app.</string>
     <string name="help_choose_apps">Choose the apps in the row. The others stay in All apps.</string>
     <string name="help_order">Manual keeps your order. Most used puts the apps you open most at the start.</string>
-    <string name="help_icon_style">Press ‹ › to try each style. The row changes while you press.</string>
+    <string name="help_icon_style">Press Left or Right to try each style. The row changes while you press.</string>
     <string name="help_apps_when_hidden">When the shows row hides, the apps stay in place or move down.</string>
     <string name="help_show_icons">The small app icon on each card. Colour shows it in the app\'s own colour.</string>
     <string name="help_row_name">The name above the row. Automatic uses the name your apps give it.</string>
@@ -228,9 +228,9 @@
     <string name="help_hidden_shows">Shows you hid from the row. Press OK to show all of them again.</string>
     <string name="help_start_after">Opens the Android settings where you set how long the TV waits.</string>
     <string name="help_home_button">Home opens Plume. Hold Home to open the TV\'s own dashboard.</string>
-    <string name="help_default_launcher">On Android TV, Plume can be the home screen. Google TV keeps its own, so use the Home button.</string>
+    <string name="help_default_launcher">On Android TV, Plume can be the home app. Google TV keeps its own: use Home opens Plume there.</string>
     <string name="help_run_setup">Go through the Home button setup again.</string>
-    <string name="help_smooth_volume">Holding Volume keeps changing it. Home then shows Google TV for about a second before Plume opens. Off while remote keys are set.</string>
+    <string name="help_smooth_volume">Hold Volume to keep changing it. Home then takes about a second longer to open Plume. Off while remote keys are set.</string>
     <string name="help_remote_keys">Change what a button on your remote does when you press it or hold it.</string>
     <!-- Season and episode on a Continue Watching card, for example "S1 E3". -->
     <string name="season_episode">S%1$s E%2$s</string>
@@ -325,11 +325,11 @@
     <string name="wp_sources">Shows from</string>
     <string name="wp_usable">%1$d/%2$d</string>
     <string name="featured_now">Featured: %1$s</string>
-    <string name="help_wp_sources">The sources whose pictures become the wallpaper: Android TV Watch Next, or a channel of an app. Plume uses only wide pictures. It skips posters, squares and pictures that it cannot get. The wallpaper changes as often as a folder of photos does.</string>
+    <string name="help_wp_sources">The apps whose shows can become the wallpaper. Plume uses wide pictures only.</string>
     <string name="section_style">Style</string>
     <string name="group_home_screen">Home screen</string>
     <string name="group_tv">TV</string>
-    <string name="help_style">Light or dark, glass, and how apps open. Hold OK on a top-bar icon to move, hide or add icons.</string>
+    <string name="help_style">Light or dark, glass, and how apps open. To move, hide or add a top-bar icon, hold OK on it.</string>
     <string name="help_theme">Auto is light from sunrise to sunset and dark at night.</string>
     <string name="help_glass">Off: solid tiles. Frosted: the wallpaper blurred behind the tiles. Clear: the wallpaper sharp behind them.</string>
     <string name="help_app_animations">The app grows out of its tile when it opens.</string>
@@ -342,4 +342,19 @@
     <string name="manage_videos">Manage videos</string>
     <string name="wp_preview_hint">Press any button to go back to settings</string>
     <string name="smooth_volume_cost">Home opens slower</string>
+    <string name="help_app_names">When the app names show under the tiles.</string>
+    <string name="help_row_position">Where the apps row sits on the screen.</string>
+    <string name="help_show_row">On Down hides the row until you press Down on the remote.</string>
+    <string name="help_weather">Shows the weather under the clock.</string>
+    <string name="help_units">Celsius or Fahrenheit.</string>
+    <string name="help_screensaver_pick">Paintings, Aerial Views, your photos, or the TV\'s own screensaver.</string>
+    <string name="help_preview">Starts the screensaver now. Press any button to stop it.</string>
+    <string name="help_photo_every">How often the next picture shows.</string>
+    <string name="help_add_from_phone">Scan the QR code with your phone, then send a photo or a video.</string>
+    <string name="help_folder">A slideshow of the photos in a folder on this TV or a USB drive.</string>
+    <string name="help_my_uploads">The photos and videos you sent from your phone.</string>
+    <string name="help_surprise">Plays a scene picked at random.</string>
+    <string name="help_scene_kind">Press OK to see the scenes. A scene downloads when you pick it.</string>
+    <string name="help_manage_videos">Remove scenes you downloaded and videos you sent.</string>
+    <string name="help_built_in">The pictures that come with Plume, and a plain colour.</string>
 </resources>

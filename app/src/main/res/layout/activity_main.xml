@@ -358,6 +358,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:lineSpacingMultiplier="1.15"
+                android:ellipsize="end"
                 android:maxLines="3"
                 android:minLines="3"
                 android:paddingStart="14dp"
