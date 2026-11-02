@@ -984,6 +984,7 @@ class MainActivity : Activity() {
     // more from the pixels right behind them. Plain wallpapers keep the theme's colour.
 
     private var wpThumb: Bitmap? = null
+    private var wpFrames: List<Bitmap> = emptyList() // what the text is measured on: the still's thumb, or a video's frames
     private var watchInk = Color.BLACK
     private var iconInk = Color.BLACK
     private var appsInk = Color.BLACK
@@ -1003,10 +1004,10 @@ class MainActivity : Activity() {
         }
         val names = findViewById<LinearLayout>(R.id.nameRow).let { row -> (0 until row.childCount).map { row.getChildAt(it) as TextView } }
         val apps = listOf(findViewById<TextView>(R.id.appsTitle)) + names
-        appsInk = inkBehind(apps)
+        // Measured over the whole row, so the On focus name keeps one colour as it moves from tile to tile.
+        appsInk = inkBehind(apps + findViewById<View>(R.id.appScroll))
         for (v in apps) ink(v, appsInk, fade = true)
-        // The On focus name moves under each tile, so it is measured where it sits (and again as it moves, see showRowLabel).
-        findViewById<TextView>(R.id.rowLabel).let { ink(it, inkBehind(listOf(it)), fade = true) }
+        ink(findViewById(R.id.rowLabel), appsInk, fade = true)
         val cols = (0 until watchRow.childCount).map { watchRow.getChildAt(it) as ViewGroup }
         val watch = listOf(watchTitle) + cols.flatMap { col -> (0 until col.childCount).mapNotNull { col.getChildAt(it) as? TextView } }
         watchInk = inkBehind(watch)
@@ -1043,10 +1044,12 @@ class MainActivity : Activity() {
         layers.setLayerInset(0, inset, inset, inset, inset)
     }
 
-    /** White or near-black, by the average brightness of the wallpaper under [views]; the theme colour without a photo. */
+    /**
+     * White or near-black for text over [views], readable on every frame of the wallpaper (one for a photo, a video's
+     * samples, see [inkFor]); the theme colour without a picture.
+     */
     private fun inkBehind(views: List<View>): Int {
-        if (currentWallpaper().startsWith("video:")) return Color.WHITE
-        val t = wpThumb ?: return fg
+        val t = wpFrames.firstOrNull() ?: return fg
         val wall = findViewById<View>(R.id.wallpaper)
         val at = IntArray(2)
         wall.getLocationInWindow(at)
@@ -1063,13 +1066,12 @@ class MainActivity : Activity() {
         val dy = (wall.height - t.height * s) / 2
         fun tx(x: Int) = ((x - dx) / s).toInt().coerceIn(0, t.width - 1)
         fun ty(y: Int) = ((y - dy) / s).toInt().coerceIn(0, t.height - 1)
-        var sum = 0f
-        var n = 0
-        for (y in ty(r.top)..ty(r.bottom)) for (x in tx(r.left)..tx(r.right)) {
-            sum += Color.luminance(t.getPixel(x, y))
-            n++
-        }
-        return inkFor(sum / n)
+        // Every frame has the thumb's size, so one mapping serves all of them.
+        return inkFor(wpFrames.map { f ->
+            val px = ArrayList<Float>()
+            for (y in ty(r.top)..ty(r.bottom)) for (x in tx(r.left)..tx(r.right)) px += Color.luminance(f.getPixel(x, y))
+            px.toFloatArray()
+        })
     }
 
     /**
@@ -1270,6 +1272,7 @@ class MainActivity : Activity() {
             glassPixels = null
             applyGlass() // open menus and the panel lose their frost too
             wpThumb = null
+            wpFrames = emptyList()
             fitInk()
             return
         }
@@ -1313,11 +1316,16 @@ class MainActivity : Activity() {
             ui.post {
                 if (isDestroyed || load != wallpaperLoad) return@post
                 wpThumb = thumb
+                wpFrames = listOfNotNull(thumb)
                 // The glass is tinted with the wallpaper's mean colour; kept, so the next start has it before the picture.
                 thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
                 if (wantDark() != dark) return@post recreate() // the Wallpaper theme follows the new picture
                 fitInk()
                 val old = view.drawable
+                if (video && thumb != null) io.execute {
+                    val frames = videoFrames(File(wallpaperDir(), choice.removePrefix("video:")), thumb.width, thumb.height)
+                    if (frames.isNotEmpty()) ui.post { if (load == wallpaperLoad) { wpFrames = frames; fitInk() } }
+                }
                 if (old == null || shown == null) {
                     glassPixels = screen
                     sharpPixels = sharp
@@ -1397,6 +1405,28 @@ class MainActivity : Activity() {
             }
         } catch (e: Exception) {
             null
+        } finally {
+            r.release()
+        }
+    }
+
+    /**
+     * Small frames of a video, one every 4 s (at most 30), read from the file, so the text colour can be one that reads
+     * on all of them: the screen cannot be read on TVs that play video on an overlay, and a colour that changed with
+     * the picture would flicker. ponytail: read again on every load (a few seconds, off the UI thread); cache if it shows.
+     */
+    private fun videoFrames(video: File, w: Int, h: Int): List<Bitmap> {
+        val r = android.media.MediaMetadataRetriever()
+        return try {
+            r.setDataSource(video.path)
+            val ms = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val at = android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            (0L..ms step 4000L).take(30).mapNotNull { t ->
+                val f = if (Build.VERSION.SDK_INT >= 27) r.getScaledFrameAtTime(t * 1000, at, w * 4, h * 4) else r.getFrameAtTime(t * 1000, at)
+                f?.let { Bitmap.createScaledBitmap(it, w, h, true).also { s -> if (s !== it) it.recycle() } }
+            }
+        } catch (e: Exception) {
+            emptyList()
         } finally {
             r.release()
         }
@@ -3436,7 +3466,7 @@ class MainActivity : Activity() {
                 label.box = v.width // the name stays inside its tile: when it is wider it scrolls
                 label.translationX = v.left + v.width / 2f - label.width / 2f
                 label.setActive(true)
-                ink(label, inkBehind(listOf(label))) // measured where it now sits, not where it was when fitInk ran
+                ink(label, appsInk) // the row's colour (see fitInk): one colour, not a new one under each tile
             }
             if (v.width > 0 && label.width > 0) place() else v.post { if (v.isFocused) place() }
             label.animate().alpha(if (dark) 0.85f else 1f).setDuration(160).start()
@@ -5454,8 +5484,18 @@ class MainActivity : Activity() {
 }
 
 /** White or near-black over a background of luminance [lum], whichever has the higher contrast (WCAG). */
-internal fun inkFor(lum: Float): Int {
+/**
+ * White or near-black text over [frames] (the luminances behind the text, one array per frame). Each colour is judged
+ * by its worst case: white by the bright end (80th percentile) of the brightest frame, dark by the dim end (20th) of
+ * the darkest, so one white thread or one bright scene counts, not the average. White wins unless dark reads clearly
+ * better (1.5x), as white with its shadow holds up best on busy pictures.
+ */
+internal fun inkFor(frames: List<FloatArray>): Int {
     val dark = 0xFF111214.toInt()
     val darkLum = 0.0063f // luminance of #111214
-    return if (1.05f / (lum + 0.05f) >= (lum + 0.05f) / (darkLum + 0.05f)) Color.WHITE else dark
+    val ends = frames.filter { it.isNotEmpty() }.map { f -> f.sorted().let { it[it.size / 5] to it[(it.size - 1) * 4 / 5] } }
+    if (ends.isEmpty()) return Color.WHITE
+    val white = 1.05f / (ends.maxOf { it.second } + 0.05f)
+    val black = (ends.minOf { it.first } + 0.05f) / (darkLum + 0.05f)
+    return if (black > white * 1.5f) dark else Color.WHITE
 }
