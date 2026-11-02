@@ -184,6 +184,12 @@ internal fun channelSortKey(engaged: Long, opened: Long) = watchSortKey(0, if (e
 internal fun <T> byWeight(rows: List<Triple<Long, Long, T>>) = rows.sortedByDescending { it.first }.map { it.second to it.third }
 
 /**
+ * A season or episode number fit to show, else null. Some apps store their own data in these columns (Alder puts "e"
+ * and a long base64 string there), which would print as "Se EeyJzIjoi..." under the card.
+ */
+internal fun displayNumber(s: String?) = s?.trim()?.takeIf { it.length in 1..6 && it.any(Char::isDigit) }
+
+/**
  * Newest first across apps (ties keep their order), each app's [perApp] newest ahead of the rest: one app's ten
  * shows can't bury the others. The rest follow, newest first, so an app on its own isn't held to [perApp].
  */
@@ -4540,8 +4546,8 @@ class MainActivity : Activity() {
                 if (str("browsable") == "0") continue
                 val title = str("title") ?: continue
                 if (hideKey(str("package_name"), title) in hidden) continue
-                val season = str("season_display_number")
-                val episode = str("episode_display_number")
+                val season = displayNumber(str("season_display_number"))
+                val episode = displayNumber(str("episode_display_number"))
                 val duration = num("duration_millis")
                 val position = num("last_playback_position_millis")
                 val sub = listOfNotNull(
