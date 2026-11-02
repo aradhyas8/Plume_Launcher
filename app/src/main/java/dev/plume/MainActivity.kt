@@ -1190,6 +1190,7 @@ class MainActivity : Activity() {
         glass.lens = look.lens
         glass.grain = look.active?.grain == true
         glass.edge = look.active?.edge ?: 0
+        glass.shade = look.active?.shade ?: 0
         if (look.active != GlassStyle.CLEAR) sharpPixels = null // 2 MB, kept only for Clear
         if (was != null && was.first == look && was.second === px) return
         glassShown = look to px
