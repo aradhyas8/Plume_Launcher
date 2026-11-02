@@ -220,4 +220,5 @@
     <string name="clock_medium">Orta</string>
     <string name="clock_large">Büyük</string>
     <string name="help_clock_size">Ana ekrandaki saatin boyutu.</string>
+    <string name="section_clock_weather">Saat ve hava durumu</string>
 </resources>

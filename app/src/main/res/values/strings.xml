@@ -287,7 +287,7 @@
     <string name="sources_hint">Hold OK to pin an input to the row.</string>
     <string name="bing_daily">Photo of the day</string>
     <!-- Remote keys: change what a button on the remote does -->
-    <string name="section_clock_weather">Weather</string>
+    <string name="section_clock_weather">Clock &amp; weather</string>
     <string name="section_remote_home">Home &amp; remote</string>
     <string name="section_lock">PIN lock</string>
     <string name="lock_note">A PIN guards Plume settings, the Wi-Fi and Android settings, and changes to the home screen. Apps still open.</string>

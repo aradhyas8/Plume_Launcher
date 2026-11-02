@@ -236,4 +236,5 @@
     <string name="clock_medium">متوسط</string>
     <string name="clock_large">كبير</string>
     <string name="help_clock_size">حجم الساعة في الشاشة الرئيسية.</string>
+    <string name="section_clock_weather">الساعة والطقس</string>
 </resources>
