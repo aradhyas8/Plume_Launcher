@@ -32,12 +32,14 @@ class GlassTest {
         assertTrue(pic.contentEquals(copy))
     }
 
-    @Test fun theFrostKeepsTheColoursRicherAndLightModeLiftsThem() {
-        val pic = intArrayOf(px(200, 100, 50))
-        assertEquals("15% more saturation", px(211, 97, 39), glassTone(pic, dark = true)[0])
-        assertEquals("and a tenth of the way to white", px(215, 112, 60), glassTone(pic, dark = false)[0])
-        val grey = intArrayOf(px(120, 120, 120))
-        assertEquals("grey stays grey", grey[0], glassTone(grey, dark = true)[0])
+    @Test fun theFrostIsEvenedOutAndRicher() {
+        val grey = { v: Int -> px(v, v, v) }
+        assertEquals("a bright sky comes down", grey(204), glassTone(intArrayOf(grey(255)), dark = true)[0])
+        assertEquals("a deep shadow comes up", grey(52), glassTone(intArrayOf(grey(0)), dark = true)[0])
+        assertEquals("the middle stays", grey(128), glassTone(intArrayOf(grey(128)), dark = true)[0])
+        val pic = glassTone(intArrayOf(px(200, 100, 50)), dark = true)[0]
+        assertTrue("35% more saturation", (pic shr 16 and 0xFF) - (pic and 0xFF) > 150)
+        assertTrue("light mode lifts it", luma(glassTone(intArrayOf(grey(100)), dark = false)[0]) > luma(glassTone(intArrayOf(grey(100)), dark = true)[0]))
     }
 
     @Test fun theMeanColourIsTheAverage() {
@@ -51,10 +53,10 @@ class GlassTest {
         val green = px(40, 160, 60)
         val darkTint = glassHue(green, dark = true, alpha = 0x80)
         assertEquals(0x80, darkTint ushr 24)
-        assertTrue("dark tint is dark", luma(darkTint) < 60)
+        assertTrue("dark tint is near black", luma(darkTint) < 40)
         assertTrue("and still green", (darkTint shr 8 and 0xFF) > (darkTint shr 16 and 0xFF))
         val light = glassHue(green, dark = false, alpha = 0xFF)
-        assertTrue("light tint is light", luma(light) > 200)
+        assertTrue("light tint is near white", luma(light) > 230)
         assertTrue("and still green", (light shr 8 and 0xFF) > (light shr 16 and 0xFF))
     }
 

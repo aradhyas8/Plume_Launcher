@@ -1193,10 +1193,10 @@ class MainActivity : Activity() {
         glassShown = look to px
         val shown = px?.takeIf { look.active != null }
         glass.setSharp(sharpPixels?.takeIf { look.active == GlassStyle.CLEAR })
-        glass.setBlur(shown?.let { glassBlur(it, look.active!!.radius, look.dark, look.sat) })
+        glass.setBlur(shown?.let { glassBlur(it, look.active!!.radius, look.dark) })
         val frost = GlassStyle.FROSTED.radius
         surfaceBlur = if (look.active?.radius == frost) glass.blur
-            else shown?.let { Bitmap.createBitmap(glassBlur(it, frost, look.dark, look.sat), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
+            else shown?.let { Bitmap.createBitmap(glassBlur(it, frost, look.dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
         glassSurfaces.forEach { it.get()?.setBlur(surfaceBlur) } // menus and cards that are open, and the panel
         if (was?.first != look) { // the card tints and which tiles get frost follow the look
             applyTheme()
