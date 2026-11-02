@@ -48,8 +48,6 @@
     <string name="edit_apps_row">Modifier la ligne d\'applis</string>
     <string name="theme">Thème</string>
     <string name="app_animations">Animations des applis</string>
-    <string name="fade_top">Fondu en haut</string>
-    <string name="fade_bottom">Fondu en bas</string>
     <string name="glass">Verre dépoli</string>
     <string name="glass_frosted">Dépoli</string>
     <string name="glass_clear">Transparent</string>
@@ -257,11 +255,4 @@
     <string name="wp_usable">%1$d/%2$d</string>
     <string name="featured_now">À l\'affiche : %1$s</string>
     <string name="help_wp_sources">Les sources dont les images deviennent le fond d\'écran : Watch Next d\'Android TV, ou une chaîne d\'une appli. Seules les images larges comptent (les affiches et les carrés sont écartés), et une image introuvable est passée. Le fond change aussi souvent qu\'un dossier de photos.</string>
-    <string name="wp_dim">Assombrissement</string>
-    <string name="dim_auto">Auto</string>
-    <string name="dim_none">Aucun</string>
-    <string name="dim_light">Léger</string>
-    <string name="dim_medium">Moyen</string>
-    <string name="dim_strong">Fort</string>
-    <string name="help_wp_dim">Le noir posé sur une image Bing ou Séries en mode sombre, pour que l\'heure, les icônes et les cartes restent lisibles. Auto regarde chaque image : une image claire reçoit plus de noir, une image très sombre est un peu éclaircie.</string>
 </resources>

@@ -49,8 +49,6 @@
     <string name="edit_apps_row">Riordina le app</string>
     <string name="theme">Tema</string>
     <string name="app_animations">Animazioni app</string>
-    <string name="fade_top">Sfumatura in alto</string>
-    <string name="fade_bottom">Sfumatura in basso</string>
     <string name="glass">Effetto vetro</string>
     <string name="glass_frosted">Smerigliato</string>
     <string name="glass_clear">Trasparente</string>
@@ -186,8 +184,6 @@
     <string name="help_lock">Un PIN che impedisce ad altri di modificare la Home.</string>
     <string name="help_updates">Plume cerca una nuova versione una volta al giorno. Installala qui.</string>
     <string name="help_finish_setup">Home apre ancora la schermata della TV. Impostalo perché apra Plume.</string>
-    <string name="help_fade_top">Scurisce la parte alta delle tue foto, così orologio e icone restano leggibili. Premi Sinistra o Destra per cambiarla.</string>
-    <string name="help_fade_bottom">Sfuma il basso delle tue foto nello sfondo, dietro le app e la riga contenuti. Premi Sinistra o Destra per cambiarla.</string>
     <string name="help_location">Per il meteo e per alba e tramonto in Auto. Automatico la ricava dal tuo indirizzo internet.</string>
     <string name="help_rearrange">Sposta le app nella riga. Puoi anche tenere premuto OK su un\'app.</string>
     <string name="help_choose_apps">Scegli le app della riga. Le altre restano in Tutte le app.</string>
@@ -299,11 +295,4 @@
     <string name="wp_usable">%1$d/%2$d</string>
     <string name="featured_now">In evidenza: %1$s</string>
     <string name="help_wp_sources">Le sorgenti le cui immagini diventano lo sfondo: Watch Next di Android TV, o un canale di un\'app. Plume usa solo immagini larghe. Salta locandine, quadrati e immagini che non riesce a ottenere. Lo sfondo cambia con la stessa frequenza di una cartella di foto.</string>
-    <string name="wp_dim">Scurimento</string>
-    <string name="dim_auto">Auto</string>
-    <string name="dim_none">Nessuno</string>
-    <string name="dim_light">Leggero</string>
-    <string name="dim_medium">Medio</string>
-    <string name="dim_strong">Forte</string>
-    <string name="help_wp_dim">Il nero sovrapposto a un\'immagine di Bing o dei contenuti in modalità scura, così orologio, icone e schede restano leggibili. Auto aggiunge più nero a un\'immagine chiara e schiarisce un poco quelle molto scure.</string>
 </resources>

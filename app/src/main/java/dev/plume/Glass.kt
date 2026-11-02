@@ -176,10 +176,10 @@ internal fun glassCrop(w: Int, h: Int): FloatArray {
 
 /**
  * The wallpaper as it shows on the screen, as [GLASS_W]x[GLASS_H] pixels, not blurred yet. [ground] fills what the
- * picture does not cover, and [fades] paints the top and bottom fades over it, as the wallpaper view shows them.
+ * picture does not cover.
  * Done once when a wallpaper loads, off the UI thread; kept (36 KB), so a style change only blurs it again.
  */
-internal fun glassScreen(wallpaper: Bitmap, ground: Int, fades: ((Canvas, Float, Float) -> Unit)? = null): IntArray {
+internal fun glassScreen(wallpaper: Bitmap, ground: Int): IntArray {
     // In two steps, or a 1920 px picture shrunk to 120 px in one would skip most of its pixels.
     val mid = Bitmap.createScaledBitmap(wallpaper, maxOf(1, wallpaper.width / 4), maxOf(1, wallpaper.height / 4), true)
     val screen = Bitmap.createBitmap(GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888)
@@ -188,7 +188,6 @@ internal fun glassScreen(wallpaper: Bitmap, ground: Int, fades: ((Canvas, Float,
     val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     val at = glassCrop(mid.width, mid.height)
     c.drawBitmap(mid, Rect(0, 0, mid.width, mid.height), RectF(at[0], at[1], at[2], at[3]), paint)
-    fades?.invoke(c, GLASS_W.toFloat(), GLASS_H.toFloat())
     if (mid !== wallpaper) mid.recycle()
     val px = IntArray(GLASS_W * GLASS_H)
     screen.getPixels(px, 0, GLASS_W, 0, 0, GLASS_W, GLASS_H)
@@ -200,14 +199,13 @@ internal fun glassScreen(wallpaper: Bitmap, ground: Int, fades: ((Canvas, Float,
  * The wallpaper as the screen shows it, sharp, for Clear's lens: three times the frost's size (960x540, 2 MB), kept
  * only while Clear is the style. Done once when a wallpaper loads, off the UI thread.
  */
-internal fun glassSharp(wallpaper: Bitmap, ground: Int, fades: ((Canvas, Float, Float) -> Unit)? = null): Bitmap {
+internal fun glassSharp(wallpaper: Bitmap, ground: Int): Bitmap {
     val k = 3
     val sharp = Bitmap.createBitmap(GLASS_W * k, GLASS_H * k, Bitmap.Config.ARGB_8888)
     val c = Canvas(sharp)
     c.drawColor(ground or (0xFF shl 24))
     val at = glassCrop(wallpaper.width, wallpaper.height)
     c.drawBitmap(wallpaper, null, RectF(at[0] * k, at[1] * k, at[2] * k, at[3] * k), Paint(Paint.FILTER_BITMAP_FLAG))
-    fades?.invoke(c, sharp.width.toFloat(), sharp.height.toFloat())
     // In graphics memory once, so the lens samples it each frame without an upload, and the process holds no copy.
     return try {
         sharp.copy(Bitmap.Config.HARDWARE, false)?.also { sharp.recycle() } ?: sharp

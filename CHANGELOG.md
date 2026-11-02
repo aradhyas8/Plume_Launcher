@@ -17,15 +17,13 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 ## Unreleased
 
 - **Bigger apps.** Select **Plume settings → Apps row → Size**, then **Standard**, **Large** or **Largest**. Large shows 6 apps across, and Largest shows 4. Banners and icon tiles both grow.
-- **Softer photo fade.** The top and bottom fades start lower and end softer, so more of the picture shows.
-- **The fades work on every wallpaper.** **Top fade** and **Bottom fade** change the two bundled pictures too. Before, they changed only your own photos.
-- **New bundled wallpapers.** **Mist (day)** and **Peak (dusk)** replace the two Rockies pictures. The fades are no longer part of the picture.
+- **Wallpapers show as they are.** Plume no longer adds dark fades or black over a picture or a video. The text and the glass change to suit the picture. **Top fade** and **Bottom fade** are gone.
+- **New bundled wallpapers.** **Mist (day)** and **Peak (dusk)** replace the two Rockies pictures.
 - The **Glass** setting changes tiles, cards and the settings panel live without restarting Plume.
 - **Clear glass.** Select **Plume settings → Appearance → Glass**, then **Clear**. Clear glass lets more of the wallpaper show through the tiles, cards and menus. **Frosted** keeps the look from 1.6.
 - In light mode with **Glass** off, the Plume settings panel is light again. Before, it was black.
 
 - **Shows wallpaper.** Select **Plume settings → Appearance → Light wallpaper** or **Dark wallpaper**, then **Shows from your apps**. The picture of a show that your apps publish becomes the wallpaper. It comes from Watch Next, or from the channels that you choose in **Wallpaper from**. It changes as often as a folder of photos does. Only wide pictures count. **Featured: …** shows under the weather. Plume fetches nothing until you select it.
-- **Darkening.** In dark mode, Plume lays black over the Bing picture and the Shows picture. Select **Plume settings → Appearance → Darkening**. Choose Auto, None, Light, Medium or Strong. Auto gives a bright picture more black and lifts a very dark one a little. **Medium** is what Plume did before.
 - **Edit the top bar.** Hold **OK** on an icon at the top of the home screen. Select **Move**, **Hide** or **Add icon**. In **Move**, press Left or Right to slide the icon. Press **OK** to place it. Press Back to cancel. **Add icon** shows the icons that you hid. **Plume settings** stays on the bar, so you can always bring the icons back.
 - **Power menu icon.** Hold **OK** on a top-bar icon and select **Add icon**, then **Power menu**. Select the icon to open the Android power menu. If the TV does not open it, a message says so. It needs the Home button turned on. If it is off, the icon offers to turn it on.
 - Plume does not close when a theme change arrives while a picture or the apps list is loading, or when the screen saver ends.
