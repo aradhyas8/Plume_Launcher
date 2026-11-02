@@ -308,7 +308,16 @@ internal class GlassLayer(context: Context) : View(context) {
     private var sharpShader: BitmapShader? = null
     private var sharpSize = 1f to 1f
     private val sharpBase = Matrix()
-    private val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    // Clear's picture evened out a little, as the frost is (glassTone) but lighter, so it stays sharp and natural:
+    // brightness pulled 25% toward the middle, so a logo still reads over a bright sky or a deep shadow.
+    private val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
+            .75f, 0f, 0f, 0f, 32f,
+            0f, .75f, 0f, 0f, 32f,
+            0f, 0f, .75f, 0f, 32f,
+            0f, 0f, 0f, 1f, 0f,
+        ))
+    }
     private val lens13: android.graphics.RuntimeShader? =
         if (android.os.Build.VERSION.SDK_INT >= 33) android.graphics.RuntimeShader(LENS_AGSL).apply {
             setFloatUniform("mag", LENS_MAG)
