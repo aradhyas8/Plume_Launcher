@@ -16,7 +16,10 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
-- **New wallpapers.** Select **Wallpaper → Built-in → More photos** to download ten wallpapers. Each image is 1920 × 1080.
+- **4K wallpaper files.** Open **Wallpaper → Built-in** to refresh downloaded photos and find new photos from GitHub.
+- New GitHub wallpapers appear without another app update. Select a new photo to download it.
+
+- **New wallpapers.** Select **Wallpaper → Built-in → More photos** to download ten wallpapers. Each file is 3840 × 2160.
 - Old wallpapers no longer ship in the app. Old selections use a plain colour until you select another wallpaper.
 - **Live wallpapers.** Select **Plume settings → Wallpaper → Live wallpapers**. Choose from NASA, Apple and Amazon scenes, or upload your own MP4. A scene downloads only after you select it.
 - **Wallpaper theme.** Select **Plume settings → Style → Theme → Wallpaper**. Plume picks light or dark from the wallpaper, and the settings take its colour.
