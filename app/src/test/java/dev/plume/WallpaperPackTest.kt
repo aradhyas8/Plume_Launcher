@@ -12,10 +12,10 @@ class WallpaperPackTest {
         val source = File(root, "app/src/main/java/dev/plume/MainActivity.kt").readText()
         val catalog = source.substringAfter("val PACK_WALLPAPERS = listOf(").substringBefore("const val PACK_URL")
         val files = Regex("Triple\\(\"([^\"]+\\.webp)\"").findAll(catalog).map { it.groupValues[1] }.toList()
-        assertEquals(16, files.size)
+        assertEquals(18, files.size)
         assertEquals(files.size, files.toSet().size)
-        assertEquals(8, Regex(", false\\)").findAll(catalog).count())
-        assertEquals(8, Regex(", true\\)").findAll(catalog).count())
+        assertEquals(9, Regex(", false\\)").findAll(catalog).count())
+        assertEquals(9, Regex(", true\\)").findAll(catalog).count())
         for (name in files) {
             assertTrue(name.matches(Regex("[a-z-]+\\.webp")))
             val file = File(root, "wallpapers/$name")

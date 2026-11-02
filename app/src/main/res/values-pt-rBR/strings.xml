@@ -29,8 +29,6 @@
     <string name="time_left_hm">%1$d h %2$d min restantes</string>
     <string name="time_left_m">%1$d min restantes</string>
     <string name="folder_name">Pasta: %1$s</string>
-    <string name="wp_mist_day">Névoa (dia)</string>
-    <string name="wp_peak_dusk">Pico (entardecer)</string>
     <string name="wp_pure_black">Preto puro</string>
     <string name="wp_soft_white">Branco suave</string>
     <string name="every_1">A cada minuto</string>

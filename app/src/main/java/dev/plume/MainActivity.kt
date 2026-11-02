@@ -1131,17 +1131,17 @@ class MainActivity : Activity() {
     // Light gets a soft white (the light ground colour), not #FFFFFF: pure white glares on a TV.
     private fun plainWallpaper(forDark: Boolean) = if (forDark) "plain:Pure black" else "plain:Soft white"
 
-    private fun defaultWallpaper(forDark: Boolean) = if (forDark) "res:Peak (dusk)" else "res:Porcelain Dunes"
+    private fun defaultWallpaper(forDark: Boolean) = "res:Porcelain Dunes"
 
     private fun currentWallpaper(forDark: Boolean = dark) =
-        prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it) } ?: defaultWallpaper(forDark)
+        prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it, forDark) } ?: defaultWallpaper(forDark)
 
-    /** The two bundled pictures were replaced: an old choice keeps working, on the picture that took its place. */
-    private fun movedWallpaper(choice: String) = when (choice) {
-        "res:Rockies (day)" -> "res:Mist (day)"
-        "res:Rockies (dusk)" -> "res:Peak (dusk)"
+    /** Mist and Peak (and Rockies before them) moved to the pack: an old choice keeps its picture once the pack is here, else the default. */
+    private fun movedWallpaper(choice: String, forDark: Boolean) = when (choice) {
+        "res:Rockies (day)", "res:Mist (day)" -> "pack:mist.webp"
+        "res:Rockies (dusk)", "res:Peak (dusk)" -> "pack:peak.webp"
         else -> choice
-    }
+    }.let { if (it.startsWith("pack:") && !File(packDir(), it.removePrefix("pack:")).isFile) defaultWallpaper(forDark) else it }
 
     /**
      * Glass: the tiles are see-through over a blur of the wallpaper (a setting, on by default since 1.6).
@@ -5489,13 +5489,10 @@ class MainActivity : Activity() {
         const val INK_MARK = "ink mark" // tag on a card's detail line whose source mark takes the text colour
         /** Shown names for the wallpaper keys saved in prefs (the keys stay English). */
         val WALLPAPER_NAMES = mapOf(
-            "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,
             "Pure black" to R.string.wp_pure_black, "Soft white" to R.string.wp_soft_white,
         )
         val BUNDLED_WALLPAPERS = linkedMapOf(
             "Porcelain Dunes" to R.drawable.wallpaper_porcelain,
-            "Mist (day)" to R.drawable.wallpaper,
-            "Peak (dusk)" to R.drawable.wallpaper_dark,
         )
         /** The wallpaper pack: photos picked on a TV to suit Clear and Frosted glass, fetched only when asked. File, name, dark. */
         val PACK_WALLPAPERS = listOf(
@@ -5507,9 +5504,10 @@ class MainActivity : Activity() {
             Triple("lilac-haze.webp", "Lilac Haze", false), Triple("obsidian-dunes.webp", "Obsidian Dunes", true),
             Triple("petrol-current.webp", "Petrol Current", true), Triple("copper-eclipse.webp", "Copper Eclipse", true),
             Triple("indigo-ridge.webp", "Indigo Ridge", true), Triple("aubergine-fold.webp", "Aubergine Fold", true),
+            Triple("mist.webp", "Mist", false), Triple("peak.webp", "Peak", true),
         )
         const val PACK_URL = "https://raw.githubusercontent.com/aradhyas8/Plume_Launcher/main/wallpapers/"
-        const val PACK_MB = "2.2 MB"
+        const val PACK_MB = "2.4 MB"
         val PIN_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
