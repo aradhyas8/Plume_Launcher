@@ -127,7 +127,16 @@
     <string name="your_photos">Vos photos</string>
     <string name="aerial_views">Aerial Views</string>
     <string name="use_aerial_views">Utiliser Aerial Views</string>
-    <string name="aerial_on_disk">%1$d scènes, %2$d Mo</string>
+    <plurals name="aerial_on_disk">
+        <item quantity="one">%1$d scène, %2$d Mo</item>
+        <item quantity="many">%1$d scènes, %2$d Mo</item>
+        <item quantity="other">%1$d scènes, %2$d Mo</item>
+    </plurals>
+    <plurals name="n_scenes">
+        <item quantity="one">%1$d scène</item>
+        <item quantity="many">%1$d scènes</item>
+        <item quantity="other">%1$d scènes</item>
+    </plurals>
     <string name="aerial_download_first">Téléchargez d’abord une scène. Sélectionnez une scène ci-dessous.</string>
     <string name="aerial_in_use">Le fond d’écran utilise cette scène. Choisissez d’abord un autre fond d’écran.</string>
     <string name="choose_gallery_hint">Choisissez « Galerie » comme écran de veille ici</string>

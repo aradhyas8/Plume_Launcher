@@ -14,7 +14,6 @@
     <string name="use_video">Use this video</string>
     <string name="remove_video">Remove a video…</string>
     <string name="video_sources_credit">Choose a moving scene for your home screen. Downloads start on selection.</string>
-    <string name="n_scenes">%1$d scenes</string>
     <string name="video_keep_one">Keep only current video</string>
     <string name="video_keep_one_desc">Delete previous video to save TV storage</string>
     <string name="video_downloading">Downloading video: %1$d%%</string>
@@ -157,7 +156,14 @@
     <string name="your_photos">Your photos</string>
     <string name="aerial_views">Aerial Views</string>
     <string name="use_aerial_views">Use Aerial Views</string>
-    <string name="aerial_on_disk">%1$d scenes, %2$d MB</string>
+    <plurals name="aerial_on_disk">
+        <item quantity="one">%1$d scene, %2$d MB</item>
+        <item quantity="other">%1$d scenes, %2$d MB</item>
+    </plurals>
+    <plurals name="n_scenes">
+        <item quantity="one">%1$d scene</item>
+        <item quantity="other">%1$d scenes</item>
+    </plurals>
     <string name="aerial_download_first">Download a scene first. Select a scene below.</string>
     <string name="aerial_in_use">The wallpaper uses this scene. Choose another wallpaper first.</string>
     <string name="choose_gallery_hint">Choose \"Gallery\" as the screensaver here</string>

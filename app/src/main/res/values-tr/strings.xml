@@ -112,7 +112,14 @@
     <string name="your_photos">Fotoğraflarınız</string>
     <string name="aerial_views">Aerial Views</string>
     <string name="use_aerial_views">Aerial Views kullan</string>
-    <string name="aerial_on_disk">%1$d sahne, %2$d MB</string>
+    <plurals name="aerial_on_disk">
+        <item quantity="one">%1$d sahne, %2$d MB</item>
+        <item quantity="other">%1$d sahne, %2$d MB</item>
+    </plurals>
+    <plurals name="n_scenes">
+        <item quantity="one">%1$d sahne</item>
+        <item quantity="other">%1$d sahne</item>
+    </plurals>
     <string name="aerial_download_first">Önce bir sahne indirin. Aşağıdan bir sahne seçin.</string>
     <string name="aerial_in_use">Duvar kâğıdı bu sahneyi kullanıyor. Önce başka bir duvar kâğıdı seçin.</string>
     <string name="choose_gallery_hint">Buradan ekran koruyucu olarak \"Galeri\"yi seçin</string>

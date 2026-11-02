@@ -1447,13 +1447,13 @@ class MainActivity : Activity() {
                     else downloadVideo(forDark, randomItem, file) { pickVideoWallpaper(forDark) }
                 }
             },
-            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else getString(R.string.n_scenes, nasaScenes.size)) {
+            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else resources.getQuantityString(R.plurals.n_scenes, nasaScenes.size, nasaScenes.size)) {
                 pickVideoScenesList(forDark, getString(R.string.nasa_earth), nasaScenes) { pickVideoWallpaper(forDark) }
             },
-            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else getString(R.string.n_scenes, appleScenes.size)) {
+            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else resources.getQuantityString(R.plurals.n_scenes, appleScenes.size, appleScenes.size)) {
                 pickSourceCategories(forDark, getString(R.string.apple_aerial), appleScenes) { pickVideoWallpaper(forDark) }
             },
-            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else getString(R.string.n_scenes, amazonScenes.size)) {
+            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else resources.getQuantityString(R.plurals.n_scenes, amazonScenes.size, amazonScenes.size)) {
                 pickSourceCategories(forDark, getString(R.string.amazon_fire_tv), amazonScenes) { pickVideoWallpaper(forDark) }
             },
             page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) },
@@ -1493,7 +1493,7 @@ class MainActivity : Activity() {
         val categories = sourceScenes.map { it.category }.distinct()
         val rows = categories.map { category ->
             val catScenes = sourceScenes.filter { it.category == category }
-            page(category, if (currentScene?.category == category) CHOSEN else getString(R.string.n_scenes, catScenes.size)) {
+            page(category, if (currentScene?.category == category) CHOSEN else resources.getQuantityString(R.plurals.n_scenes, catScenes.size, catScenes.size)) {
                 pickVideoScenesList(forDark, category, catScenes) { pickSourceCategories(forDark, source, sourceScenes, onBack) }
             }
         }
@@ -3862,7 +3862,7 @@ class MainActivity : Activity() {
                 useGallery(null)
                 pickScreensaver(0)
             },
-            page(getString(R.string.aerial_views), if (aerialScreensaverOn()) CHOSEN else getString(R.string.n_scenes, aerialFiles(this).size)) {
+            page(getString(R.string.aerial_views), if (aerialScreensaverOn()) CHOSEN else aerialFiles(this).size.let { resources.getQuantityString(R.plurals.n_scenes, it, it) }) {
                 pickAerialScenes()
             },
             page(getString(R.string.your_photos), if (photos) "${wallpaperName(photoScreensaver()!!)} $CHOSEN" else "") {
@@ -3889,7 +3889,7 @@ class MainActivity : Activity() {
         val onDisk = aerialFiles(this)
         val mb = onDisk.sumOf { it.length() } / (1024 * 1024)
         val rows = listOf(
-            page(getString(R.string.use_aerial_views), if (aerialScreensaverOn()) CHOSEN else getString(R.string.aerial_on_disk, onDisk.size, mb)) {
+            page(getString(R.string.use_aerial_views), if (aerialScreensaverOn()) CHOSEN else resources.getQuantityString(R.plurals.aerial_on_disk, onDisk.size, onDisk.size, mb)) {
                 if (onDisk.isEmpty()) toast(getString(R.string.aerial_download_first), long = true)
                 else useGallery(AERIAL_SCREENSAVER)
                 pickAerialScenes(0)
