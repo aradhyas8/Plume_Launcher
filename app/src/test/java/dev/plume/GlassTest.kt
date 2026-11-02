@@ -135,6 +135,75 @@ class GlassTest {
         assertEquals(1f, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.PLAIN).lens, 0f)
     }
 
+    @Test fun clearRefractionKeepsCentreSharpAndBendsTheRimOutward() {
+        assertTrue("centre magnifies", clearLensScale(0f) > 1f)
+        assertTrue("rim samples outside the tile", clearLensScale(1f) < 1f)
+        var previous = clearLensScale(0f)
+        for (step in 1..4) {
+            val zoom = clearLensScale(step / 4f)
+            assertTrue("no reversed bands", zoom < previous)
+            assertTrue("bounded distortion", zoom in 0.8f..1.1f)
+            previous = zoom
+        }
+    }
+
+    @Test fun clearCacheBoundsMemoryAcrossRowsAndGrids() {
+        for (count in listOf(1, 8, 40, 100)) for ((width, height) in listOf(188 to 152, 600 to 900, 3840 to 2160)) {
+            val (w, h) = clearCacheSize(width, height, count)
+            assertTrue("positive dimensions", w > 0 && h > 0)
+            assertTrue("never larger than the tile", w <= width && h <= height)
+            assertTrue("visible tiles fit 2 MB", w.toLong() * h * count * 4 <= 2 * 1024 * 1024)
+        }
+    }
+
+    @Test fun clearCacheKeepsAnAppRowNearFullSize() {
+        val (w, h) = clearCacheSize(408, 321, 5)
+        assertTrue("sharp, not upscaled", w >= 360 && h >= 280)
+    }
+
+    @Test fun clearLensMeshBendsOnlyTheRimAndSmoothly() {
+        val (verts, texs) = clearLensMesh(160, 90, 500f, 300f, 200f, 150f, 0.5f, 0.5f)
+        val n = LENS_GRID + 1
+        val row = LENS_GRID / 2 * n
+        assertEquals(n * n * 2, verts.size)
+        assertEquals(160f, verts[(row + n - 1) * 2], 0.01f)
+        assertEquals("centre samples the tile centre", 250f, texs[(row + LENS_GRID / 2) * 2], 0.01f)
+        assertTrue("rim samples outside the tile", texs[row * 2] < (500f - 200f) * 0.5f)
+        for (i in 1..LENS_GRID) {
+            val ux = verts[(row + i) * 2] / 80f - 1f
+            val x = texs[(row + i) * 2] / 0.5f - 500f
+            assertTrue("monotonic", texs[(row + i) * 2] > texs[(row + i - 1) * 2])
+            // Away from the rim band the picture is evenly magnified, not bulged.
+            if (kotlin.math.abs(ux) < 0.8f) assertEquals(ux * 200f / clearLensScale(0f), x, 0.5f)
+        }
+        assertEquals(LENS_GRID * LENS_GRID * 6, LENS_INDICES.size)
+        assertTrue(LENS_INDICES.all { it in 0 until n * n })
+    }
+
+    @Test fun clearCacheRefreshWaitsForGeometryInsteadOfTheFocusGlint() {
+        assertEquals(80L, clearBakeDelay(1000L, 1000L))
+        assertEquals(1L, clearBakeDelay(1079L, 1000L))
+        assertEquals(0L, clearBakeDelay(1080L, 1000L))
+        assertEquals("no extra delay after settling", 0L, clearBakeDelay(1500L, 1000L))
+    }
+
+    @Test fun clearRefreshFadesWithoutAnOpacityFlash() {
+        for (alpha in listOf(1, 128, 255)) {
+            assertEquals(0, clearImageAlpha(0, alpha, true))
+            assertEquals(alpha, clearImageAlpha(CLEAR_FADE_MS, alpha, true))
+            assertEquals("animations off: immediate", alpha, clearImageAlpha(0, alpha, false))
+            var previous = 0
+            for (elapsed in 0L..CLEAR_FADE_MS step 10) {
+                val image = clearImageAlpha(elapsed, alpha, true)
+                assertTrue("smooth forward fade", image >= previous)
+                val base = clearBaseAlpha(alpha, image)
+                val combined = image + base * (1f - image / 255f)
+                assertEquals("no brighter or darker flash", alpha.toFloat(), combined, 1f)
+                previous = image
+            }
+        }
+    }
+
     @Test fun theOldGlassSwitchStillMeansSomething() {
         assertEquals(GlassStyle.FROSTED, GlassStyle.of(null, oldOn = true))
         assertTrue(GlassStyle.of(null, oldOn = false) == null)

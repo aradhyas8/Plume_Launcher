@@ -1188,8 +1188,7 @@ class MainActivity : Activity() {
     private var glassPixels: IntArray? = null
 
     /**
-     * The blur for menus, dialogs and the panel: always Frosted's, because text over Clear's sharper picture is hard to
-     * read. With Frosted it is the tiles' own bitmap; with Clear, a second one (230 KB).
+     * The blur for menus, dialogs and the panel: softer than tiles so text stays readable.
      */
     private var surfaceBlur: Bitmap? = null
 
@@ -1214,9 +1213,9 @@ class MainActivity : Activity() {
         if (was != null && was.first == look && was.second === px) return
         glassShown = look to px
         val shown = px?.takeIf { look.active != null }
-        glass.setSharp(sharpPixels?.takeIf { look.active == GlassStyle.CLEAR })
+        glass.setSharp(sharpPixels?.takeIf { look.active == GlassStyle.CLEAR }, io)
         glass.setBlur(shown?.let { glassBlur(it, look.active!!.radius, look.dark) })
-        val frost = GlassStyle.FROSTED.radius
+        val frost = if (look.active == GlassStyle.CLEAR) 4 else GlassStyle.FROSTED.radius
         surfaceBlur = if (look.active?.radius == frost) glass.blur
             else shown?.let { Bitmap.createBitmap(glassBlur(it, frost, look.dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
         glassSurfaces.forEach { it.get()?.setBlur(surfaceBlur) } // menus and cards that are open, and the panel
