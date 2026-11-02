@@ -267,6 +267,14 @@ internal fun clearCacheSize(w: Int, h: Int, visible: Int): Pair<Int, Int> {
 /** Refresh shortly after geometry stops moving, independently of the focus glint. */
 internal fun clearBakeDelay(now: Long, movedAt: Long) = (80L - (now - movedAt)).coerceAtLeast(0L)
 
+internal const val CLEAR_FADE_MS = 120L
+internal fun clearImageAlpha(elapsed: Long, alpha: Int, animate: Boolean) =
+    if (animate) (alpha * (elapsed.toFloat() / CLEAR_FADE_MS).coerceIn(0f, 1f)).toInt() else alpha
+
+/** Preserve the tile's total opacity while its two images overlap, without an offscreen layer. */
+internal fun clearBaseAlpha(alpha: Int, imageAlpha: Int) =
+    if (imageAlpha == 255) 0 else ((alpha - imageAlpha) * 255f / (255 - imageAlpha)).toInt()
+
 /** The frost for [glassScreen] pixels: about a millisecond, so it is redone on the UI thread when the look changes. */
 internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius, passes = 3), dark)
 
@@ -293,6 +301,7 @@ internal class GlassLayer(context: Context) : View(context) {
         val area = Rect()
         val bakedArea = Rect()
         var image: Bitmap? = null
+        var readyAt = 0L
     }
 
     private val tiles = ArrayList<Tile>()
@@ -418,6 +427,8 @@ internal class GlassLayer(context: Context) : View(context) {
                                 for ((tile, area, image) in results) if (tile in tiles && tile.area == area) {
                                     tile.image = image
                                     tile.bakedArea.set(area)
+                                    tile.readyAt = SystemClock.uptimeMillis()
+                                    if (android.animation.ValueAnimator.areAnimatorsEnabled()) until = maxOf(until, tile.readyAt + CLEAR_FADE_MS)
                                 }
                             }
                             if (isAttachedToWindow) invalidate() // An outdated job must still let the current viewport request its images.
@@ -563,17 +574,21 @@ internal class GlassLayer(context: Context) : View(context) {
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
             val sh = sharpShader
             if (sh != null) {
-                lensPaint.alpha = alpha
-                val image = t.image
-                if (image != null && t.bakedArea == t.area) {
-                    lensPaint.shader = null
-                    c.drawBitmap(image, null, rect, lensPaint)
-                } else {
+                val image = t.image?.takeIf { t.bakedArea == t.area }
+                val imageAlpha = if (image == null) 0 else clearImageAlpha(SystemClock.uptimeMillis() - t.readyAt, alpha,
+                    android.animation.ValueAnimator.areAnimatorsEnabled())
+                if (imageAlpha < alpha) {
                     matrix.set(sharpBase)
                     matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
                     sh.setLocalMatrix(matrix)
                     lensPaint.shader = sh
+                    lensPaint.alpha = clearBaseAlpha(alpha, imageAlpha)
                     c.drawRoundRect(rect, rx, ry, lensPaint)
+                }
+                if (image != null && imageAlpha > 0) {
+                    lensPaint.shader = null
+                    lensPaint.alpha = imageAlpha
+                    c.drawBitmap(image, null, rect, lensPaint)
                 }
             } else if (s != null) {
                 matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)

@@ -163,6 +163,23 @@ class GlassTest {
         assertEquals("no extra delay after settling", 0L, clearBakeDelay(1500L, 1000L))
     }
 
+    @Test fun clearRefreshFadesWithoutAnOpacityFlash() {
+        for (alpha in listOf(1, 128, 255)) {
+            assertEquals(0, clearImageAlpha(0, alpha, true))
+            assertEquals(alpha, clearImageAlpha(CLEAR_FADE_MS, alpha, true))
+            assertEquals("animations off: immediate", alpha, clearImageAlpha(0, alpha, false))
+            var previous = 0
+            for (elapsed in 0L..CLEAR_FADE_MS step 10) {
+                val image = clearImageAlpha(elapsed, alpha, true)
+                assertTrue("smooth forward fade", image >= previous)
+                val base = clearBaseAlpha(alpha, image)
+                val combined = image + base * (1f - image / 255f)
+                assertEquals("no brighter or darker flash", alpha.toFloat(), combined, 1f)
+                previous = image
+            }
+        }
+    }
+
     @Test fun theOldGlassSwitchStillMeansSomething() {
         assertEquals(GlassStyle.FROSTED, GlassStyle.of(null, oldOn = true))
         assertTrue(GlassStyle.of(null, oldOn = false) == null)
