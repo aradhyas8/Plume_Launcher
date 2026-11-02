@@ -78,6 +78,7 @@ class GlassTest {
         assertEquals("as strong as Dark", look.copy(coloured = false).wash() ushr 24, wash ushr 24)
         assertTrue("a pale accent on dark", luma(look.accent()!!) > 180)
         assertEquals("Dark has no accent", null, look.copy(coloured = false).accent())
+        assertEquals("tiles keep the thin tint, so each shows its own colour", look.copy(coloured = false).tile(lit = false), look.tile(lit = false))
     }
 
     @Test fun theGlintWaitsThenRunsOnce() {

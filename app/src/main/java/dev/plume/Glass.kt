@@ -173,8 +173,8 @@ internal fun vivid(hue: Int, dark: Boolean): Int {
 
 /**
  * Everything glass paints follows from these, so two equal looks need no redraw. [style] is the stored choice (null
- * for off); [hue] is the wallpaper's mean colour, which tints the glass. [coloured] (the Wallpaper theme): the glass
- * and the settings' accents take that colour, [vivid].
+ * for off); [hue] is the wallpaper's mean colour, which tints the glass. [coloured] (the Wallpaper theme): the panels
+ * and the settings' accents take that colour, [vivid]; tiles keep the thin tint.
  */
 internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val backdrop: Backdrop, val hue: Int = GLASS_GREY, val coloured: Boolean = false) {
     /**
@@ -195,7 +195,9 @@ internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val bac
         // Dark tint makes a focused tile darker, not brighter: on Clear and in the Wallpaper theme focus keeps the rest
         // tint and shows by its light (sheen, rim, glint) and lift instead.
         val more = lit && !(dark && (coloured || it == GlassStyle.CLEAR))
-        tint((if (more) it.tintLit else it.tintRest) * (if (dark) 9 else 8) / 8)
+        // Tiles keep the thin tint in the Wallpaper theme too: one vivid colour over every tile hid the colour of the
+        // picture under each one, so a busy photo turned the whole row one flat colour.
+        glassHue(hue, dark, (if (more) it.tintLit else it.tintRest) * (if (dark) 9 else 8) / 8)
     } ?: 0
 
     /** The panel's and menus' tint: as strong in both styles, as they carry text. */
