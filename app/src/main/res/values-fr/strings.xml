@@ -271,4 +271,15 @@
     <string name="help_wp_sources">Les sources dont les images deviennent le fond d\'écran : Watch Next d\'Android TV, ou une chaîne d\'une appli. Seules les images larges comptent (les affiches et les carrés sont écartés), et une image introuvable est passée. Le fond change aussi souvent qu\'un dossier de photos.</string>
     <string name="theme_wallpaper">Fond d\'écran</string>
     <string name="help_theme_wallpaper">Fond d\'écran choisit clair ou sombre selon votre image, et le verre prend ses couleurs.</string>
+    <string name="clock_style">Style de l’horloge</string>
+    <string name="clock_light">Fin</string>
+    <string name="clock_bold">Gras</string>
+    <string name="clock_serif">Serif</string>
+    <string name="help_clock_style">L’aspect des chiffres de l’horloge.</string>
+    <string name="clock_size">Taille de l’horloge</string>
+    <string name="clock_small">Petite</string>
+    <string name="clock_medium">Moyenne</string>
+    <string name="clock_large">Grande</string>
+    <string name="help_clock_size">La taille de l’horloge sur l’accueil.</string>
+    <string name="section_clock_weather">Horloge et météo</string>
 </resources>

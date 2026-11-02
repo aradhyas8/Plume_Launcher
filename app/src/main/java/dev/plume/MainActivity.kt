@@ -954,6 +954,15 @@ class MainActivity : Activity() {
 
     private fun wantDark() = prefersDark(prefs)
 
+    /** The clock's digits only: the date keeps the system font, which has every language's month names. */
+    private fun clockFace(): Typeface = when (prefs.getString("clock_style", "light")) {
+        "bold" -> Typeface.create("sans-serif", Typeface.BOLD) // strong on busy wallpapers
+        "serif" -> resources.getFont(R.font.clock_serif) // Fraunces, OFL
+        else -> Typeface.create("sans-serif-light", Typeface.NORMAL)
+    }
+
+    private fun clockSize() = CLOCK_SIZES.keys.first { it.toString() == prefs.getString("clock_size", "48") }
+
     private fun applyTheme() {
         dark = wantDark()
         fg = if (dark) DARK_TEXT else 0xFF111214.toInt()
@@ -969,6 +978,8 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.root).setBackgroundColor(ground)
         // With glass, the wallpaper and the frost behind the grid are the point of All apps: let them show.
         allApps.setBackgroundColor(if (glassy != null) Color.TRANSPARENT else ground)
+        findViewById<TextView>(R.id.clock).typeface = clockFace()
+        findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
         for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
             findViewById<TextView>(id).setTextColor(fg)
         }
@@ -1078,14 +1089,20 @@ class MainActivity : Activity() {
      * Text colour plus a shadow in the opposite colour. Plume never darkens the picture, so on a busy one this shadow
      * is what keeps the text readable: wider and stronger than a plain drop shadow.
      */
+    /** Text colour, and the same for an icon beside the text (the weather's). */
+    private fun TextView.tint(color: Int) {
+        setTextColor(color)
+        compoundDrawableTintList = ColorStateList.valueOf(color)
+    }
+
     private fun ink(v: TextView, color: Int, fade: Boolean = false) {
         if (wpThumb == null) v.setShadowLayer(0f, 0f, 0f, 0)
         // Tight and light: a wide one is cut off at the view's edges and shows as a dark box behind the text.
         else v.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), if (color == Color.WHITE) 0x73000000 else 0x66FFFFFF)
-        if (!fade || v.currentTextColor == color) return v.setTextColor(color)
+        if (!fade || v.currentTextColor == color) return v.tint(color)
         ValueAnimator.ofArgb(v.currentTextColor, color).apply {
             duration = 800 // with the wallpaper's crossfade
-            addUpdateListener { v.setTextColor(it.animatedValue as Int) }
+            addUpdateListener { v.tint(it.animatedValue as Int) }
             start()
         }
     }
@@ -2281,6 +2298,18 @@ class MainActivity : Activity() {
         val names = rowNames()
         // Rows with more than two values also step back with Left; two-value rows flip either way.
         val steps = mutableMapOf<Int, (Int) -> Unit>(
+            R.string.clock_size to { d ->
+                prefs.edit().putString("clock_size", CLOCK_SIZES.keys.toList().step(clockSize(), d).toString()).apply()
+                findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
+                findViewById<View>(R.id.clock).post { fitInk() } // the clock now covers other pixels
+                renderSettings(R.string.clock_size)
+            },
+            R.string.clock_style to { d ->
+                prefs.edit().putString("clock_style", CLOCK_STYLES.keys.toList().step(prefs.getString("clock_style", "light")!!, d)).apply()
+                findViewById<TextView>(R.id.clock).typeface = clockFace()
+                findViewById<View>(R.id.clock).post { fitInk() } // the clock now covers other pixels
+                renderSettings(R.string.clock_style)
+            },
             R.string.icon_style to { d ->
                 prefs.edit().putString("icon_style", ICON_STYLES.keys.toList().step(iconStyle(), d)).apply()
                 renderApps()
@@ -2380,6 +2409,12 @@ class MainActivity : Activity() {
             R.string.apps_when_hidden to Triple(getString(R.string.apps_when_hidden), getString(if (rowDrops()) R.string.moves_down else R.string.stays_put)) {
                 steps[R.string.apps_when_hidden]!!(1)
             },
+            R.string.clock_size to Triple(getString(R.string.clock_size), getString(CLOCK_SIZES.getValue(clockSize()))) {
+                steps[R.string.clock_size]!!(1)
+            },
+            R.string.clock_style to Triple(getString(R.string.clock_style), getString(CLOCK_STYLES.getValue(prefs.getString("clock_style", "light")!!))) {
+                steps[R.string.clock_style]!!(1)
+            },
             // "weather" is off/c/f as before; "wx_unit" keeps the unit while it's off.
             R.string.weather to Triple(getString(R.string.weather), toggle(weather != "off")) {
                 if (weather == "off") prefs.edit().putString("weather", unit).apply()
@@ -2446,7 +2481,7 @@ class MainActivity : Activity() {
             Triple(R.string.bottom_row, "${rowName()} · ${rows[R.string.show_row]!!.second}", listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
                 R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.restore_hidden)),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${prefs.getString("geo_city", null) ?: rows[R.string.weather_location]!!.second}",
-                listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
+                listOf(R.string.clock_style, R.string.clock_size, R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
@@ -2479,6 +2514,8 @@ class MainActivity : Activity() {
                 R.string.apps_when_hidden to listOf(R.string.stays_put, R.string.moves_down).map { getString(it) to null },
                 R.string.show_icons to listOf(R.string.monochrome, R.string.colour).map { getString(it) to null },
                 R.string.weather_units to listOf("°C" to null, "°F" to null),
+                R.string.clock_style to CLOCK_STYLES.values.map { getString(it) to null },
+                R.string.clock_size to CLOCK_SIZES.values.map { getString(it) to null },
             )
             val styles = keys.map { k ->
                 val cost = k == R.string.smooth_volume && prefs.getBoolean("smooth_volume", false)
@@ -4637,10 +4674,11 @@ class MainActivity : Activity() {
                 }
                 if (!prefs.contains("geo_lat")) return@execute
                 val now = getJson("https://api.open-meteo.com/v1/forecast?latitude=${prefs.getFloat("geo_lat", 0f)}" +
-                    "&longitude=${prefs.getFloat("geo_lon", 0f)}&current=temperature_2m,weather_code").getJSONObject("current")
+                    "&longitude=${prefs.getFloat("geo_lon", 0f)}&current=temperature_2m,weather_code,is_day").getJSONObject("current")
                 prefs.edit()
                     .putFloat("wx_temp", now.getDouble("temperature_2m").toFloat())
                     .putInt("wx_code", now.getInt("weather_code"))
+                    .putBoolean("wx_day", now.optInt("is_day", 1) == 1)
                     .putLong("wx_time", System.currentTimeMillis()).apply()
                 ui.post { if (!isDestroyed) showWeather() }
             } catch (e: Exception) {
@@ -4748,10 +4786,26 @@ class MainActivity : Activity() {
         }
         val c = prefs.getFloat("wx_temp", 0f)
         val temp = Math.round(if (unit == "f") c * 9 / 5 + 32 else c)
-        view.text = listOfNotNull("$temp° ${weatherWord(prefs.getInt("wx_code", 0))}".trim(), prefs.getString("geo_city", null))
-            .joinToString("  ·  ")
+        // Sits after the date on the same line: an icon for the sky, then the temperature. The city stays in settings.
+        val code = prefs.getInt("wx_code", 0)
+        view.text = "$temp°"
+        view.contentDescription = "$temp° ${weatherWord(code)}"
+        val icon = getDrawable(weatherIcon(code, prefs.getBoolean("wx_day", true)))!!.mutate().apply { setBounds(0, 0, dp(18), dp(18)) }
+        view.setCompoundDrawablesRelative(icon, null, null, null)
+        view.compoundDrawableTintList = ColorStateList.valueOf(view.currentTextColor)
         view.visibility = View.VISIBLE
         view.post { fitInk() }
+    }
+
+    /** The same WMO codes as icons. Clear and partly cloudy have a night version. */
+    private fun weatherIcon(code: Int, day: Boolean) = when (code) {
+        0 -> if (day) R.drawable.ms_light_mode_fill else R.drawable.ms_dark_mode_fill
+        1, 2 -> if (day) R.drawable.ms_partly_cloudy_day_fill else R.drawable.ms_partly_cloudy_night_fill
+        45, 48 -> R.drawable.ms_foggy_fill
+        in 51..67, in 80..82 -> R.drawable.ms_rainy_fill
+        in 71..77, 85, 86 -> R.drawable.ms_weather_snowy_fill
+        in 95..99 -> R.drawable.ms_thunderstorm_fill
+        else -> R.drawable.ms_cloud_fill
     }
 
     /** WMO weather codes, as Open-Meteo reports them. */
@@ -5341,7 +5395,7 @@ class MainActivity : Activity() {
             R.string.show_row to R.drawable.ms_visibility, R.string.apps_when_hidden to R.drawable.ms_vertical_align_bottom, R.string.row_name to R.drawable.ms_edit,
             R.string.show_icons to R.drawable.ms_badge, R.string.cw_apps to R.drawable.ms_widgets, R.string.cw_channels to R.drawable.ms_podcasts,
             R.string.restore_hidden to R.drawable.ms_visibility_off,
-            R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
+            R.string.clock_style to R.drawable.ms_schedule, R.string.clock_size to R.drawable.ms_format_size, R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
             R.string.screensaver to R.drawable.ms_bedtime, R.string.test_screensaver to R.drawable.ms_play_circle, R.string.screensaver_timing to R.drawable.ms_timer,
             R.string.home_button to R.drawable.ms_home, R.string.default_launcher to R.drawable.ms_home_app_logo, R.string.smooth_volume to R.drawable.ms_volume_up,
             R.string.section_keys to R.drawable.ms_keyboard, R.string.setup_home to R.drawable.ms_restart_alt,
@@ -5356,7 +5410,7 @@ class MainActivity : Activity() {
             R.string.section_style to R.string.help_style, R.string.section_clock_weather to R.string.help_clock_weather,
             R.string.theme to R.string.help_theme, R.string.glass to R.string.help_glass, R.string.app_animations to R.string.help_app_animations,
             R.string.app_names to R.string.help_app_names, R.string.row_position to R.string.help_row_position, R.string.show_row to R.string.help_show_row,
-            R.string.weather to R.string.help_weather, R.string.weather_units to R.string.help_units, R.string.screensaver to R.string.help_screensaver_pick,
+            R.string.clock_style to R.string.help_clock_style, R.string.clock_size to R.string.help_clock_size, R.string.weather to R.string.help_weather, R.string.weather_units to R.string.help_units, R.string.screensaver to R.string.help_screensaver_pick,
             R.string.test_screensaver to R.string.help_preview, R.string.folder_photo_changes to R.string.help_photo_every,
             R.string.section_app_row to R.string.help_apps_row, R.string.bottom_row to R.string.help_shows_row,
             R.string.section_screensaver to R.string.help_screensaver, R.string.section_remote_home to R.string.help_remote_home,
@@ -5373,6 +5427,8 @@ class MainActivity : Activity() {
             R.string.setup_home to R.string.help_run_setup, R.string.section_keys to R.string.help_remote_keys,
         )
         val ROW_SHOW = linkedMapOf("always" to R.string.always, "down" to R.string.on_down, "never" to R.string.never) // "Show row"
+        val CLOCK_SIZES = linkedMapOf(38 to R.string.clock_small, 48 to R.string.clock_medium, 60 to R.string.clock_large) // sp
+        val CLOCK_STYLES = linkedMapOf("light" to R.string.clock_light, "bold" to R.string.clock_bold, "serif" to R.string.clock_serif)
         const val BADGE = 0xFFFF453A.toInt()
         // Dark mode tokens, for AMOLED: true black, and near-black cards that read as cards because their edge
         // catches light (brightest along the top), the way light-mode cards use a soft shadow.
