@@ -197,6 +197,13 @@ internal fun <T> newestPerApp(items: List<Pair<Long, T>>, perApp: Int, app: (T) 
 }
 
 /**
+ * The cards of one source of a split row (By title, Per channel), in the order of the mixed row: newest first by the sort key, not
+ * the order the channel lists them in. Turned-off apps and repeats are left out, and no more than [limit] stay.
+ */
+internal fun <T> sourceCards(items: List<Pair<Long, T>>, perApp: Int, limit: Int, app: (T) -> String?, off: (T) -> Boolean, same: (T) -> String): List<T> =
+    newestPerApp(items, perApp, app).filter { !off(it) }.distinctBy(same).take(limit)
+
+/**
  * Whether an app's home-screen channel feeds Continue Watching. Channels named "Continue Watching" (Stremio's) start
  * on, every other one (Plex On Deck, a Stremio catalog) starts off; [flipped] holds the ones the user switched.
  */
@@ -404,7 +411,7 @@ class MainActivity : Activity() {
         loadWallpaper()
         // "Show row: On Down": the row slides in while one of its cards has focus, however focus got there.
         window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, now ->
-            val out = rowShow() == "down" && now?.getTag(R.id.watchRow) is Prog
+            val out = ShowRows.slidesIn(rowShow(), onCard = now?.getTag(R.id.watchRow) is Prog, onTitle = now === watchTitle)
             if (out != rowOut) { rowOut = out; placeRow(animate = true) }
         }
         watchScroll.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
@@ -4826,16 +4833,16 @@ class MainActivity : Activity() {
         val label = apps.associate { it.pkg to it.label }
         val found = ArrayList<Pair<ShowRows.Source, List<Prog>>>()
         val seen = HashSet<String>()
-        fun add(key: String, title: String, kind: ShowRows.Kind, items: List<Prog>) {
-            seen += items.mapNotNull { it.pkg }
-            val shown = items.filter { it.pkg !in off }.distinctBy { it.intent ?: it.title }.take(ROW_CARDS)
+        fun add(key: String, title: String, kind: ShowRows.Kind, items: List<Pair<Long, Prog>>) {
+            seen += items.mapNotNull { it.second.pkg }
+            val shown = sourceCards(items, PER_APP, ROW_CARDS, { it.group }, { it.pkg in off }) { it.intent ?: it.title }
             if (shown.isNotEmpty()) found += ShowRows.Source(key, title, kind) to shown
         }
-        add(WATCH_NEXT, getString(R.string.watch_next), ShowRows.Kind.WATCH_NEXT, newestPerApp(watchNext, PER_APP) { it.group })
+        add(WATCH_NEXT, getString(R.string.watch_next), ShowRows.Kind.WATCH_NEXT, watchNext)
         for ((id, p, n) in on.distinctBy { (_, p, n) -> channelKey(p, n) }) {
             val kind = if (n.equals("Continue Watching", ignoreCase = true)) ShowRows.Kind.CONTINUE else ShowRows.Kind.OTHER
             add(channelKey(p, n), if (n == label[p] || label[p].isNullOrBlank()) n else "${label[p]} · $n", kind,
-                readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "ch$id").map { it.second })
+                readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "ch$id"))
         }
         publishingPkgs = seen
         val rows = ShowRows.ordered(found.map { it.first }).map { s -> found.first { it.first === s } }
@@ -5122,7 +5129,7 @@ class MainActivity : Activity() {
 
     private fun showWatchNext(cards: Cards) {
         val list = cards.list
-        val key = cards.current?.key.orEmpty() + "|" + cards.sources.size + "|" + list.joinToString("|") { "${it.title}/${it.sub}/${it.progress}/${it.image}" }
+        val key = ShowRows.stamp(cards.sources.map { it.key to it.title }, cards.current?.key, list.map { "${it.title}/${it.sub}/${it.progress}/${it.image}" })
         if (key == watchKey) { // unchanged: keep views (and focus) as they are, just fill in missing posters
             retryPosters()
             return
@@ -5360,10 +5367,10 @@ class MainActivity : Activity() {
     }
 
     private fun loadPoster(v: ImageView, uri: String?) {
+        v.tag = uri // a load still on its way for the show this card had finds another uri here and drops its picture
         if (uri == null) return
         posters.get(uri)?.let { v.setImageBitmap(it); return }
-        v.tag = uri
-        if (!loading.add(uri)) return // already on its way
+        if (!loading.add(uri)) return // already on its way: posterArrived fills this card when it lands
         posterIo.execute {
             val bmp = try {
                 decode(uri)
@@ -5374,7 +5381,17 @@ class MainActivity : Activity() {
                 loading.remove(uri)
             } ?: return@execute
             posters.put(uri, bmp)
-            ui.post { if (!isDestroyed && v.tag == uri) v.setImageBitmap(bmp) }
+            ui.post { posterArrived(uri) }
+        }
+    }
+
+    /** A poster is in the cache: each card that wants it shows it, whichever load fetched it. */
+    private fun posterArrived(uri: String) {
+        if (isDestroyed) return
+        val bmp = posters.get(uri) ?: return
+        for (i in 0 until watchRow.childCount) {
+            val img = ((watchRow.getChildAt(i) as? ViewGroup)?.getChildAt(0) as? ViewGroup)?.getChildAt(0) as? ImageView ?: continue
+            if (img.tag == uri) img.setImageBitmap(bmp)
         }
     }
 
@@ -5391,7 +5408,7 @@ class MainActivity : Activity() {
         val left = java.util.concurrent.atomic.AtomicInteger(missing.size)
         for (uri in missing) posterIo.execute {
             if (loading.add(uri)) try {
-                decode(uri)?.let { posters.put(uri, it) }
+                decode(uri)?.let { posters.put(uri, it); ui.post { posterArrived(uri) } }
             } catch (e: Exception) {
                 android.util.Log.w("TvHome", "poster failed: $uri ($e)")
             } finally {
