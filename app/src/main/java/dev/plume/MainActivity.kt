@@ -982,9 +982,11 @@ class MainActivity : Activity() {
             iconShadow(v)
         }
         val names = findViewById<LinearLayout>(R.id.nameRow).let { row -> (0 until row.childCount).map { row.getChildAt(it) as TextView } }
-        val apps = listOf(R.id.appsTitle, R.id.rowLabel).map { findViewById<TextView>(it) } + names
+        val apps = listOf(findViewById<TextView>(R.id.appsTitle)) + names
         appsInk = inkBehind(apps)
         for (v in apps) ink(v, appsInk, fade = true)
+        // The On focus name moves under each tile, so it is measured where it sits (and again as it moves, see showRowLabel).
+        findViewById<TextView>(R.id.rowLabel).let { ink(it, inkBehind(listOf(it)), fade = true) }
         val cols = (0 until watchRow.childCount).map { watchRow.getChildAt(it) as ViewGroup }
         val watch = listOf(watchTitle) + cols.flatMap { col -> (0 until col.childCount).mapNotNull { col.getChildAt(it) as? TextView } }
         watchInk = inkBehind(watch)
@@ -3234,6 +3236,7 @@ class MainActivity : Activity() {
                 label.box = v.width // the name stays inside its tile: when it is wider it scrolls
                 label.translationX = v.left + v.width / 2f - label.width / 2f
                 label.setActive(true)
+                ink(label, inkBehind(listOf(label))) // measured where it now sits, not where it was when fitInk ran
             }
             if (v.width > 0 && label.width > 0) place() else v.post { if (v.isFocused) place() }
             label.animate().alpha(if (dark) 0.85f else 1f).setDuration(160).start()
