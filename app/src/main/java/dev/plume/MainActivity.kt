@@ -1594,6 +1594,7 @@ class MainActivity : Activity() {
                         }
                     }
                 } else {
+                    active = false // A pending download must not replace this newer selection.
                     setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) }
                 }
             }
