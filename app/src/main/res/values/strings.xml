@@ -363,4 +363,9 @@
     <string name="help_wallpaper_pack">Six photos chosen to look good behind Clear and Frosted glass. They download only when you press OK. Credits are in Plume\'s README.</string>
     <string name="theme_wallpaper">Wallpaper</string>
     <string name="help_theme_wallpaper">Wallpaper picks light or dark from your picture, and the glass takes its colours.</string>
+    <string name="clock_style">Clock style</string>
+    <string name="clock_light">Light</string>
+    <string name="clock_rounded">Rounded</string>
+    <string name="clock_serif">Serif</string>
+    <string name="help_clock_style">The look of the clock’s numbers.</string>
 </resources>
