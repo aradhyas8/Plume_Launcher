@@ -276,4 +276,9 @@
     <string name="clock_bold">Gras</string>
     <string name="clock_serif">Serif</string>
     <string name="help_clock_style">L’aspect des chiffres de l’horloge.</string>
+    <string name="clock_size">Taille de l’horloge</string>
+    <string name="clock_small">Petite</string>
+    <string name="clock_medium">Moyenne</string>
+    <string name="clock_large">Grande</string>
+    <string name="help_clock_size">La taille de l’horloge sur l’accueil.</string>
 </resources>

@@ -215,4 +215,9 @@
     <string name="clock_bold">Kalın</string>
     <string name="clock_serif">Serif</string>
     <string name="help_clock_style">Saatteki rakamların görünümü.</string>
+    <string name="clock_size">Saat boyutu</string>
+    <string name="clock_small">Küçük</string>
+    <string name="clock_medium">Orta</string>
+    <string name="clock_large">Büyük</string>
+    <string name="help_clock_size">Ana ekrandaki saatin boyutu.</string>
 </resources>

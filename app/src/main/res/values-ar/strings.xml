@@ -231,4 +231,9 @@
     <string name="clock_bold">عريض</string>
     <string name="clock_serif">مزخرف</string>
     <string name="help_clock_style">شكل أرقام الساعة.</string>
+    <string name="clock_size">حجم الساعة</string>
+    <string name="clock_small">صغير</string>
+    <string name="clock_medium">متوسط</string>
+    <string name="clock_large">كبير</string>
+    <string name="help_clock_size">حجم الساعة في الشاشة الرئيسية.</string>
 </resources>

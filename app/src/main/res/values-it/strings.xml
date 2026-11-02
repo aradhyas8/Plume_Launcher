@@ -316,4 +316,9 @@
     <string name="clock_bold">Grassetto</string>
     <string name="clock_serif">Serif</string>
     <string name="help_clock_style">L’aspetto dei numeri dell’orologio.</string>
+    <string name="clock_size">Dimensione orologio</string>
+    <string name="clock_small">Piccolo</string>
+    <string name="clock_medium">Medio</string>
+    <string name="clock_large">Grande</string>
+    <string name="help_clock_size">Quanto è grande l’orologio nella Home.</string>
 </resources>

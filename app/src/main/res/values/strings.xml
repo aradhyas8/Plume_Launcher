@@ -368,4 +368,9 @@
     <string name="clock_bold">Bold</string>
     <string name="clock_serif">Serif</string>
     <string name="help_clock_style">The look of the clock’s numbers.</string>
+    <string name="clock_size">Clock size</string>
+    <string name="clock_small">Small</string>
+    <string name="clock_medium">Medium</string>
+    <string name="clock_large">Large</string>
+    <string name="help_clock_size">How big the clock is on Home.</string>
 </resources>
