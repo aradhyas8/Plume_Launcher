@@ -384,7 +384,7 @@ class MainActivity : Activity() {
         if (!prefs.getBoolean("wp_shared", false)) {
             val wasDark = wantDark()
             val choice = prefs.getString(if (wasDark) "wp_dark" else "wp_light", null)
-                ?: if (wasDark) "res:Rockies (dusk)" else "res:Rockies (day)"
+                ?: defaultWallpaper(wasDark)
             val photo = prefs.getLong(if (wasDark) "wp_photo_dark" else "wp_photo_light", -1)
             val at = prefs.getLong(if (wasDark) "wp_photo_at_dark" else "wp_photo_at_light", System.currentTimeMillis())
             prefs.edit().putString("wp_light", choice).putString("wp_dark", choice)
@@ -1131,15 +1131,21 @@ class MainActivity : Activity() {
     // Light gets a soft white (the light ground colour), not #FFFFFF: pure white glares on a TV.
     private fun plainWallpaper(forDark: Boolean) = if (forDark) "plain:Pure black" else "plain:Soft white"
 
-    private fun defaultWallpaper(forDark: Boolean) = if (forDark) "res:Peak (dusk)" else "res:Porcelain Dunes"
+    private fun defaultWallpaper(forDark: Boolean) = plainWallpaper(forDark)
 
     private fun currentWallpaper(forDark: Boolean = dark) =
         prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it) } ?: defaultWallpaper(forDark)
 
-    /** The two bundled pictures were replaced: an old choice keeps working, on the picture that took its place. */
+    /** Removed pictures fall back to a plain colour, even before the new pack downloads. */
     private fun movedWallpaper(choice: String) = when (choice) {
-        "res:Rockies (day)" -> "res:Mist (day)"
-        "res:Rockies (dusk)" -> "res:Peak (dusk)"
+        "res:Rockies (day)", "res:Mist (day)", "res:Porcelain Dunes",
+        "pack:niteroi.webp", "pack:valencia-mist.webp", "pack:muralla-roja.webp",
+        "pack:porcelain-dunes.webp", "pack:glacier-silk.webp", "pack:rose-limestone.webp",
+        "pack:sage-tide.webp", "pack:lilac-haze.webp" -> plainWallpaper(false)
+        "res:Rockies (dusk)", "res:Peak (dusk)", "pack:hemisferic.webp",
+        "pack:light-trails.webp", "pack:t-centralen.webp", "pack:obsidian-dunes.webp",
+        "pack:petrol-current.webp", "pack:copper-eclipse.webp", "pack:indigo-ridge.webp",
+        "pack:aubergine-fold.webp" -> plainWallpaper(true)
         else -> choice
     }
 
@@ -5492,21 +5498,14 @@ class MainActivity : Activity() {
             "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,
             "Pure black" to R.string.wp_pure_black, "Soft white" to R.string.wp_soft_white,
         )
-        val BUNDLED_WALLPAPERS = linkedMapOf(
-            "Porcelain Dunes" to R.drawable.wallpaper_porcelain,
-            "Mist (day)" to R.drawable.wallpaper,
-            "Peak (dusk)" to R.drawable.wallpaper_dark,
-        )
-        /** The wallpaper pack: photos picked on a TV to suit Clear and Frosted glass, fetched only when asked. File, name, dark. */
+        val BUNDLED_WALLPAPERS = emptyMap<String, Int>()
+        /** The wallpaper pack, fetched only when asked. File, name, dark. */
         val PACK_WALLPAPERS = listOf(
-            Triple("niteroi.webp", "Niterói", false), Triple("valencia-mist.webp", "Valencia mist", false),
-            Triple("muralla-roja.webp", "Muralla Roja", false), Triple("hemisferic.webp", "Hemisfèric", true),
-            Triple("light-trails.webp", "Light trails", true), Triple("t-centralen.webp", "T-Centralen", true),
-            Triple("porcelain-dunes.webp", "Porcelain Dunes", false), Triple("glacier-silk.webp", "Glacier Silk", false),
-            Triple("rose-limestone.webp", "Rose Limestone", false), Triple("sage-tide.webp", "Sage Tide", false),
-            Triple("lilac-haze.webp", "Lilac Haze", false), Triple("obsidian-dunes.webp", "Obsidian Dunes", true),
-            Triple("petrol-current.webp", "Petrol Current", true), Triple("copper-eclipse.webp", "Copper Eclipse", true),
-            Triple("indigo-ridge.webp", "Indigo Ridge", true), Triple("aubergine-fold.webp", "Aubergine Fold", true),
+            Triple("01_Alpine_Dawn.webp", "Alpine Dawn", false), Triple("02_Forest_Mist.webp", "Forest Mist", false),
+            Triple("03_Coastal_Dusk.webp", "Coastal Dusk", true), Triple("04_Autumn_Canopy.webp", "Autumn Canopy", true),
+            Triple("05_Arctic_Aurora.webp", "Arctic Aurora", true), Triple("06_Sand_Dunes.webp", "Sand Dunes", false),
+            Triple("07_Aerial_River.webp", "Aerial River", false), Triple("08_Ocean_Reef.webp", "Ocean Reef", false),
+            Triple("09_Cherry_Blossom.webp", "Cherry Blossom", false), Triple("10_Moonlit_Ridge.webp", "Moonlit Ridge", true),
         )
         const val PACK_URL = "https://raw.githubusercontent.com/aradhyas8/Plume_Launcher/main/wallpapers/"
         const val PACK_MB = "2.2 MB"

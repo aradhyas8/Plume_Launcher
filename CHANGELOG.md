@@ -16,13 +16,13 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
-- **More wallpapers.** Built-in includes Porcelain Dunes. Select **More photos** to download six photos and ten original wallpapers.
+- **New wallpapers.** Select **Wallpaper → Built-in → More photos** to download ten wallpapers. Each image is 1920 × 1080.
+- Old wallpapers no longer ship in the app. Old selections use a plain colour until you select another wallpaper.
 - **Live wallpapers.** Select **Plume settings → Wallpaper → Live wallpapers**. Choose from NASA, Apple and Amazon scenes, or upload your own MP4. A scene downloads only after you select it.
 - **Wallpaper theme.** Select **Plume settings → Style → Theme → Wallpaper**. Plume picks light or dark from the wallpaper, and the settings take its colour.
 - **A new Plume settings.** The sections have new icons, new groups and clearer names. The wallpaper card is at the top.
 - **The selected tile rises.** The selected tile or card moves up out of its row, so you can find it easily.
 - **New clock.** Date and weather show on one line, with a weather icon. Select **Plume settings → Clock & weather → Clock style** or **Clock size**.
-- **More photos.** Select **Plume settings → Wallpaper → Built-in → More photos**. Plume downloads six photos that look good behind glass.
 - **Glass edges catch light.** The top edge of each glass tile is lit, and a light runs along it when you select it. Text stays easy to read on any wallpaper.
 - **Italian.** Plume is now available in Italian.
 - The wallpaper stays the same when the theme changes from light to dark.
