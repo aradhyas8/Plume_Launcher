@@ -67,6 +67,14 @@ class GlassTest {
         assertEquals("off: no tint", 0, look.copy(style = null).tile(lit = true))
     }
 
+    @Test fun neutralGlassIsThinGrey() {
+        val look = GlassLook(GlassStyle.FROSTED, dark = true, backdrop = Backdrop.PICTURE, hue = px(40, 160, 60), neutral = true)
+        val wash = look.wash()
+        assertEquals("grey, not green", wash shr 8 and 0xFF, wash shr 16 and 0xFF)
+        assertTrue("thinner than the tinted panel", wash ushr 24 < look.copy(neutral = false).wash() ushr 24)
+        assertTrue("thinner tiles", look.tile(lit = true) ushr 24 < look.copy(neutral = false).tile(lit = true) ushr 24)
+    }
+
     @Test fun aSurfaceFindsItsPlaceInTheBlur() {
         // The blur is 16:9 (320x180), so on a 1920x1080 screen it scales by 6 both ways; a view at (300, 200) shifts it back.
         val m = glassMapping(1920, 1080, 300, 200)

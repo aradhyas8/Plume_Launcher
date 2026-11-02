@@ -55,15 +55,15 @@ internal fun boxBlur(px: IntArray, w: Int, h: Int, radius: Int, passes: Int = 2)
 }
 
 /**
- * The frost keeps the wallpaper's colours, a little richer (15% more saturation), as glass makes what is behind it
+ * The frost keeps the wallpaper's colours, a little richer ([sat]% saturation), as glass makes what is behind it
  * look; light mode lifts them a tenth of the way to white. The tint on top ([glassHue]) gives the light or dark side.
  */
-internal fun glassTone(px: IntArray, dark: Boolean): IntArray = IntArray(px.size) {
+internal fun glassTone(px: IntArray, dark: Boolean, sat: Int = 115): IntArray = IntArray(px.size) {
     val p = px[it]
     val c = IntArray(3) { k -> p shr (16 - 8 * k) and 0xFF }
     val grey = (c[0] * 299 + c[1] * 587 + c[2] * 114) / 1000
     for (k in 0..2) {
-        c[k] = (grey + (c[k] - grey) * 115 / 100).coerceIn(0, 255)
+        c[k] = (grey + (c[k] - grey) * sat / 100).coerceIn(0, 255)
         if (!dark) c[k] += (255 - c[k]) / 10
     }
     (0xFF shl 24) or (c[0] shl 16) or (c[1] shl 8) or c[2]
@@ -140,9 +140,10 @@ internal enum class Backdrop {
 
 /**
  * Everything glass paints follows from these, so two equal looks need no redraw. [style] is the stored choice (null
- * for off); [hue] is the wallpaper's mean colour, which tints the glass.
+ * for off); [hue] is the wallpaper's mean colour, which tints the glass. [neutral] (the Wallpaper theme): a thin grey
+ * tint over a richer blur, so the glass takes its colour from the wallpaper behind it, not from a tint.
  */
-internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val backdrop: Backdrop, val hue: Int = GLASS_GREY) {
+internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val backdrop: Backdrop, val hue: Int = GLASS_GREY, val neutral: Boolean = false) {
     /**
      * The style that shows: none on a plain background, which has nothing behind it. Clear needs a still picture: a
      * video moves, so the sharp still under a tile would not match it; there it is Frosted, whose heavy blur of the
@@ -157,10 +158,15 @@ internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val bac
     val lens: Float get() = active?.lens ?: 1f
 
     /** A tile's tint, at rest or [lit]: 0 with glass off. */
-    fun tile(lit: Boolean): Int = active?.let { glassHue(hue, dark, if (lit) it.tintLit else it.tintRest) } ?: 0
+    fun tile(lit: Boolean): Int = active?.let { glassHue(tint, dark, (if (lit) it.tintLit else it.tintRest) * (if (neutral) 3 else 4) / 4) } ?: 0
 
     /** The panel's and menus' tint: as strong in both styles, as they carry text. */
-    fun wash(): Int = glassHue(hue, dark, 0xA6)
+    fun wash(): Int = glassHue(tint, dark, if (neutral) 0x73 else 0xA6)
+
+    /** The frost's saturation (see [glassTone]). */
+    val sat: Int get() = if (neutral) 130 else 115
+
+    private val tint get() = if (neutral) GLASS_GREY else hue
 }
 
 /**
@@ -234,7 +240,7 @@ internal const val LENS_MAG = 1.25f
 internal const val LENS_BEND = 0.5f
 
 /** The frost for [glassScreen] pixels: about a millisecond, so it is redone on the UI thread when the look changes. */
-internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius, passes = 3), dark)
+internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean, sat: Int = 115) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius, passes = 3), dark, sat)
 
 /**
  * The fine grain of frosted glass: a 64 px tile of soft light and dark specks, repeated. Made once; about 6% strong,

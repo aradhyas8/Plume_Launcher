@@ -224,4 +224,6 @@
     <string name="input_removed">أُزيل من الصف.</string>
     <string name="sources_hint">اضغط مطوّلًا على OK لتثبيت مدخل في الصف.</string>
     <string name="fire_os_no_input">لم يسمح Fire TV لـ Plume بالتبديل إلى هذا المدخل. اضغط مطولًا على زر الرئيسية واختر مصادر الإدخال.</string>
+    <string name="theme_wallpaper">الخلفية</string>
+    <string name="help_theme_wallpaper">تختار الخلفية الوضع الفاتح أو الداكن حسب صورتك، ويأخذ الزجاج ألوانها.</string>
 </resources>
