@@ -297,7 +297,7 @@
     <string name="sources_hint">Hold OK to pin an input to the row.</string>
     <string name="bing_daily">Photo of the day</string>
     <!-- Remote keys: change what a button on the remote does -->
-    <string name="section_clock_weather">Weather</string>
+    <string name="section_clock_weather">Clock &amp; weather</string>
     <string name="section_remote_home">Home &amp; remote</string>
     <string name="section_lock">PIN lock</string>
     <string name="lock_note">A PIN guards Plume settings, the Wi-Fi and Android settings, and changes to the home screen. Apps still open.</string>
@@ -367,6 +367,20 @@
     <string name="help_scene_kind">Press OK to see the scenes. A scene downloads when you pick it.</string>
     <string name="help_manage_videos">Remove scenes you downloaded and videos you sent.</string>
     <string name="help_built_in">The pictures that come with Plume, and a plain colour.</string>
+    <string name="get_wallpaper_pack">More photos (%1$s)</string>
+    <string name="downloading_wallpapers">Downloading wallpapers (%1$s)…</string>
+    <string name="wallpapers_failed">Couldn\'t download the wallpapers. Check the connection and try again.</string>
+    <string name="help_wallpaper_pack">Six photos and ten original wallpapers for Clear and Frosted glass. They download only when you press OK. Credits are in Plume\'s README.</string>
     <string name="theme_wallpaper">Wallpaper</string>
     <string name="help_theme_wallpaper">Wallpaper picks light or dark from your picture, and the glass takes its colours.</string>
+    <string name="clock_style">Clock style</string>
+    <string name="clock_light">Light</string>
+    <string name="clock_bold">Bold</string>
+    <string name="clock_serif">Serif</string>
+    <string name="help_clock_style">The look of the clock’s numbers.</string>
+    <string name="clock_size">Clock size</string>
+    <string name="clock_small">Small</string>
+    <string name="clock_medium">Medium</string>
+    <string name="clock_large">Large</string>
+    <string name="help_clock_size">How big the clock is on Home.</string>
 </resources>

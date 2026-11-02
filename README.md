@@ -258,7 +258,7 @@ Bug reports, design ideas, translations and pull requests are welcome. Plume sta
   - Ivan Shishkin: *Rye*
   - Jasper Francis Cropsey: *Autumn on the Hudson River*
   - Martin Johnson Heade: *Thunder Storm on Narragansett Bay*
-- **Wallpapers:** "The Lonely Tree, Garda Lake" by [Giuseppe Milo](https://commons.wikimedia.org/wiki/File:The_Lonely_Tree_Garda_Lake_Italy_Fine_Art_Photography_(188093893).jpeg) (CC BY 3.0), and "Mountain Peak, Alaska" by [Godot13](https://commons.wikimedia.org/wiki/File:Mountain_Peak,_Alaska_(1999).jpg) (CC BY-SA 4.0), via Wikimedia Commons
+- **Wallpaper pack:** ten 1920 × 1080 WebP images in [`wallpapers/`](wallpapers), available as an optional 2.2 MB download: Alpine Dawn, Forest Mist, Coastal Dusk, Autumn Canopy, Arctic Aurora, Sand Dunes, Aerial River, Ocean Reef, Cherry Blossom, and Moonlit Ridge.
 - **Aerial Views:** the Apple Aerial scene list comes from the [Aerial Views](https://github.com/theothernt/AerialViews) project (GPL-3.0). Plume's Aerial Views screensaver is not part of that app.
 - **App logos:** [Simple Icons](https://simpleicons.org) (CC0). All trademarks belong to their respective owners.
 - **HDMI input and settings icons:** [Material Symbols](https://fonts.google.com/icons) by Google (Apache 2.0)

@@ -311,4 +311,14 @@
     <string name="help_wp_sources">Le sorgenti le cui immagini diventano lo sfondo: Watch Next di Android TV, o un canale di un\'app. Plume usa solo immagini larghe. Salta locandine, quadrati e immagini che non riesce a ottenere. Lo sfondo cambia con la stessa frequenza di una cartella di foto.</string>
     <string name="theme_wallpaper">Sfondo</string>
     <string name="help_theme_wallpaper">Sfondo sceglie chiaro o scuro in base alla tua immagine, e il vetro ne prende i colori.</string>
+    <string name="clock_style">Stile orologio</string>
+    <string name="clock_light">Sottile</string>
+    <string name="clock_bold">Grassetto</string>
+    <string name="clock_serif">Serif</string>
+    <string name="help_clock_style">L’aspetto dei numeri dell’orologio.</string>
+    <string name="clock_size">Dimensione orologio</string>
+    <string name="clock_small">Piccolo</string>
+    <string name="clock_medium">Medio</string>
+    <string name="clock_large">Grande</string>
+    <string name="help_clock_size">Quanto è grande l’orologio nella Home.</string>
 </resources>

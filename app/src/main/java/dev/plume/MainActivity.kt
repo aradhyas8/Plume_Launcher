@@ -187,6 +187,12 @@ internal fun channelSortKey(engaged: Long, opened: Long) = watchSortKey(0, if (e
 internal fun <T> byWeight(rows: List<Triple<Long, Long, T>>) = rows.sortedByDescending { it.first }.map { it.second to it.third }
 
 /**
+ * A season or episode number fit to show, else null. Some apps store their own data in these columns (Alder puts "e"
+ * and a long base64 string there), which would print as "Se EeyJzIjoi..." under the card.
+ */
+internal fun displayNumber(s: String?) = s?.trim()?.takeIf { it.length in 1..6 && it.any(Char::isDigit) }
+
+/**
  * Newest first across apps (ties keep their order), each app's [perApp] newest ahead of the rest: one app's ten
  * shows can't bury the others. The rest follow, newest first, so an app on its own isn't held to [perApp].
  */
@@ -281,6 +287,8 @@ internal fun dropSessions(c: Context) {
         }
     }
 }
+
+internal fun <T> preferTvApps(tv: List<T>, other: List<T>, pkg: (T) -> String) = (tv + other).distinctBy(pkg)
 
 class MainActivity : Activity() {
 
@@ -397,7 +405,7 @@ class MainActivity : Activity() {
         if (!prefs.getBoolean("wp_shared", false)) {
             val wasDark = wantDark()
             val choice = prefs.getString(if (wasDark) "wp_dark" else "wp_light", null)
-                ?: if (wasDark) "res:Rockies (dusk)" else "res:Rockies (day)"
+                ?: defaultWallpaper(wasDark)
             val photo = prefs.getLong(if (wasDark) "wp_photo_dark" else "wp_photo_light", -1)
             val at = prefs.getLong(if (wasDark) "wp_photo_at_dark" else "wp_photo_at_light", System.currentTimeMillis())
             prefs.edit().putString("wp_light", choice).putString("wp_dark", choice)
@@ -970,6 +978,15 @@ class MainActivity : Activity() {
 
     private fun wantDark() = prefersDark(prefs)
 
+    /** The clock's digits only: the date keeps the system font, which has every language's month names. */
+    private fun clockFace(): Typeface = when (prefs.getString("clock_style", "light")) {
+        "bold" -> Typeface.create("sans-serif", Typeface.BOLD) // strong on busy wallpapers
+        "serif" -> resources.getFont(R.font.clock_serif) // Fraunces, OFL
+        else -> Typeface.create("sans-serif-light", Typeface.NORMAL)
+    }
+
+    private fun clockSize() = CLOCK_SIZES.keys.first { it.toString() == prefs.getString("clock_size", "48") }
+
     private fun applyTheme() {
         dark = wantDark()
         fg = if (dark) DARK_TEXT else 0xFF111214.toInt()
@@ -985,6 +1002,8 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.root).setBackgroundColor(ground)
         // With glass, the wallpaper and the frost behind the grid are the point of All apps: let them show.
         allApps.setBackgroundColor(if (glassy != null) Color.TRANSPARENT else ground)
+        findViewById<TextView>(R.id.clock).typeface = clockFace()
+        findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
         for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
             findViewById<TextView>(id).setTextColor(fg)
         }
@@ -1094,14 +1113,20 @@ class MainActivity : Activity() {
      * Text colour plus a shadow in the opposite colour. Plume never darkens the picture, so on a busy one this shadow
      * is what keeps the text readable: wider and stronger than a plain drop shadow.
      */
+    /** Text colour, and the same for an icon beside the text (the weather's). */
+    private fun TextView.tint(color: Int) {
+        setTextColor(color)
+        compoundDrawableTintList = ColorStateList.valueOf(color)
+    }
+
     private fun ink(v: TextView, color: Int, fade: Boolean = false) {
         if (wpThumb == null) v.setShadowLayer(0f, 0f, 0f, 0)
         // Tight and light: a wide one is cut off at the view's edges and shows as a dark box behind the text.
         else v.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), if (color == Color.WHITE) 0x73000000 else 0x66FFFFFF)
-        if (!fade || v.currentTextColor == color) return v.setTextColor(color)
+        if (!fade || v.currentTextColor == color) return v.tint(color)
         ValueAnimator.ofArgb(v.currentTextColor, color).apply {
             duration = 800 // with the wallpaper's crossfade
-            addUpdateListener { v.setTextColor(it.animatedValue as Int) }
+            addUpdateListener { v.tint(it.animatedValue as Int) }
             start()
         }
     }
@@ -1128,15 +1153,21 @@ class MainActivity : Activity() {
     // Light gets a soft white (the light ground colour), not #FFFFFF: pure white glares on a TV.
     private fun plainWallpaper(forDark: Boolean) = if (forDark) "plain:Pure black" else "plain:Soft white"
 
-    private fun defaultWallpaper(forDark: Boolean) = if (forDark) "res:Peak (dusk)" else "res:Mist (day)"
+    private fun defaultWallpaper(forDark: Boolean) = plainWallpaper(forDark)
 
     private fun currentWallpaper(forDark: Boolean = dark) =
         prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it) } ?: defaultWallpaper(forDark)
 
-    /** The two bundled pictures were replaced: an old choice keeps working, on the picture that took its place. */
+    /** Removed pictures fall back to a plain colour, even before the new pack downloads. */
     private fun movedWallpaper(choice: String) = when (choice) {
-        "res:Rockies (day)" -> "res:Mist (day)"
-        "res:Rockies (dusk)" -> "res:Peak (dusk)"
+        "res:Rockies (day)", "res:Mist (day)", "res:Porcelain Dunes",
+        "pack:niteroi.webp", "pack:valencia-mist.webp", "pack:muralla-roja.webp",
+        "pack:porcelain-dunes.webp", "pack:glacier-silk.webp", "pack:rose-limestone.webp",
+        "pack:sage-tide.webp", "pack:lilac-haze.webp" -> plainWallpaper(false)
+        "res:Rockies (dusk)", "res:Peak (dusk)", "pack:hemisferic.webp",
+        "pack:light-trails.webp", "pack:t-centralen.webp", "pack:obsidian-dunes.webp",
+        "pack:petrol-current.webp", "pack:copper-eclipse.webp", "pack:indigo-ridge.webp",
+        "pack:aubergine-fold.webp" -> plainWallpaper(true)
         else -> choice
     }
 
@@ -1187,8 +1218,7 @@ class MainActivity : Activity() {
     private var glassPixels: IntArray? = null
 
     /**
-     * The blur for menus, dialogs and the panel: always Frosted's, because text over Clear's sharper picture is hard to
-     * read. With Frosted it is the tiles' own bitmap; with Clear, a second one (230 KB).
+     * The blur for menus, dialogs and the panel: softer than tiles so text stays readable.
      */
     private var surfaceBlur: Bitmap? = null
 
@@ -1213,9 +1243,9 @@ class MainActivity : Activity() {
         if (was != null && was.first == look && was.second === px) return
         glassShown = look to px
         val shown = px?.takeIf { look.active != null }
-        glass.setSharp(sharpPixels?.takeIf { look.active == GlassStyle.CLEAR })
+        glass.setSharp(sharpPixels?.takeIf { look.active == GlassStyle.CLEAR }, io)
         glass.setBlur(shown?.let { glassBlur(it, look.active!!.radius, look.dark) })
-        val frost = GlassStyle.FROSTED.radius
+        val frost = if (look.active == GlassStyle.CLEAR) 4 else GlassStyle.FROSTED.radius
         surfaceBlur = if (look.active?.radius == frost) glass.blur
             else shown?.let { Bitmap.createBitmap(glassBlur(it, frost, look.dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
         glassSurfaces.forEach { it.get()?.setBlur(surfaceBlur) } // menus and cards that are open, and the panel
@@ -1273,6 +1303,7 @@ class MainActivity : Activity() {
         choice.startsWith("video:") -> videoScenes(this).firstOrNull { "video:${it.file}" == choice }?.name
             ?: choice.removePrefix("video:").substringBeforeLast('.')
         choice.startsWith("folder:") -> getString(R.string.folder_name, choice.substringAfter(':').substringAfter(':'))
+        choice.startsWith("pack:") -> PACK_WALLPAPERS.firstOrNull { "pack:${it.first}" == choice }?.second ?: choice.removePrefix("pack:")
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
     }
 
@@ -1455,6 +1486,7 @@ class MainActivity : Activity() {
         return when {
             choice == Bing.CHOICE -> fitWallpaper { Bing.file(this).inputStream() }
             choice == ShowsWall.CHOICE -> fitWallpaper { ShowsWall.file(this).inputStream() }
+            choice.startsWith("pack:") -> fitWallpaper { File(packDir(), choice.removePrefix("pack:")).inputStream() }
             choice.startsWith("folder:") -> {
                 val uri = ContentUris.withAppendedId(PHOTOS, folderPhoto(choice) ?: return null)
                 fitWallpaper { contentResolver.openInputStream(uri) ?: throw IOException("gone: $uri") }
@@ -1538,13 +1570,26 @@ class MainActivity : Activity() {
     }
 
     /** The pictures that ship with Plume, and the plain colour of the theme. */
-    private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } + plainWallpaper(forDark)
+    private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } +
+        PACK_WALLPAPERS.filter { File(packDir(), it.first).isFile }.sortedBy { it.third != forDark }.map { "pack:${it.first}" } + plainWallpaper(forDark)
 
+    private fun packDir() = File(filesDir, "wallpaper-pack")
+    private fun packReady() = PACK_WALLPAPERS.all { File(packDir(), it.first).exists() }
+
+    /** The pictures that ship with Plume, the downloaded pack, and the plain colour; until the pack is here, a tile fetches it. */
     private fun pickBuiltIn(forDark: Boolean, focusOn: String? = null) {
         val current = currentWallpaper(forDark)
+        val get = if (packReady()) emptyList() else listOf(
+            Tile(getString(R.string.get_wallpaper_pack, PACK_MB), icon = R.drawable.ms_photo_library, help = R.string.help_wallpaper_pack) {
+                download(PACK_URL, PACK_WALLPAPERS.map { it.first }, packDir(), getString(R.string.downloading_wallpapers, PACK_MB), R.string.wallpapers_failed) { ok ->
+                    if (ok && settingsScrim.visibility == View.VISIBLE) pickBuiltIn(forDark, "pack:${PACK_WALLPAPERS.first { it.third == forDark }.first}")
+                }
+            })
         wallGrid(getString(R.string.built_in), listOf(null to builtIns(forDark).map { c ->
-            Tile(wallpaperName(c), c) { setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) } }
-        }), forDark, current, focusOn) { pickWallpaper(forDark, current) }
+            Tile(wallpaperName(c), c, help = R.string.help_wallpaper_pack.takeIf { c.startsWith("pack:") }) {
+                setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) }
+            }
+        } + get), forDark, current, focusOn) { pickWallpaper(forDark, current) }
     }
 
     /** Your uploaded photos and videos, as choices; videos are the MP4s that are not catalogue scenes. */
@@ -2282,6 +2327,18 @@ class MainActivity : Activity() {
         val names = rowNames()
         // Rows with more than two values also step back with Left; two-value rows flip either way.
         val steps = mutableMapOf<Int, (Int) -> Unit>(
+            R.string.clock_size to { d ->
+                prefs.edit().putString("clock_size", CLOCK_SIZES.keys.toList().step(clockSize(), d).toString()).apply()
+                findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
+                findViewById<View>(R.id.clock).post { fitInk() } // the clock now covers other pixels
+                renderSettings(R.string.clock_size)
+            },
+            R.string.clock_style to { d ->
+                prefs.edit().putString("clock_style", CLOCK_STYLES.keys.toList().step(prefs.getString("clock_style", "light")!!, d)).apply()
+                findViewById<TextView>(R.id.clock).typeface = clockFace()
+                findViewById<View>(R.id.clock).post { fitInk() } // the clock now covers other pixels
+                renderSettings(R.string.clock_style)
+            },
             R.string.icon_style to { d ->
                 prefs.edit().putString("icon_style", ICON_STYLES.keys.toList().step(iconStyle(), d)).apply()
                 renderApps()
@@ -2382,6 +2439,12 @@ class MainActivity : Activity() {
             R.string.apps_when_hidden to Triple(getString(R.string.apps_when_hidden), getString(if (rowDrops()) R.string.moves_down else R.string.stays_put)) {
                 steps[R.string.apps_when_hidden]!!(1)
             },
+            R.string.clock_size to Triple(getString(R.string.clock_size), getString(CLOCK_SIZES.getValue(clockSize()))) {
+                steps[R.string.clock_size]!!(1)
+            },
+            R.string.clock_style to Triple(getString(R.string.clock_style), getString(CLOCK_STYLES.getValue(prefs.getString("clock_style", "light")!!))) {
+                steps[R.string.clock_style]!!(1)
+            },
             // "weather" is off/c/f as before; "wx_unit" keeps the unit while it's off.
             R.string.weather to Triple(getString(R.string.weather), toggle(weather != "off")) {
                 if (weather == "off") prefs.edit().putString("weather", unit).apply()
@@ -2448,7 +2511,7 @@ class MainActivity : Activity() {
             Triple(R.string.bottom_row, "${rowName()} · ${rows[R.string.show_row]!!.second}", listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
                 R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.cards_rows, R.string.restore_hidden)),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${prefs.getString("geo_city", null) ?: rows[R.string.weather_location]!!.second}",
-                listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
+                listOf(R.string.clock_style, R.string.clock_size, R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
@@ -2481,6 +2544,8 @@ class MainActivity : Activity() {
                 R.string.apps_when_hidden to listOf(R.string.stays_put, R.string.moves_down).map { getString(it) to null },
                 R.string.show_icons to listOf(R.string.monochrome, R.string.colour).map { getString(it) to null },
                 R.string.weather_units to listOf("°C" to null, "°F" to null),
+                R.string.clock_style to CLOCK_STYLES.values.map { getString(it) to null },
+                R.string.clock_size to CLOCK_SIZES.values.map { getString(it) to null },
             )
             val styles = keys.map { k ->
                 val cost = k == R.string.smooth_volume && prefs.getBoolean("smooth_volume", false)
@@ -3097,6 +3162,7 @@ class MainActivity : Activity() {
                     choice == Bing.CHOICE -> BitmapFactory.decodeFile(Bing.file(this@MainActivity).path, small)
                     choice == ShowsWall.CHOICE -> BitmapFactory.decodeFile(ShowsWall.file(this@MainActivity).path, small)
                     choice.startsWith("file:") -> BitmapFactory.decodeFile(File(wallpaperDir(), choice.removePrefix("file:")).path, small)
+                    choice.startsWith("pack:") -> BitmapFactory.decodeFile(File(packDir(), choice.removePrefix("pack:")).path, small)
                     choice.startsWith("video:") -> File(wallpaperDir(), choice.removePrefix("video:")).takeIf { it.isFile }?.let { videoPoster(it) }?.let { p ->
                         val w = if (big) 480 else 160
                         Bitmap.createScaledBitmap(p, w, maxOf(1, w * p.height / p.width), true).also { if (it !== p) p.recycle() }
@@ -3195,15 +3261,15 @@ class MainActivity : Activity() {
 
     private fun loadApps(): List<App> {
         val pm = packageManager
-        return pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0)
-            .map { it.activityInfo }
-            .filter { it.packageName != packageName && it.packageName != TV_SETTINGS }
-            .distinctBy { it.packageName }
-            .map { a ->
+        fun query(category: String) = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category), 0)
+            .map { it.activityInfo to category }
+        return preferTvApps(query(Intent.CATEGORY_LEANBACK_LAUNCHER), query(Intent.CATEGORY_LAUNCHER)) { it.first.packageName }
+            .filter { (a, _) -> a.packageName != packageName && a.packageName != TV_SETTINGS }
+            .map { (a, category) ->
                 App(
                     a.packageName,
                     a.loadLabel(pm).toString(),
-                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
+                    Intent(Intent.ACTION_MAIN).addCategory(category)
                         .setComponent(ComponentName(a.packageName, a.name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     a.loadIcon(pm),
                     load = { a.loadIcon(pm) },
@@ -4129,7 +4195,7 @@ class MainActivity : Activity() {
                 returnTo = focusKey(from)
             } else startApp(a.launch, from)
         } catch (e: Exception) {
-            packageManager.getLeanbackLaunchIntentForPackage(a.pkg)?.let { startApp(it, from) }
+            (packageManager.getLeanbackLaunchIntentForPackage(a.pkg) ?: packageManager.getLaunchIntentForPackage(a.pkg))?.let { startApp(it, from) }
         }
     }
 
@@ -4377,28 +4443,35 @@ class MainActivity : Activity() {
      * Fetches the Gallery paintings into a temporary folder and only swaps it in once every file arrived,
      * so a dropped connection never leaves a half-filled Gallery behind.
      */
-    private fun downloadPaintings(then: () -> Unit) {
+    private fun downloadPaintings(then: () -> Unit) =
+        download(PAINTINGS_URL, PAINTING_FILES, paintingsDir(this), getString(R.string.downloading_paintings, PAINTINGS_MB), R.string.paintings_failed) { ok ->
+            if (ok) then()
+            if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.screensaver)
+        }
+
+    /** Fetches [files] from [url] into [dir], all or nothing; [done] runs on the UI thread with whether they all arrived. */
+    private fun download(url: String, files: List<String>, dir: File, start: String, failed: Int, done: (Boolean) -> Unit) {
         if (downloading) return
         downloading = true
-        toast(getString(R.string.downloading_paintings, PAINTINGS_MB))
+        toast(start)
         Thread {
-            val part = File(filesDir, "paintings.part").apply { deleteRecursively(); mkdirs() }
+            val part = File(dir.path + ".part").apply { deleteRecursively(); mkdirs() }
             val ok = try {
-                for (f in PAINTING_FILES) openStream(PAINTINGS_URL + f).use { input ->
+                for (f in files) openStream(url + f).use { input ->
                     File(part, f).outputStream().use { input.copyTo(it) }
                 }
-                paintingsDir(this).deleteRecursively()
-                part.renameTo(paintingsDir(this))
+                dir.deleteRecursively()
+                part.renameTo(dir)
             } catch (e: Exception) {
-                android.util.Log.w("Plume", "paintings download failed ($e)")
+                android.util.Log.w("Plume", "download from $url failed ($e)")
                 part.deleteRecursively()
                 false
             }
             ui.post {
                 if (isDestroyed) return@post
                 downloading = false
-                if (ok) then() else toast(getString(R.string.paintings_failed), long = true)
-                if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.screensaver)
+                if (!ok) toast(getString(failed), long = true)
+                done(ok)
             }
         }.start()
     }
@@ -4648,10 +4721,11 @@ class MainActivity : Activity() {
                 }
                 if (!prefs.contains("geo_lat")) return@execute
                 val now = getJson("https://api.open-meteo.com/v1/forecast?latitude=${prefs.getFloat("geo_lat", 0f)}" +
-                    "&longitude=${prefs.getFloat("geo_lon", 0f)}&current=temperature_2m,weather_code").getJSONObject("current")
+                    "&longitude=${prefs.getFloat("geo_lon", 0f)}&current=temperature_2m,weather_code,is_day").getJSONObject("current")
                 prefs.edit()
                     .putFloat("wx_temp", now.getDouble("temperature_2m").toFloat())
                     .putInt("wx_code", now.getInt("weather_code"))
+                    .putBoolean("wx_day", now.optInt("is_day", 1) == 1)
                     .putLong("wx_time", System.currentTimeMillis()).apply()
                 ui.post { if (!isDestroyed) showWeather() }
             } catch (e: Exception) {
@@ -4759,10 +4833,26 @@ class MainActivity : Activity() {
         }
         val c = prefs.getFloat("wx_temp", 0f)
         val temp = Math.round(if (unit == "f") c * 9 / 5 + 32 else c)
-        view.text = listOfNotNull("$temp° ${weatherWord(prefs.getInt("wx_code", 0))}".trim(), prefs.getString("geo_city", null))
-            .joinToString("  ·  ")
+        // Sits after the date on the same line: an icon for the sky, then the temperature. The city stays in settings.
+        val code = prefs.getInt("wx_code", 0)
+        view.text = "$temp°"
+        view.contentDescription = "$temp° ${weatherWord(code)}"
+        val icon = getDrawable(weatherIcon(code, prefs.getBoolean("wx_day", true)))!!.mutate().apply { setBounds(0, 0, dp(18), dp(18)) }
+        view.setCompoundDrawablesRelative(icon, null, null, null)
+        view.compoundDrawableTintList = ColorStateList.valueOf(view.currentTextColor)
         view.visibility = View.VISIBLE
         view.post { fitInk() }
+    }
+
+    /** The same WMO codes as icons. Clear and partly cloudy have a night version. */
+    private fun weatherIcon(code: Int, day: Boolean) = when (code) {
+        0 -> if (day) R.drawable.ms_light_mode_fill else R.drawable.ms_dark_mode_fill
+        1, 2 -> if (day) R.drawable.ms_partly_cloudy_day_fill else R.drawable.ms_partly_cloudy_night_fill
+        45, 48 -> R.drawable.ms_foggy_fill
+        in 51..67, in 80..82 -> R.drawable.ms_rainy_fill
+        in 71..77, 85, 86 -> R.drawable.ms_weather_snowy_fill
+        in 95..99 -> R.drawable.ms_thunderstorm_fill
+        else -> R.drawable.ms_cloud_fill
     }
 
     /** WMO weather codes, as Open-Meteo reports them. */
@@ -4784,6 +4874,7 @@ class MainActivity : Activity() {
 
     private fun refreshWatchNext() {
         if (checkSelfPermission(TV_LISTINGS) != PackageManager.PERMISSION_GRANTED) {
+            android.util.Log.w("Plume", "continue watching: no $TV_LISTINGS")
             showWatchNext(Cards(emptyList(), null, emptyList()))
             return
         }
@@ -4791,6 +4882,7 @@ class MainActivity : Activity() {
             val cards = try {
                 queryWatchNext()
             } catch (e: Exception) {
+                android.util.Log.w("Plume", "continue watching failed ($e)")
                 Cards(emptyList(), null, emptyList())
             }
             ui.post { if (!isDestroyed) showWatchNext(cards) }
@@ -4819,6 +4911,7 @@ class MainActivity : Activity() {
             readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "ch$id")
         }
         val all = watchNext + channels
+        android.util.Log.i("Plume", "continue watching: ${watchNext.size} from Watch Next, ${channels.size} from ${on.size} channels")
         publishingPkgs = all.mapNotNull { it.second.pkg }.toSet()
         return Cards(emptyList(), null, newestPerApp(all.filter { it.second.pkg !in off }.distinctBy { it.second.intent ?: it.second.title }, PER_APP) { it.group }
             .take(ROW_CARDS))
@@ -4946,15 +5039,17 @@ class MainActivity : Activity() {
     /** Pairs of (sort key, item), see [watchSortKey]; a [group] is a channel, its rows sorted by [channelSortKey] and [byWeight]. */
     private fun readPrograms(uri: Uri, hidden: Set<String>, group: String? = null): List<Pair<Long, Prog>> {
         val out = ArrayList<Triple<Long, Long, Prog>>()
-        contentResolver.query(uri, null, null, null, null)?.use { c ->
+        val cursor = contentResolver.query(uri, null, null, null, null)
+        if (cursor == null) android.util.Log.w("Plume", "no TV provider answer for $uri") // provider hidden from us or missing
+        cursor?.use { c ->
             fun str(col: String) = c.getColumnIndex(col).let { if (it < 0 || c.isNull(it)) null else c.getString(it) }
             fun num(col: String) = c.getColumnIndex(col).let { if (it < 0 || c.isNull(it)) 0L else c.getLong(it) }
             while (c.moveToNext()) {
                 if (str("browsable") == "0") continue
                 val title = str("title") ?: continue
                 if (hideKey(str("package_name"), title) in hidden) continue
-                val season = str("season_display_number")
-                val episode = str("episode_display_number")
+                val season = displayNumber(str("season_display_number"))
+                val episode = displayNumber(str("episode_display_number"))
                 val duration = num("duration_millis")
                 val position = num("last_playback_position_millis")
                 val sub = listOfNotNull(
@@ -5606,7 +5701,7 @@ class MainActivity : Activity() {
             R.string.show_row to R.drawable.ms_visibility, R.string.apps_when_hidden to R.drawable.ms_vertical_align_bottom, R.string.row_name to R.drawable.ms_edit,
             R.string.show_icons to R.drawable.ms_badge, R.string.cw_apps to R.drawable.ms_widgets, R.string.cw_channels to R.drawable.ms_podcasts,
             R.string.restore_hidden to R.drawable.ms_visibility_off,
-            R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
+            R.string.clock_style to R.drawable.ms_schedule, R.string.clock_size to R.drawable.ms_format_size, R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
             R.string.screensaver to R.drawable.ms_bedtime, R.string.test_screensaver to R.drawable.ms_play_circle, R.string.screensaver_timing to R.drawable.ms_timer,
             R.string.home_button to R.drawable.ms_home, R.string.default_launcher to R.drawable.ms_home_app_logo, R.string.smooth_volume to R.drawable.ms_volume_up,
             R.string.section_keys to R.drawable.ms_keyboard, R.string.setup_home to R.drawable.ms_restart_alt,
@@ -5621,7 +5716,7 @@ class MainActivity : Activity() {
             R.string.section_style to R.string.help_style, R.string.section_clock_weather to R.string.help_clock_weather,
             R.string.theme to R.string.help_theme, R.string.glass to R.string.help_glass, R.string.app_animations to R.string.help_app_animations,
             R.string.app_names to R.string.help_app_names, R.string.row_position to R.string.help_row_position, R.string.show_row to R.string.help_show_row,
-            R.string.weather to R.string.help_weather, R.string.weather_units to R.string.help_units, R.string.screensaver to R.string.help_screensaver_pick,
+            R.string.clock_style to R.string.help_clock_style, R.string.clock_size to R.string.help_clock_size, R.string.weather to R.string.help_weather, R.string.weather_units to R.string.help_units, R.string.screensaver to R.string.help_screensaver_pick,
             R.string.test_screensaver to R.string.help_preview, R.string.folder_photo_changes to R.string.help_photo_every,
             R.string.section_app_row to R.string.help_apps_row, R.string.bottom_row to R.string.help_shows_row,
             R.string.section_screensaver to R.string.help_screensaver, R.string.section_remote_home to R.string.help_remote_home,
@@ -5638,6 +5733,8 @@ class MainActivity : Activity() {
             R.string.setup_home to R.string.help_run_setup, R.string.section_keys to R.string.help_remote_keys,
         )
         val ROW_SHOW = linkedMapOf("always" to R.string.always, "down" to R.string.on_down, "never" to R.string.never) // "Show row"
+        val CLOCK_SIZES = linkedMapOf(38 to R.string.clock_small, 48 to R.string.clock_medium, 60 to R.string.clock_large) // sp
+        val CLOCK_STYLES = linkedMapOf("light" to R.string.clock_light, "bold" to R.string.clock_bold, "serif" to R.string.clock_serif)
         val CARDS_ROWS = linkedMapOf(ShowRows.MIXED to R.string.cards_mixed, ShowRows.BY_TITLE to R.string.cards_title, ShowRows.PER_CHANNEL to R.string.cards_each) // "Rows"
         const val BADGE = 0xFFFF453A.toInt()
         // Dark mode tokens, for AMOLED: true black, and near-black cards that read as cards because their edge
@@ -5702,10 +5799,17 @@ class MainActivity : Activity() {
             "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,
             "Pure black" to R.string.wp_pure_black, "Soft white" to R.string.wp_soft_white,
         )
-        val BUNDLED_WALLPAPERS = linkedMapOf(
-            "Mist (day)" to R.drawable.wallpaper,
-            "Peak (dusk)" to R.drawable.wallpaper_dark,
+        val BUNDLED_WALLPAPERS = emptyMap<String, Int>()
+        /** The wallpaper pack, fetched only when asked. File, name, dark. */
+        val PACK_WALLPAPERS = listOf(
+            Triple("01_Alpine_Dawn.webp", "Alpine Dawn", false), Triple("02_Forest_Mist.webp", "Forest Mist", false),
+            Triple("03_Coastal_Dusk.webp", "Coastal Dusk", true), Triple("04_Autumn_Canopy.webp", "Autumn Canopy", true),
+            Triple("05_Arctic_Aurora.webp", "Arctic Aurora", true), Triple("06_Sand_Dunes.webp", "Sand Dunes", false),
+            Triple("07_Aerial_River.webp", "Aerial River", false), Triple("08_Ocean_Reef.webp", "Ocean Reef", false),
+            Triple("09_Cherry_Blossom.webp", "Cherry Blossom", false), Triple("10_Moonlit_Ridge.webp", "Moonlit Ridge", true),
         )
+        const val PACK_URL = "https://raw.githubusercontent.com/aradhyas8/Plume_Launcher/main/wallpapers/"
+        const val PACK_MB = "2.2 MB"
         val PIN_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,

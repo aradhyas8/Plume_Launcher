@@ -28,9 +28,16 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
         </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <package android:name="com.google.android.apps.tv.launcherx" />
         <!-- Fire OS's input switch, for the HDMI tiles (Remap.openInput) -->
         <package android:name="com.amazon.tv.inputpreference.service" />
+        <!-- The TV provider (Watch Next, app channels). Stock Android TV makes it visible to all apps;
+             some makers' builds (Philips) don't, and then every query comes back null. -->
+        <provider android:authorities="android.media.tv" />
     </queries>
 
     <application
@@ -53,6 +60,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.COMMON_HOME" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

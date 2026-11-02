@@ -73,6 +73,17 @@ class ContinueWatchingTest {
         assertEquals(listOf("x", "y"), newestPerApp(plain, 3) { "app" })
     }
 
+    @Test fun onlyReadableSeasonAndEpisodeNumbersShow() {
+        assertEquals("5", displayNumber("5"))
+        assertEquals("12", displayNumber(" 12 "))
+        assertEquals("1A", displayNumber("1A"))
+        // What Alder stores: a letter and an encoded blob. Neither prints, so the card shows only the time left.
+        assertEquals(null, displayNumber("e"))
+        assertEquals(null, displayNumber("eyJzIjoidHYiLCJrIjoidHUgaGkgcmUgZGlsIG1laW4iLCJ0IjoidHUgaGkgcmUgZGlsIG1laW4ifQ"))
+        assertEquals(null, displayNumber(""))
+        assertEquals(null, displayNumber(null))
+    }
+
     @Test fun continueWatchingChannelsStartOnOthersOff() {
         assertEquals(true, channelOn("Continue Watching", "stremio/Continue Watching", emptySet()))
         assertEquals(false, channelOn("On Deck", "plex/On Deck", emptySet()))
