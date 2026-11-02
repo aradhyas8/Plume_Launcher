@@ -234,12 +234,13 @@
             android:textSize="14sp"
             android:visibility="gone" />
 
+        <!-- 16dp between the title and the cards: room for the focused card's rise (~13dp). -->
         <dev.plume.SnapScrollView
             android:id="@+id/watchScroll"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="-16dp"
-            android:layout_marginTop="-16dp"
+            android:layout_marginTop="-8dp"
             android:layout_marginEnd="-16dp"
             android:layout_marginBottom="-24dp"
             android:clipToPadding="false"
