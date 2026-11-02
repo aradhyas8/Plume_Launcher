@@ -22,6 +22,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
@@ -412,9 +413,11 @@ class MainActivity : Activity() {
             setColorFilter(fg)
             val ring = GradientDrawable().apply { shape = GradientDrawable.OVAL }
             // Lit, the icon sits on its ring, so it takes the theme colour; otherwise it's on the wallpaper (see fitInk).
-            background = ring
+            // Under the ring, the icon's shadow (see iconShadow); empty until fitInk.
+            background = LayerDrawable(arrayOf(ColorDrawable(Color.TRANSPARENT), ring))
             setOnFocusChangeListener { v, focused ->
                 if (focused) lastTop = v
+                (background as LayerDrawable).getDrawable(0).alpha = if (focused) 0 else 255 // on its disc it needs none
                 // With glass a lit icon sits on a glass disc: the frost, its light and the wallpaper's tint.
                 val disc = glassActive()
                 ring.setColor(if (!focused) 0 else if (disc) glassLook().tile(lit = true) else if (dark) DARK_CARD_LIT[0] else Color.WHITE)
@@ -952,6 +955,7 @@ class MainActivity : Activity() {
         iconInk = fg
         for (v in topIcons()) v.setColorFilter(if (v.isFocused) fg else iconInk)
         watchInk = fg
+        appsInk = fg
     }
 
     // ---------- text over the wallpaper ----------
@@ -962,6 +966,7 @@ class MainActivity : Activity() {
     private var wpThumb: Bitmap? = null
     private var watchInk = Color.BLACK
     private var iconInk = Color.BLACK
+    private var appsInk = Color.BLACK
 
     private fun topIcons() = TOP_KEYS.keys.toList()
         .map { findViewById<ImageView>(it) }
@@ -972,15 +977,50 @@ class MainActivity : Activity() {
         for (v in top) ink(v, topInk, fade = true)
         val icons = topIcons()
         iconInk = inkBehind(icons)
-        for (v in icons) if (!v.isFocused) v.setColorFilter(iconInk)
-        val apps = listOf(R.id.appsTitle, R.id.rowLabel).map { findViewById<TextView>(it) }
-        val appsInk = inkBehind(apps)
-        for (v in apps) ink(v, appsInk, fade = true)
-        val watch = listOf(watchTitle) + (0 until watchRow.childCount).flatMap { i ->
-            (watchRow.getChildAt(i) as ViewGroup).let { col -> (0 until col.childCount).mapNotNull { col.getChildAt(it) as? TextView } }
+        for (v in icons) {
+            if (!v.isFocused) v.setColorFilter(iconInk)
+            iconShadow(v)
         }
+        val names = findViewById<LinearLayout>(R.id.nameRow).let { row -> (0 until row.childCount).map { row.getChildAt(it) as TextView } }
+        val apps = listOf(findViewById<TextView>(R.id.appsTitle)) + names
+        appsInk = inkBehind(apps)
+        for (v in apps) ink(v, appsInk, fade = true)
+        // The On focus name moves under each tile, so it is measured where it sits (and again as it moves, see showRowLabel).
+        findViewById<TextView>(R.id.rowLabel).let { ink(it, inkBehind(listOf(it)), fade = true) }
+        val cols = (0 until watchRow.childCount).map { watchRow.getChildAt(it) as ViewGroup }
+        val watch = listOf(watchTitle) + cols.flatMap { col -> (0 until col.childCount).mapNotNull { col.getChildAt(it) as? TextView } }
         watchInk = inkBehind(watch)
         for (v in watch) ink(v, watchInk, fade = true)
+        // The progress bar and the source mark go with the card's text.
+        for (col in cols) for (i in 0 until col.childCount) when (val v = col.getChildAt(i)) {
+            is ProgressBar -> v.progressDrawable = progressBarDrawable(watchInk)
+            is TextView -> if (v.tag == INK_MARK) v.compoundDrawablesRelative[0]?.setTint(watchInk)
+        }
+    }
+
+    /**
+     * A soft shadow in the opposite colour under a top icon, as [ink] gives text, so it holds on busy photos too.
+     * Drawn once into a small bitmap in the icon's background, under its focus ring; none on a plain wallpaper.
+     */
+    private fun iconShadow(v: ImageView) {
+        val layers = v.background as? LayerDrawable ?: return
+        val icon = v.drawable?.constantState?.newDrawable(resources)?.mutate()
+        val box = v.layoutParams.width - v.paddingLeft - v.paddingRight
+        if (wpThumb == null || icon == null || box <= 0) return layers.setDrawable(0, ColorDrawable(Color.TRANSPARENT))
+        val blur = dp(3)
+        val mask = Bitmap.createBitmap(box + blur * 2, box + blur * 2, Bitmap.Config.ARGB_8888)
+        icon.setBounds(blur, blur, blur + box, blur + box)
+        icon.draw(Canvas(mask))
+        val shape = mask.extractAlpha()
+        mask.eraseColor(Color.TRANSPARENT)
+        Canvas(mask).drawBitmap(shape, 0f, dp(1).toFloat(), Paint().apply {
+            color = if (iconInk == Color.WHITE) 0x80000000.toInt() else 0x80FFFFFF.toInt()
+            maskFilter = BlurMaskFilter(blur.toFloat(), BlurMaskFilter.Blur.NORMAL)
+        })
+        shape.recycle()
+        layers.setDrawable(0, BitmapDrawable(resources, mask).apply { alpha = if (v.isFocused) 0 else 255 })
+        val inset = v.paddingLeft - blur
+        layers.setLayerInset(0, inset, inset, inset, inset)
     }
 
     /** White or near-black, by the average brightness of the wallpaper under [views]; the theme colour without a photo. */
@@ -2868,6 +2908,7 @@ class MainActivity : Activity() {
     private fun showNet(caps: NetworkCapabilities?) {
         val ethernet = caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
         wifi.setImageResource(if (ethernet) R.drawable.ic_ethernet else R.drawable.ic_wifi)
+        iconShadow(wifi) // the shadow takes the new picture's shape
         // Dim only the icon: the focus ring is the background and should stay full strength.
         wifi.imageAlpha = if (caps == null) 90 else 255
     }
@@ -3172,8 +3213,10 @@ class MainActivity : Activity() {
             row.addView(fittingLabel(t.contentDescription.toString(), 13f).apply {
                 gravity = Gravity.CENTER
                 alpha = if (dark) 0.85f else 1f
+                ink(this, appsInk)
             }, LinearLayout.LayoutParams(t.layoutParams as LinearLayout.LayoutParams).apply { height = MATCH_PARENT })
         }
+        row.post { fitInk() } // measured again over the names' own place on the wallpaper
     }
 
     /** Slides the shared name label under the focused row tile; fades it out once focus leaves the row. */
@@ -3193,6 +3236,7 @@ class MainActivity : Activity() {
                 label.box = v.width // the name stays inside its tile: when it is wider it scrolls
                 label.translationX = v.left + v.width / 2f - label.width / 2f
                 label.setActive(true)
+                ink(label, inkBehind(listOf(label))) // measured where it now sits, not where it was when fitInk ran
             }
             if (v.width > 0 && label.width > 0) place() else v.post { if (v.isFocused) place() }
             label.animate().alpha(if (dark) 0.85f else 1f).setDuration(160).start()
@@ -4570,7 +4614,7 @@ class MainActivity : Activity() {
     private fun sourceIcon(pkg: String?): Drawable? {
         if (pkg == null) return null
         val colour = cwColour()
-        val tint = BRAND_COLOURS[pkg]?.takeIf { colour } ?: fg
+        val tint = BRAND_COLOURS[pkg]?.takeIf { colour } ?: watchInk // a mark without its brand colour goes with the card's text
         LOGOS[pkg]?.takeIf { !it.second }?.let { return getDrawable(it.first)!!.mutate().apply { setTint(tint) } }
         return try {
             packageManager.getApplicationIcon(pkg).mutate().apply { if (!colour) colorFilter = GREYSCALE }
@@ -4710,7 +4754,7 @@ class MainActivity : Activity() {
         col.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
             progress = p.progress
-            progressDrawable = progressBarDrawable()
+            progressDrawable = progressBarDrawable(watchInk)
             visibility = if (p.progress > 0) View.VISIBLE else View.INVISIBLE
         }, LinearLayout.LayoutParams(w, dp(3)).apply { topMargin = dp(8) })
         col.addView(title)
@@ -4724,6 +4768,8 @@ class MainActivity : Activity() {
                     it.setBounds(0, 0, dp(12), dp(12))
                     setCompoundDrawablesRelative(it, null, null, null)
                     compoundDrawablePadding = dp(6)
+                    // A plain mark (not the app's own icon, not in brand colour) follows the text: fitInk re-tints it.
+                    if (LOGOS[p.pkg]?.second == false && (!cwColour() || BRAND_COLOURS[p.pkg] == null)) tag = INK_MARK
                 }
             })
         }
@@ -4731,11 +4777,12 @@ class MainActivity : Activity() {
         return col
     }
 
-    private fun progressBarDrawable(): Drawable {
+    /** [ink] fills it; the track is a faint version on the same side, light behind white and dark behind near-black. */
+    private fun progressBarDrawable(ink: Int = fg): Drawable {
         fun bar(color: Int) = GradientDrawable().apply { cornerRadius = dp(2).toFloat(); setColor(color) }
         return LayerDrawable(arrayOf(
-            bar(if (dark) 0x40FFFFFF else 0x26000000),
-            ClipDrawable(bar(fg), Gravity.START, ClipDrawable.HORIZONTAL),
+            bar(if (Color.luminance(ink) > 0.5f) 0x40FFFFFF else 0x26000000),
+            ClipDrawable(bar(ink), Gravity.START, ClipDrawable.HORIZONTAL),
         )).apply {
             setId(0, android.R.id.background)
             setId(1, android.R.id.progress)
@@ -5022,6 +5069,7 @@ class MainActivity : Activity() {
         /** Glass setting -> its styles in cycling order; null is off. */
         val GLASS_STYLES: List<GlassStyle?> = listOf(null, GlassStyle.FROSTED, GlassStyle.CLEAR)
         const val GRID_GAP = 16 // dp; shared by the apps row and the cards so their columns line up
+        const val INK_MARK = "ink mark" // tag on a card's detail line whose source mark takes the text colour
         /** Shown names for the wallpaper keys saved in prefs (the keys stay English). */
         val WALLPAPER_NAMES = mapOf(
             "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,
