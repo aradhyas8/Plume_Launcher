@@ -208,4 +208,6 @@
     <string name="input_removed">Satırdan kaldırıldı.</string>
     <string name="sources_hint">Bir girişi satıra sabitlemek için OK tuşunu basılı tutun.</string>
     <string name="fire_os_no_input">Fire TV, Plume\'un bu girişe geçmesine izin vermedi. Ana Ekran tuşunu basılı tutup Girişler\'i seçin.</string>
+    <string name="theme_wallpaper">Duvar kağıdı</string>
+    <string name="help_theme_wallpaper">Duvar kağıdı, resminize göre açık veya koyu seçer; cam onun renklerini alır.</string>
 </resources>

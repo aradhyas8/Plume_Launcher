@@ -105,9 +105,10 @@ import java.util.Date
 import java.util.concurrent.Executors
 import org.json.JSONObject
 
-/** Light/dark from the launcher's theme setting; shared with the Gallery screensaver. */
+/** Light/dark from the launcher's theme setting; shared with the Gallery screensaver. Wallpaper: dark on a dark picture. */
 internal fun prefersDark(prefs: SharedPreferences) = when (prefs.getString("theme", "light")) {
     "dark" -> true
+    "wallpaper" -> prefs.getInt("glass_hue", GLASS_GREY).let { (it shr 16 and 0xFF) * 299 + (it shr 8 and 0xFF) * 587 + (it and 0xFF) * 114 } < 128_000
     "auto" -> autoDark(sunPlace(prefs), System.currentTimeMillis(), Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
     else -> false
 }
@@ -1130,7 +1131,8 @@ class MainActivity : Activity() {
      * The style, the theme and what is behind the home screen: all that glass depends on. A video is never captured
      * to blur (that fails on TVs that play video on a hardware overlay, and redrawing costs frames): it gets a tint.
      */
-    private fun glassLook() = GlassLook(glassStyle(), dark, Backdrop.of(currentWallpaper()), prefs.getInt("glass_hue", GLASS_GREY))
+    private fun glassLook() = GlassLook(glassStyle(), dark, Backdrop.of(currentWallpaper()), prefs.getInt("glass_hue", GLASS_GREY),
+        neutral = prefs.getString("theme", null) == "wallpaper")
 
     /** Glass needs something behind it: with a plain background the tiles stay as they are. */
     private fun glassActive() = glassLook().active != null
@@ -1310,6 +1312,7 @@ class MainActivity : Activity() {
                 wpThumb = thumb
                 // The glass is tinted with the wallpaper's mean colour; kept, so the next start has it before the picture.
                 thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
+                if (wantDark() != dark) return@post recreate() // the Wallpaper theme follows the new picture
                 fitInk()
                 val old = view.drawable
                 if (old == null || shown == null) {
@@ -2236,7 +2239,7 @@ class MainActivity : Activity() {
                 renderSettings(R.string.icon_style)
             },
             R.string.theme to { d ->
-                prefs.edit().putString("theme", listOf("light", "dark", "auto").step(theme, d)).putBoolean("reopen_settings", true).apply()
+                prefs.edit().putString("theme", THEMES.step(theme, d)).putBoolean("reopen_settings", true).apply()
                 recreate() // colours are applied once per activity; reopen the panel after
             },
             R.string.row_size to { d ->
@@ -2271,7 +2274,8 @@ class MainActivity : Activity() {
                 renderSettings(R.string.show_icons)
             },
             R.string.glass to { d ->
-                prefs.edit().putString("glass_style", GLASS_STYLES.step(glassStyle(), d)?.key ?: "off").apply()
+                val styles = if (currentWallpaper().startsWith("video:")) GLASS_STYLES - GlassStyle.CLEAR else GLASS_STYLES
+                prefs.edit().putString("glass_style", styles.step(glassStyle().let { if (it in styles) it else GlassStyle.FROSTED }, d)?.key ?: "off").apply()
                 // Clear's sharp picture is made only while Clear is the style: load the wallpaper again to make it.
                 if (glassStyle() == GlassStyle.CLEAR && sharpPixels == null && Backdrop.of(currentWallpaper()) == Backdrop.PICTURE) loadWallpaper()
                 else applyGlass()
@@ -2280,7 +2284,7 @@ class MainActivity : Activity() {
         )
         val rows = linkedMapOf<Int, Triple<String, String, () -> Unit>>(
             R.string.edit_apps_row to Triple(getString(R.string.edit_apps_row), "") { closeLauncherSettings(); startEdit(grab = null) },
-            R.string.theme to Triple(getString(R.string.theme), getString(mapOf("light" to R.string.theme_light, "dark" to R.string.theme_dark, "auto" to R.string.theme_auto)[theme] ?: R.string.theme_light)) {
+            R.string.theme to Triple(getString(R.string.theme), getString(mapOf("light" to R.string.theme_light, "dark" to R.string.theme_dark, "wallpaper" to R.string.theme_wallpaper, "auto" to R.string.theme_auto)[theme] ?: R.string.theme_light)) {
                 steps[R.string.theme]!!(1)
             },
             R.string.wallpaper to Triple(getString(R.string.wallpaper), wallpaperName(currentWallpaper())) { pickWallpaper(dark) },
@@ -2409,6 +2413,7 @@ class MainActivity : Activity() {
             val help = { k: Int ->
                 when {
                     k == R.string.theme && theme == "auto" -> autoNote()
+                    k == R.string.theme && theme == "wallpaper" -> getString(R.string.help_theme_wallpaper)
                     k == R.string.glass && glassStyle() == GlassStyle.CLEAR && currentWallpaper().startsWith("video:") -> getString(R.string.glass_clear_video)
                     else -> ROW_HELP[k]?.let { getString(it) }
                 }
@@ -2416,7 +2421,7 @@ class MainActivity : Activity() {
             // Choices show side by side (or under the title when long); the row's value is the picked one's name.
             val choices = mapOf(
                 R.string.theme to listOf(R.string.theme_light to R.drawable.ms_light_mode, R.string.theme_dark to R.drawable.ms_dark_mode,
-                    R.string.theme_auto to R.drawable.ms_routine).map { (s, i) -> getString(s) to i },
+                    R.string.theme_wallpaper to R.drawable.ms_wallpaper, R.string.theme_auto to R.drawable.ms_routine).map { (s, i) -> getString(s) to i },
                 R.string.glass to listOf(R.string.off, R.string.glass_frosted, R.string.glass_clear).map { getString(it) to null },
                 R.string.sort_apps to listOf(R.string.manual, R.string.most_used).map { getString(it) to null },
                 R.string.app_names to listOf(R.string.on_focus, R.string.always, R.string.never).map { getString(it) to null },
@@ -2431,6 +2436,7 @@ class MainActivity : Activity() {
                 val cost = k == R.string.smooth_volume && prefs.getBoolean("smooth_volume", false)
                 RowStyle(ROW_ICONS[k], sub = if (cost) getString(R.string.smooth_volume_cost) else null, choices = choices[k],
                     help = help(k), area = SECTION_AREAS[section.first], art = ROW_ART[k],
+                    dim = getString(R.string.glass_clear).takeIf { k == R.string.glass && currentWallpaper().startsWith("video:") },
                     // Without the adb permission, Home opens Plume is switched on in Android's Accessibility screen.
                     ext = k == R.string.screensaver_timing || k == R.string.home_button && !homeServiceOn() && checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED)
             }
@@ -2762,7 +2768,8 @@ class MainActivity : Activity() {
      */
     private class RowStyle(val icon: Int? = null, val sub: String? = null, val choices: List<Pair<String, Int?>>? = null,
                            val thumb: Pair<String, Boolean>? = null, val help: String? = null, val area: Int? = null,
-                           val art: String? = null, val ext: Boolean = false, val header: Boolean = false, val hero: Boolean = false)
+                           val art: String? = null, val ext: Boolean = false, val header: Boolean = false, val hero: Boolean = false,
+                           val dim: String? = null)
 
     // Settings colours, one set for each surface (dark or light, solid or glass). Over glass the text is a little
     // stronger and has a soft shadow, as the wallpaper's colour shows through the panel. Focus is always the brightest.
@@ -2859,7 +2866,7 @@ class MainActivity : Activity() {
         var below: View? = null
         when {
             options != null -> {
-                val (view, paint) = if (style.art != null) artChoices(style.art, options, value) else choices(options, value, stacked)
+                val (view, paint) = if (style.art != null) artChoices(style.art, options, value) else choices(options, value, stacked, style.dim)
                 restyle += paint
                 if (stacked) below = view else end.addView(view)
             }
@@ -2947,9 +2954,10 @@ class MainActivity : Activity() {
      * Every choice at once. The picked one has an outline and a light tint, never a solid fill, so the focused row stays
      * the brightest thing on the panel. Left and Right still step through them. Returns the view and its focus restyle.
      */
-    private fun choices(options: List<Pair<String, Int?>>, picked: String, stacked: Boolean = false): Pair<View, (Boolean) -> Unit> {
+    private fun choices(options: List<Pair<String, Int?>>, picked: String, stacked: Boolean = false, dim: String? = null): Pair<View, (Boolean) -> Unit> {
         val pills = options.map { (text, iconRes) ->
             label(text, 14f).apply {
+                if (text == dim) alpha = .35f // there but not available here (Clear on a video)
                 gravity = Gravity.CENTER
                 // Under the title the choices share the row's width, icon above name, so four of them still fit.
                 if (stacked) { maxLines = 2; setPadding(dp(4), dp(6), dp(4), dp(6)) } else setPadding(dp(10), dp(5), dp(10), dp(5))
@@ -5357,6 +5365,7 @@ class MainActivity : Activity() {
         val ICON_STYLES = linkedMapOf(ICON_STYLE_KEYS[0] to R.string.monochrome, ICON_STYLE_KEYS[1] to R.string.colour, ICON_STYLE_KEYS[2] to R.string.banner, ICON_STYLE_KEYS[3] to R.string.banner_mono)
         /** Glass setting -> its styles in cycling order; null is off. */
         val GLASS_STYLES: List<GlassStyle?> = listOf(null, GlassStyle.FROSTED, GlassStyle.CLEAR)
+        val THEMES = listOf("light", "dark", "wallpaper", "auto")
         const val GRID_GAP = 16 // dp; shared by the apps row and the cards so their columns line up
         const val INK_MARK = "ink mark" // tag on a card's detail line whose source mark takes the text colour
         /** Shown names for the wallpaper keys saved in prefs (the keys stay English). */
