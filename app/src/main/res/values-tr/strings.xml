@@ -13,8 +13,8 @@
     <string name="time_left_hm">%1$d sa %2$d dk kaldı</string>
     <string name="time_left_m">%1$d dk kaldı</string>
     <string name="folder_name">Klasör: %1$s</string>
-    <string name="wp_rockies_day">Kayalık Dağlar (gündüz)</string>
-    <string name="wp_rockies_dusk">Kayalık Dağlar (alacakaranlık)</string>
+    <string name="wp_mist_day">Sis (gündüz)</string>
+    <string name="wp_peak_dusk">Zirve (alacakaranlık)</string>
     <string name="wp_pure_black">Saf siyah</string>
     <string name="wp_soft_white">Yumuşak beyaz</string>
     <string name="every_1">Her dakika</string>
@@ -47,9 +47,12 @@
     <string name="done">Bitti</string>
     <string name="edit_apps_row">Uygulama satırını düzenle</string>
     <string name="theme">Tema</string>
-    <string name="fade_top">Üst geçiş</string>
-    <string name="fade_bottom">Alt geçiş</string>
     <string name="sort_apps">Uygulamaları sırala</string>
+    <string name="row_size">Boyut</string>
+    <string name="size_standard">Standart</string>
+    <string name="size_large">Büyük</string>
+    <string name="size_largest">En büyük</string>
+    <string name="help_row_size">Satırdaki uygulamaları büyütür. Ekrana daha az uygulama sığar. Her boyutu denemek için ‹ › tuşlarına basın.</string>
     <string name="manual">Manuel</string>
     <string name="most_used">En çok kullanılanlar</string>
     <string name="apps_in_row">Satırdaki uygulamalar</string>
@@ -107,6 +110,18 @@
     <string name="gallery_paintings">Galeri tabloları</string>
     <string name="downloading">İndiriliyor…</string>
     <string name="your_photos">Fotoğraflarınız</string>
+    <string name="aerial_views">Aerial Views</string>
+    <string name="use_aerial_views">Aerial Views kullan</string>
+    <plurals name="aerial_on_disk">
+        <item quantity="one">%1$d sahne, %2$d MB</item>
+        <item quantity="other">%1$d sahne, %2$d MB</item>
+    </plurals>
+    <plurals name="n_scenes">
+        <item quantity="one">%1$d sahne</item>
+        <item quantity="other">%1$d sahne</item>
+    </plurals>
+    <string name="aerial_download_first">Önce bir sahne indirin. Aşağıdan bir sahne seçin.</string>
+    <string name="aerial_in_use">Duvar kâğıdı bu sahneyi kullanıyor. Önce başka bir duvar kâğıdı seçin.</string>
     <string name="choose_gallery_hint">Buradan ekran koruyucu olarak \"Galeri\"yi seçin</string>
     <string name="paintings_failed">Tablolar indirilemedi. Bağlantıyı kontrol edip tekrar deneyin.</string>
     <string name="cant_dream">Bu TV isteğe bağlı ekran koruyucu başlatmayı desteklemiyor</string>
@@ -193,4 +208,6 @@
     <string name="input_removed">Satırdan kaldırıldı.</string>
     <string name="sources_hint">Bir girişi satıra sabitlemek için OK tuşunu basılı tutun.</string>
     <string name="fire_os_no_input">Fire TV, Plume\'un bu girişe geçmesine izin vermedi. Ana Ekran tuşunu basılı tutup Girişler\'i seçin.</string>
+    <string name="theme_wallpaper">Duvar kağıdı</string>
+    <string name="help_theme_wallpaper">Duvar kağıdı, resminize göre açık veya koyu seçer; cam onun renklerini alır.</string>
 </resources>

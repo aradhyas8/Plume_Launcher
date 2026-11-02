@@ -14,8 +14,8 @@
     <string name="time_left_hm">Quedan %1$d h %2$d min</string>
     <string name="time_left_m">Quedan %1$d min</string>
     <string name="folder_name">Carpeta: %1$s</string>
-    <string name="wp_rockies_day">Montañas Rocosas (día)</string>
-    <string name="wp_rockies_dusk">Montañas Rocosas (atardecer)</string>
+    <string name="wp_mist_day">Niebla (día)</string>
+    <string name="wp_peak_dusk">Cumbre (atardecer)</string>
     <string name="wp_pure_black">Negro puro</string>
     <string name="wp_soft_white">Blanco suave</string>
     <string name="every_1">Cada minuto</string>
@@ -48,10 +48,15 @@
     <string name="done">Listo</string>
     <string name="edit_apps_row">Reordenar apps</string>
     <string name="theme">Tema</string>
-    <string name="fade_top">Degradado superior</string>
-    <string name="fade_bottom">Degradado inferior</string>
     <string name="glass">Cristal</string>
+    <string name="glass_frosted">Esmerilado</string>
+    <string name="glass_clear">Transparente</string>
     <string name="sort_apps">Orden</string>
+    <string name="row_size">Tamaño</string>
+    <string name="size_standard">Estándar</string>
+    <string name="size_large">Grande</string>
+    <string name="size_largest">Muy grande</string>
+    <string name="help_row_size">Hace más grandes las apps de la fila. Caben menos apps a lo ancho. Pulsa ‹ › para probar cada tamaño.</string>
     <string name="manual">Manual</string>
     <string name="most_used">Más usadas</string>
     <string name="apps_in_row">Elegir apps</string>
@@ -122,6 +127,20 @@
     <string name="gallery_paintings">Cuadros de la Galería</string>
     <string name="downloading">Descargando…</string>
     <string name="your_photos">Tus fotos</string>
+    <string name="aerial_views">Aerial Views</string>
+    <string name="use_aerial_views">Usar Aerial Views</string>
+    <plurals name="aerial_on_disk">
+        <item quantity="one">%1$d escena, %2$d MB</item>
+        <item quantity="many">%1$d escenas, %2$d MB</item>
+        <item quantity="other">%1$d escenas, %2$d MB</item>
+    </plurals>
+    <plurals name="n_scenes">
+        <item quantity="one">%1$d escena</item>
+        <item quantity="many">%1$d escenas</item>
+        <item quantity="other">%1$d escenas</item>
+    </plurals>
+    <string name="aerial_download_first">Descarga una escena primero. Selecciona una escena abajo.</string>
+    <string name="aerial_in_use">El fondo usa esta escena. Elige otro fondo primero.</string>
     <string name="choose_gallery_hint">Elige \"Galería\" como salvapantallas aquí</string>
     <string name="paintings_failed">No se pudieron descargar los cuadros. Comprueba la conexión e inténtalo de nuevo.</string>
     <string name="cant_dream">Esta TV no puede iniciar el salvapantallas bajo demanda</string>
@@ -172,8 +191,6 @@
     <string name="help_lock">Un PIN que impide que otras personas cambien tu pantalla de inicio.</string>
     <string name="help_updates">Plume busca una versión nueva una vez al día. Instálala aquí.</string>
     <string name="help_finish_setup">Inicio todavía abre la pantalla de inicio propia de la TV. Configúralo para que abra Plume.</string>
-    <string name="help_fade_top">Oscurece la parte superior de tus fotos para que el reloj y los iconos se lean bien. Pulsa Izquierda o Derecha para cambiarlo.</string>
-    <string name="help_fade_bottom">Funde la parte inferior de tus fotos con el fondo, detrás de las apps y de la fila de contenidos. Pulsa Izquierda o Derecha para cambiarlo.</string>
     <string name="help_location">Para el clima y para el amanecer y el atardecer en Auto. Automático la obtiene de tu dirección de internet.</string>
     <string name="help_rearrange">Mueve las apps de la fila. También puedes mantener pulsado OK sobre una app.</string>
     <string name="help_choose_apps">Elige las apps de la fila. Las demás siguen en Todas las apps.</string>
@@ -278,4 +295,6 @@
         <item quantity="one">%d botón</item>
         <item quantity="other">%d botones</item>
     </plurals>
+    <string name="theme_wallpaper">Fondo</string>
+    <string name="help_theme_wallpaper">Fondo elige claro u oscuro según tu imagen, y el cristal toma sus colores.</string>
 </resources>

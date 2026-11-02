@@ -19,21 +19,22 @@ import java.net.Socket
  * A one-page web server for adding wallpapers from a phone. It only runs while the upload panel is open,
  * and only answers on /<code> (the random code is in the QR code), so others on the Wi-Fi can't post.
  * The page sends the photo as the raw request body, so there's no multipart parsing.
- * [onPhoto] runs on the server thread with the uploaded file and returns the new wallpaper's name, or null.
+ * [onUpload] runs on the server thread with the uploaded file and whether it is a video, and returns the new wallpaper's name, or null.
  */
-internal class UploadServer(val code: String, private val temp: File, private val onPhoto: (File) -> String?) {
+internal class UploadServer(val code: String, private val temp: File, private val onUpload: (File, Boolean) -> String?) {
     private val socket = try {
         ServerSocket(8080)
     } catch (e: IOException) {
         ServerSocket(0) // 8080 taken: any free port (it's in the QR code either way)
     }
     val port get() = socket.localPort
+    @Volatile private var client: Socket? = null
 
     init {
         Thread(::serve, "wallpaper-upload").start()
     }
 
-    fun stop() = socket.close()
+    fun stop() { socket.close(); client?.close() }
 
     private fun serve() {
         while (!socket.isClosed) {
@@ -42,10 +43,15 @@ internal class UploadServer(val code: String, private val temp: File, private va
             } catch (e: IOException) {
                 return // closed
             }
+            client = s
             try {
+                if (socket.isClosed) s.close()
                 s.use { handle(it) }
             } catch (e: Exception) {
                 android.util.Log.w("Plume", "upload request failed ($e)")
+            } finally {
+                client = null
+                temp.delete()
             }
         }
     }
@@ -64,7 +70,9 @@ internal class UploadServer(val code: String, private val temp: File, private va
             method == "GET" -> reply(out, 200, "text/html; charset=utf-8", PAGE)
             method == "POST" -> {
                 val length = headers["content-length"]?.toLongOrNull() ?: -1
-                if (length !in 1..MAX_BYTES) return reply(out, 413, "text/plain", "That file is too big (25 MB at most).")
+                val video = headers["content-type"].orEmpty().startsWith("video/") // the browser sends the file's own type
+                val max = if (video) VIDEO_LIMIT else MAX_BYTES
+                if (length !in 1..max) return reply(out, 413, "text/plain", "That file is too big (${max / 1024 / 1024} MB at most).")
                 temp.outputStream().use { file ->
                     val buf = ByteArray(64 * 1024)
                     var left = length
@@ -76,12 +84,12 @@ internal class UploadServer(val code: String, private val temp: File, private va
                     }
                 }
                 val name = try {
-                    onPhoto(temp)
+                    onUpload(temp, video)
                 } finally {
                     temp.delete()
                 }
                 if (name != null) reply(out, 200, "text/plain", "Added \"$name\" to your TV.")
-                else reply(out, 415, "text/plain", "That doesn't look like a photo the TV can open.")
+                else reply(out, 415, "text/plain", if (video) "Use an H.264 or HEVC MP4 video up to 1080p." else "That doesn't look like a photo the TV can open.")
             }
             else -> reply(out, 405, "text/plain", "Not allowed")
         }
@@ -123,13 +131,13 @@ internal class UploadServer(val code: String, private val temp: File, private va
               button:disabled{opacity:.35} input{display:none} #s{min-height:1.5em}
             </style></head><body>
             <h1>Add a wallpaper</h1>
-            <p>Pick a photo. It shows on your TV a moment after you upload it.</p>
-            <label><input id="f" type="file" accept="image/*"><span id="n">Choose photo</span></label>
+            <p>Pick a photo, or an H.264 or HEVC MP4 video up to 1080p and 350 MB. A photo shows on your TV a moment after you upload it; a video plays there first.</p>
+            <label><input id="f" type="file" accept="image/*,video/mp4"><span id="n">Choose photo or video</span></label>
             <button id="b" disabled>Upload to TV</button>
             <div id="s"></div>
             <script>
               const f=document.getElementById('f'),b=document.getElementById('b'),s=document.getElementById('s'),n=document.getElementById('n');
-              f.onchange=()=>{b.disabled=!f.files.length;n.textContent=f.files.length?f.files[0].name:'Choose photo';s.textContent=''};
+              f.onchange=()=>{b.disabled=!f.files.length;n.textContent=f.files.length?f.files[0].name:'Choose photo or video';s.textContent=''};
               b.onclick=async()=>{
                 b.disabled=true;s.textContent='Uploading…';
                 try{const r=await fetch(location.pathname,{method:'POST',body:f.files[0]});
@@ -187,6 +195,14 @@ internal fun importWallpaper(src: File, dir: File): File? {
     val file = generateSequence(1) { it + 1 }.map { File(dir, "Photo $it.jpg") }.first { !it.exists() }
     file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 85, it) }
     out.recycle()
+    return file
+}
+
+internal fun importVideoWallpaper(src: File, dir: File): File? {
+    if (!validVideo(src)) return null
+    dir.mkdirs()
+    val file = generateSequence(1) { it + 1 }.map { File(dir, "Video $it.mp4") }.first { !it.exists() }
+    src.copyTo(file)
     return file
 }
 

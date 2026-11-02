@@ -16,17 +16,26 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Aerial Views screensaver.** Select **Plume settings → Screensaver → Screensaver → Aerial Views**. It plays Apple's aerial videos. It uses the same downloaded scenes as the video wallpaper, so each scene downloads only once.
+- **Bigger apps.** Select **Plume settings → Apps row → Size**, then **Standard**, **Large** or **Largest**. Large shows 6 apps across, and Largest shows 4. Banners and icon tiles both grow.
+- **Wallpapers show as they are.** Plume no longer adds dark fades or black over a picture or a video. The text and the glass change to suit the picture. **Top fade** and **Bottom fade** are gone.
+- **New bundled wallpapers.** **Mist (day)** and **Peak (dusk)** replace the two Rockies pictures.
+- The **Glass** setting changes tiles, cards and the settings panel live without restarting Plume.
+- **Clear glass.** Select **Plume settings → Appearance → Glass**, then **Clear**. Clear glass lets more of the wallpaper show through the tiles, cards and menus. **Frosted** keeps the look from 1.6.
 - **Fire TV: Plume shows sooner after Home.** Android holds an app's start for 5 seconds after Home. While **Plume: Home button** is on, Plume starts with an alarm. The system sends the alarm, so the wait does not apply. Plume sets the Android setting `min_futurity` to 0 for this. Plume puts the old value back when you turn the Home button off. This needs the `WRITE_SECURE_SETTINGS` grant.
 - In light mode with **Glass** off, the Plume settings panel is light again. Before, it was black.
 
 - **Shows wallpaper.** Select **Plume settings → Appearance → Light wallpaper** or **Dark wallpaper**, then **Shows from your apps**. The picture of a show that your apps publish becomes the wallpaper. It comes from Watch Next, or from the channels that you choose in **Wallpaper from**. It changes as often as a folder of photos does. Only wide pictures count. **Featured: …** shows under the weather. Plume fetches nothing until you select it.
-- **Darkening.** In dark mode, Plume lays black over the Bing picture and the Shows picture. Select **Plume settings → Appearance → Darkening**. Choose Auto, None, Light, Medium or Strong. Auto gives a bright picture more black and lifts a very dark one a little. **Medium** is what Plume did before.
 - **Edit the top bar.** Hold **OK** on an icon at the top of the home screen. Select **Move**, **Hide** or **Add icon**. In **Move**, press Left or Right to slide the icon. Press **OK** to place it. Press Back to cancel. **Add icon** shows the icons that you hid. **Plume settings** stays on the bar, so you can always bring the icons back.
+- **Power menu icon.** Hold **OK** on a top-bar icon and select **Add icon**, then **Power menu**. Select the icon to open the Android power menu. If the TV does not open it, a message says so. It needs the Home button turned on. If it is off, the icon offers to turn it on.
 - Plume does not close when a theme change arrives while a picture or the apps list is loading, or when the screen saver ends.
 - **Home returns to your app.** Press Home in an app that you started from a tile or a card. The home screen shows that tile or card in focus, not the first tile. If you started the app in another way, or the tile is gone, Home shows the first tile.
 - Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
 - **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.
 - **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.
+- On Fire TV, Plume comes back when you press **Home** on the Plume home screen or in the Plume settings. Before, Amazon's home stayed on the screen.
+- On Google TV, Plume covers the app that you watch only when the Google TV home screen opens. Before, a notice or a sign-in screen from the Google TV launcher also brought Plume to the front.
+- On Xiaomi TVs, **Plume settings → Updates → Install** opens the TV's installer. Before, Plume closed.
 
 ## 1.6
 

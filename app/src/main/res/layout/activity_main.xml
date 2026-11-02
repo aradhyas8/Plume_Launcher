@@ -6,6 +6,13 @@
     android:layout_height="match_parent"
     android:background="#F3F5F7">
 
+    <SurfaceView
+        android:id="@+id/videoWallpaper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/wallpaper"
         android:layout_width="match_parent"
@@ -134,6 +141,18 @@
                 android:focusable="true"
                 android:padding="8dp"
                 android:src="@drawable/ic_tune" />
+
+            <!-- Hidden until it is added from the top bar's menu. -->
+            <ImageView
+                android:id="@+id/powerButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="@string/act_power"
+                android:focusable="true"
+                android:padding="8dp"
+                android:src="@drawable/ic_power"
+                android:visibility="gone" />
         </LinearLayout>
 
         <View
@@ -215,12 +234,13 @@
             android:textSize="14sp"
             android:visibility="gone" />
 
+        <!-- 16dp between the title and the cards: room for the focused card's rise (~13dp). -->
         <dev.plume.SnapScrollView
             android:id="@+id/watchScroll"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="-16dp"
-            android:layout_marginTop="-16dp"
+            android:layout_marginTop="-8dp"
             android:layout_marginEnd="-16dp"
             android:layout_marginBottom="-24dp"
             android:clipToPadding="false"
@@ -289,13 +309,13 @@
 
         <dev.plume.GlassBox
             android:id="@+id/settingsPanel"
-            android:layout_width="400dp"
+            android:layout_width="440dp"
             android:layout_height="match_parent"
             android:layout_gravity="end"
             android:orientation="vertical"
             android:paddingStart="28dp"
             android:paddingTop="40dp"
-            android:paddingEnd="48dp"
+            android:paddingEnd="40dp"
             android:paddingBottom="27dp">
 
             <!-- "Plume settings ›" above a section's title, so you know where Back goes. -->
@@ -304,7 +324,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:paddingStart="14dp"
-                android:textSize="13sp"
+                android:textSize="14sp"
                 android:visibility="gone" />
 
             <TextView
@@ -314,7 +334,7 @@
                 android:fontFamily="sans-serif-medium"
                 android:paddingStart="14dp"
                 android:text="@string/plume_settings"
-                android:textSize="20sp" />
+                android:textSize="24sp" />
 
             <!-- Scrolls once the rows outgrow the screen; focus moving down scrolls it along. -->
             <ScrollView
@@ -338,11 +358,12 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:lineSpacingMultiplier="1.15"
+                android:ellipsize="end"
                 android:maxLines="3"
                 android:minLines="3"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:textSize="13sp" />
+                android:textSize="14sp" />
         </dev.plume.GlassBox>
     </FrameLayout>
 </FrameLayout>
