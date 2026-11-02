@@ -252,7 +252,7 @@ Bug reports, design ideas, translations and pull requests are welcome. Plume sta
   - Jasper Francis Cropsey: *Autumn on the Hudson River*
   - Martin Johnson Heade: *Thunder Storm on Narragansett Bay*
 - **Wallpapers:** "The Lonely Tree, Garda Lake" by [Giuseppe Milo](https://commons.wikimedia.org/wiki/File:The_Lonely_Tree_Garda_Lake_Italy_Fine_Art_Photography_(188093893).jpeg) (CC BY 3.0), and "Mountain Peak, Alaska" by [Godot13](https://commons.wikimedia.org/wiki/File:Mountain_Peak,_Alaska_(1999).jpg) (CC BY-SA 4.0), via Wikimedia Commons
-- **Wallpaper pack** (optional download, cropped to 16:9 and saved as WebP; files in [`wallpapers/`](wallpapers), shared under the same licences), via Wikimedia Commons:
+- **Wallpaper pack** (optional download, 2.2 MB). Select **Wallpaper → Built-in → More photos**. The pack includes ten original wallpapers and these six photos from Wikimedia Commons. The photos retain their listed licences. Files and generation details are in [`wallpapers/`](wallpapers):
   - "Niterói" from [Contemporary Art Museum in Niteroi City 5](https://commons.wikimedia.org/wiki/File:Contemporary_Art_Museum_in_Niteroi_City_5.jpg) by Donatas Dabravolskas (CC BY-SA 4.0)
   - "Valencia mist" from [Ciudad de las Artes y las Ciencias1-edit](https://commons.wikimedia.org/wiki/File:Ciudad_de_las_Artes_y_las_Ciencias1-edit.jpg) by Elemaki, modifications by Alvaro qc (CC BY-SA 3.0)
   - "Muralla Roja" from [Muralla Roja, Calp](https://commons.wikimedia.org/wiki/File:Muralla_Roja,_Calp.JPG) by Joanbanjo (CC BY-SA 4.0)

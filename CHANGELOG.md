@@ -16,6 +16,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **More wallpapers.** Built-in includes Porcelain Dunes. Select **More photos** to download six photos and ten original wallpapers.
 - **Live wallpapers.** Select **Plume settings → Wallpaper → Live wallpapers**. Choose from NASA, Apple and Amazon scenes, or upload your own MP4. A scene downloads only after you select it.
 - **Wallpaper theme.** Select **Plume settings → Style → Theme → Wallpaper**. Plume picks light or dark from the wallpaper, and the settings take its colour.
 - **A new Plume settings.** The sections have new icons, new groups and clearer names. The wallpaper card is at the top.

@@ -1131,7 +1131,7 @@ class MainActivity : Activity() {
     // Light gets a soft white (the light ground colour), not #FFFFFF: pure white glares on a TV.
     private fun plainWallpaper(forDark: Boolean) = if (forDark) "plain:Pure black" else "plain:Soft white"
 
-    private fun defaultWallpaper(forDark: Boolean) = if (forDark) "res:Peak (dusk)" else "res:Mist (day)"
+    private fun defaultWallpaper(forDark: Boolean) = if (forDark) "res:Peak (dusk)" else "res:Porcelain Dunes"
 
     private fun currentWallpaper(forDark: Boolean = dark) =
         prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it) } ?: defaultWallpaper(forDark)
@@ -1543,7 +1543,7 @@ class MainActivity : Activity() {
 
     /** The pictures that ship with Plume, and the plain colour of the theme. */
     private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } +
-        (if (packReady()) PACK_WALLPAPERS.sortedBy { it.third != forDark }.map { "pack:${it.first}" } else emptyList()) + plainWallpaper(forDark)
+        PACK_WALLPAPERS.filter { File(packDir(), it.first).isFile }.sortedBy { it.third != forDark }.map { "pack:${it.first}" } + plainWallpaper(forDark)
 
     private fun packDir() = File(filesDir, "wallpaper-pack")
     private fun packReady() = PACK_WALLPAPERS.all { File(packDir(), it.first).exists() }
@@ -5488,6 +5488,7 @@ class MainActivity : Activity() {
             "Pure black" to R.string.wp_pure_black, "Soft white" to R.string.wp_soft_white,
         )
         val BUNDLED_WALLPAPERS = linkedMapOf(
+            "Porcelain Dunes" to R.drawable.wallpaper_porcelain,
             "Mist (day)" to R.drawable.wallpaper,
             "Peak (dusk)" to R.drawable.wallpaper_dark,
         )
@@ -5496,9 +5497,14 @@ class MainActivity : Activity() {
             Triple("niteroi.webp", "Niterói", false), Triple("valencia-mist.webp", "Valencia mist", false),
             Triple("muralla-roja.webp", "Muralla Roja", false), Triple("hemisferic.webp", "Hemisfèric", true),
             Triple("light-trails.webp", "Light trails", true), Triple("t-centralen.webp", "T-Centralen", true),
+            Triple("porcelain-dunes.webp", "Porcelain Dunes", false), Triple("glacier-silk.webp", "Glacier Silk", false),
+            Triple("rose-limestone.webp", "Rose Limestone", false), Triple("sage-tide.webp", "Sage Tide", false),
+            Triple("lilac-haze.webp", "Lilac Haze", false), Triple("obsidian-dunes.webp", "Obsidian Dunes", true),
+            Triple("petrol-current.webp", "Petrol Current", true), Triple("copper-eclipse.webp", "Copper Eclipse", true),
+            Triple("indigo-ridge.webp", "Indigo Ridge", true), Triple("aubergine-fold.webp", "Aubergine Fold", true),
         )
-        const val PACK_URL = "https://github.com/aradhyas8/Plume_Launcher/releases/download/wallpapers-1/"
-        const val PACK_MB = "1.2 MB"
+        const val PACK_URL = "https://raw.githubusercontent.com/aradhyas8/Plume_Launcher/main/wallpapers/"
+        const val PACK_MB = "2.2 MB"
         val PIN_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
