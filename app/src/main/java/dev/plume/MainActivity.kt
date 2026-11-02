@@ -2275,7 +2275,7 @@ class MainActivity : Activity() {
             },
             R.string.glass to { d ->
                 val styles = if (currentWallpaper().startsWith("video:")) GLASS_STYLES - GlassStyle.CLEAR else GLASS_STYLES
-                prefs.edit().putString("glass_style", styles.step(glassStyle().takeIf { it in styles } ?: GlassStyle.FROSTED, d)?.key ?: "off").apply()
+                prefs.edit().putString("glass_style", styles.step(glassStyle().let { if (it in styles) it else GlassStyle.FROSTED }, d)?.key ?: "off").apply()
                 // Clear's sharp picture is made only while Clear is the style: load the wallpaper again to make it.
                 if (glassStyle() == GlassStyle.CLEAR && sharpPixels == null && Backdrop.of(currentWallpaper()) == Backdrop.PICTURE) loadWallpaper()
                 else applyGlass()
