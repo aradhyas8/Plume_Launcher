@@ -191,7 +191,12 @@ internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val bac
     val lens: Float get() = active?.lens ?: 1f
 
     /** A tile's tint, at rest or [lit]: 0 with glass off. */
-    fun tile(lit: Boolean): Int = active?.let { tint((if (lit) it.tintLit else it.tintRest) * (if (dark) 9 else 8) / 8) } ?: 0
+    fun tile(lit: Boolean): Int = active?.let {
+        // Dark tint makes a focused tile darker, not brighter: on Clear and in the Wallpaper theme focus keeps the rest
+        // tint and shows by its light (sheen, rim, glint) and lift instead.
+        val more = lit && !(dark && (coloured || it == GlassStyle.CLEAR))
+        tint((if (more) it.tintLit else it.tintRest) * (if (dark) 9 else 8) / 8)
+    } ?: 0
 
     /** The panel's and menus' tint: as strong in both styles, as they carry text. */
     fun wash(): Int = tint(if (dark) 0x99 else 0x8C)
