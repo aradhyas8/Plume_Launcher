@@ -43,6 +43,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - **New bundled wallpapers.** **Mist (day)** and **Peak (dusk)** replace the two Rockies pictures.
 - The **Glass** setting changes tiles, cards and the settings panel live without restarting Plume.
 - **Clear glass.** Select **Plume settings → Appearance → Glass**, then **Clear**. Clear glass lets more of the wallpaper show through the tiles, cards and menus. **Frosted** keeps the look from 1.6.
+- **Fire TV: Plume shows sooner after Home.** Android holds an app's start for 5 seconds after Home. While **Plume: Home button** is on, Plume starts with an alarm. The system sends the alarm, so the wait does not apply. Plume sets the Android setting `min_futurity` to 0 for this. Plume puts the old value back when you turn the Home button off. This needs the `WRITE_SECURE_SETTINGS` grant.
 - In light mode with **Glass** off, the Plume settings panel is light again. Before, it was black.
 
 - **Shows wallpaper.** Select **Plume settings → Appearance → Light wallpaper** or **Dark wallpaper**, then **Shows from your apps**. The picture of a show that your apps publish becomes the wallpaper. It comes from Watch Next, or from the channels that you choose in **Wallpaper from**. It changes as often as a folder of photos does. Only wide pictures count. **Featured: …** shows under the weather. Plume fetches nothing until you select it.
