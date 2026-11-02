@@ -357,4 +357,6 @@
     <string name="help_scene_kind">Press OK to see the scenes. A scene downloads when you pick it.</string>
     <string name="help_manage_videos">Remove scenes you downloaded and videos you sent.</string>
     <string name="help_built_in">The pictures that come with Plume, and a plain colour.</string>
+    <string name="theme_wallpaper">Wallpaper</string>
+    <string name="help_theme_wallpaper">Wallpaper picks light or dark from your picture, and the glass takes its colours.</string>
 </resources>

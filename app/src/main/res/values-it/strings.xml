@@ -309,4 +309,6 @@
     <string name="wp_usable">%1$d/%2$d</string>
     <string name="featured_now">In evidenza: %1$s</string>
     <string name="help_wp_sources">Le sorgenti le cui immagini diventano lo sfondo: Watch Next di Android TV, o un canale di un\'app. Plume usa solo immagini larghe. Salta locandine, quadrati e immagini che non riesce a ottenere. Lo sfondo cambia con la stessa frequenza di una cartella di foto.</string>
+    <string name="theme_wallpaper">Sfondo</string>
+    <string name="help_theme_wallpaper">Sfondo sceglie chiaro o scuro in base alla tua immagine, e il vetro ne prende i colori.</string>
 </resources>

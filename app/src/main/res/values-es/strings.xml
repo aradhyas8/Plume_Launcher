@@ -295,4 +295,6 @@
         <item quantity="one">%d botón</item>
         <item quantity="other">%d botones</item>
     </plurals>
+    <string name="theme_wallpaper">Fondo</string>
+    <string name="help_theme_wallpaper">Fondo elige claro u oscuro según tu imagen, y el cristal toma sus colores.</string>
 </resources>
