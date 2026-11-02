@@ -274,6 +274,8 @@ internal fun dropSessions(c: Context) {
     }
 }
 
+internal fun <T> preferTvApps(tv: List<T>, other: List<T>, pkg: (T) -> String) = (tv + other).distinctBy(pkg)
+
 class MainActivity : Activity() {
 
     /**
@@ -3230,15 +3232,15 @@ class MainActivity : Activity() {
 
     private fun loadApps(): List<App> {
         val pm = packageManager
-        return pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0)
-            .map { it.activityInfo }
-            .filter { it.packageName != packageName && it.packageName != TV_SETTINGS }
-            .distinctBy { it.packageName }
-            .map { a ->
+        fun query(category: String) = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category), 0)
+            .map { it.activityInfo to category }
+        return preferTvApps(query(Intent.CATEGORY_LEANBACK_LAUNCHER), query(Intent.CATEGORY_LAUNCHER)) { it.first.packageName }
+            .filter { (a, _) -> a.packageName != packageName && a.packageName != TV_SETTINGS }
+            .map { (a, category) ->
                 App(
                     a.packageName,
                     a.loadLabel(pm).toString(),
-                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
+                    Intent(Intent.ACTION_MAIN).addCategory(category)
                         .setComponent(ComponentName(a.packageName, a.name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     a.loadIcon(pm),
                     load = { a.loadIcon(pm) },
@@ -4147,7 +4149,7 @@ class MainActivity : Activity() {
                 returnTo = focusKey(from)
             } else startApp(a.launch, from)
         } catch (e: Exception) {
-            packageManager.getLeanbackLaunchIntentForPackage(a.pkg)?.let { startApp(it, from) }
+            (packageManager.getLeanbackLaunchIntentForPackage(a.pkg) ?: packageManager.getLaunchIntentForPackage(a.pkg))?.let { startApp(it, from) }
         }
     }
 
