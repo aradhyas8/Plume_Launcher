@@ -3108,26 +3108,16 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.FIT_XY
             if (grey) { colorFilter = GREYSCALE; alpha = rest }
         }
-        // A colour banner has nothing else to tell the selected tile from the others: the rest are dimmed a little,
-        // and the selected one gets a ring in the text colour. Both fade over the same 160 ms as the lift.
+        // A colour banner rests dimmed a little, so the selected one, risen out of the row, also stands out in
+        // brightness. The dim fades over the same 160 ms as the lift.
         val dim = View(this).apply { setBackgroundColor(Color.BLACK); alpha = if (grey) 0f else BANNER_DIM }
-        val ring = View(this).apply {
-            background = GradientDrawable().apply {
-                cornerRadius = dp(8).toFloat()
-                setStroke(dp(3), fg)
-                setColor(Color.TRANSPARENT)
-            }
-            alpha = 0f
-        }
         val col = FrameLayout(this).apply {
             addView(pic, MATCH_PARENT, MATCH_PARENT)
             addView(dim, MATCH_PARENT, MATCH_PARENT)
-            addView(ring, MATCH_PARENT, MATCH_PARENT)
             tag = a.pkg
             setOnClickListener { launch(a) }
         }
         style(col, dp(8), card = false, lift = 1.12f) { focused ->
-            ring.animate().alpha(if (focused) 1f else 0f).setDuration(160).start()
             if (!grey) dim.animate().alpha(if (focused) 0f else BANNER_DIM).setDuration(160).start()
             if (!grey) return@style
             pic.colorFilter = if (focused) null else GREYSCALE
@@ -4838,8 +4828,12 @@ class MainActivity : Activity() {
             if (card && dark) v.background = rimCard(radius, focused, frosted = frosted)
             else if (card) v.background = if (focused) lit else rest
             if (frosted) glass.kick(260) // the lift moves the tile: its blur follows
+            // The selected tile rises out of the row's line. Its growth stops short of the gap, so at the
+            // largest size it still doesn't cover its neighbours.
+            val grow = if (focused && v.width > 0) minOf(lift, 1 + dp(GRID_GAP) * 1.2f / v.width) else 1f
             v.animate()
-                .scaleX(if (focused) lift else 1f).scaleY(if (focused) lift else 1f)
+                .scaleX(grow).scaleY(grow)
+                .translationY(if (focused) -maxOf(v.height * 0.06f, dp(4).toFloat()) else 0f)
                 .translationZ(if (focused) dp(14).toFloat() else 0f)
                 .setDuration(160).setInterpolator(DECELERATE).start()
             onFocus?.invoke(focused)
