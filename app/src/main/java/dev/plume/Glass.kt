@@ -264,6 +264,9 @@ internal fun clearCacheSize(w: Int, h: Int, visible: Int): Pair<Int, Int> {
     return maxOf(1, (w * factor).toInt()) to maxOf(1, (h * factor).toInt())
 }
 
+/** Refresh shortly after geometry stops moving, independently of the focus glint. */
+internal fun clearBakeDelay(now: Long, movedAt: Long) = (80L - (now - movedAt)).coerceAtLeast(0L)
+
 /** The frost for [glassScreen] pixels: about a millisecond, so it is redone on the UI thread when the look changes. */
 internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius, passes = 3), dark)
 
@@ -299,6 +302,7 @@ internal class GlassLayer(context: Context) : View(context) {
     private val visible = Rect()
     private val row = Rect()
     private val rect = RectF()
+    private val sampleArea = Rect()
     private val at = IntArray(2)
     private val scale = FloatArray(2)
     private var shader: BitmapShader? = null
@@ -313,6 +317,8 @@ internal class GlassLayer(context: Context) : View(context) {
     private var sharp: Bitmap? = null
     private var worker: java.util.concurrent.Executor? = null
     private var baking = false
+    private var bakeQueued = false
+    private var movedAt = 0L
     private var cacheFailed = false
     @Volatile private var cacheVersion = 0
     private var sharpSize = 1f to 1f
@@ -351,11 +357,13 @@ internal class GlassLayer(context: Context) : View(context) {
     }
 
     private fun queueBake() {
-        removeCallbacks(bake)
-        postDelayed(bake, maxOf(120L, until - SystemClock.uptimeMillis()))
+        if (bakeQueued || baking) return
+        bakeQueued = true
+        postDelayed(bake, clearBakeDelay(SystemClock.uptimeMillis(), movedAt))
     }
 
     private val bake = Runnable {
+        bakeQueued = false
         val source = sharp
         if (!baking && source != null && isAttachedToWindow && width > 0 && height > 0) {
             val visibleTiles = tiles.filter { !it.area.isEmpty }
@@ -488,6 +496,7 @@ internal class GlassLayer(context: Context) : View(context) {
     override fun onDetachedFromWindow() {
         cacheVersion++
         removeCallbacks(bake)
+        bakeQueued = false
         tiles.forEach { it.image = null; it.area.setEmpty() }
         viewTreeObserver.removeOnGlobalLayoutListener(moved)
         super.onDetachedFromWindow()
@@ -495,7 +504,6 @@ internal class GlassLayer(context: Context) : View(context) {
 
     /** Tiles move on a scroll or a focus lift: draw again for the next [ms]. */
     fun kick(ms: Long) {
-        cacheVersion++
         until = maxOf(until, SystemClock.uptimeMillis() + ms)
         postInvalidateOnAnimation()
     }
@@ -505,6 +513,7 @@ internal class GlassLayer(context: Context) : View(context) {
         val s = shader
         // A new viewport can need smaller images to stay within the shared memory limit.
         var needsBake = false
+        var geometryChanged = false
         paint.shader = s
         getLocationInWindow(at)
         val ox = at[0]
@@ -541,8 +550,14 @@ internal class GlassLayer(context: Context) : View(context) {
             // Remove the tile's own focus transform from the cache key; its image scales with it.
             val left = rect.left - v.translationX * scale[0] + v.pivotX * (sx - scale[0])
             val top = rect.top - v.translationY * scale[1] + v.pivotY * (sy - scale[1])
-            t.area.set(kotlin.math.round(left).toInt(), kotlin.math.round(top).toInt(),
+            sampleArea.set(kotlin.math.round(left).toInt(), kotlin.math.round(top).toInt(),
                 kotlin.math.round(left + v.width * scale[0]).toInt(), kotlin.math.round(top + v.height * scale[1]).toInt())
+            // getLocationInWindow rounds to whole pixels during focus scaling; ignore that one-pixel jitter.
+            if (t.area.isEmpty || kotlin.math.abs(t.area.left - sampleArea.left) > 1 || kotlin.math.abs(t.area.top - sampleArea.top) > 1 ||
+                t.area.width() != sampleArea.width() || t.area.height() != sampleArea.height()) {
+                t.area.set(sampleArea)
+                geometryChanged = true
+            }
             if (sharp != null && !t.area.isEmpty && (t.image == null || t.bakedArea != t.area)) needsBake = true
             c.save()
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
@@ -550,7 +565,7 @@ internal class GlassLayer(context: Context) : View(context) {
             if (sh != null) {
                 lensPaint.alpha = alpha
                 val image = t.image
-                if (image != null) {
+                if (image != null && t.bakedArea == t.area) {
                     lensPaint.shader = null
                     c.drawBitmap(image, null, rect, lensPaint)
                 } else {
@@ -576,6 +591,12 @@ internal class GlassLayer(context: Context) : View(context) {
             c.restore()
         }
         if (sharp != null && !cacheFailed) {
+            if (geometryChanged) {
+                cacheVersion++
+                movedAt = SystemClock.uptimeMillis()
+                removeCallbacks(bake)
+                bakeQueued = false
+            }
             val count = tiles.count { !it.area.isEmpty }
             if (needsBake || tiles.any {
                 val image = it.image

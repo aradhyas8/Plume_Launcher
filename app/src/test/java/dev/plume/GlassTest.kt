@@ -156,6 +156,13 @@ class GlassTest {
         }
     }
 
+    @Test fun clearCacheRefreshWaitsForGeometryInsteadOfTheFocusGlint() {
+        assertEquals(80L, clearBakeDelay(1000L, 1000L))
+        assertEquals(1L, clearBakeDelay(1079L, 1000L))
+        assertEquals(0L, clearBakeDelay(1080L, 1000L))
+        assertEquals("no extra delay after settling", 0L, clearBakeDelay(1500L, 1000L))
+    }
+
     @Test fun theOldGlassSwitchStillMeansSomething() {
         assertEquals(GlassStyle.FROSTED, GlassStyle.of(null, oldOn = true))
         assertTrue(GlassStyle.of(null, oldOn = false) == null)
