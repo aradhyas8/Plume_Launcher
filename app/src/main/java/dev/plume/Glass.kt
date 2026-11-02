@@ -325,12 +325,12 @@ internal class GlassLayer(context: Context) : View(context) {
     private var sharpSize = 1f to 1f
     private val sharpBase = Matrix()
     // Clear's picture evened out a little, as the frost is (glassTone) but lighter, so it stays sharp and natural:
-    // brightness pulled 25% toward the middle, so a logo still reads over a bright sky or a deep shadow.
+    // brightness pulled 10% toward the middle, so a logo still reads over a bright sky; more turned it milky grey.
     private val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
-            .75f, 0f, 0f, 0f, 32f,
-            0f, .75f, 0f, 0f, 32f,
-            0f, 0f, .75f, 0f, 32f,
+            .9f, 0f, 0f, 0f, 13f,
+            0f, .9f, 0f, 0f, 13f,
+            0f, 0f, .9f, 0f, 13f,
             0f, 0f, 0f, 1f, 0f,
         ))
     }
@@ -502,7 +502,7 @@ internal class GlassLayer(context: Context) : View(context) {
         unit.setScale(1f, rect.height())
         unit.postTranslate(0f, rect.top)
         sheenPaint.shader.setLocalMatrix(unit)
-        sheenPaint.alpha = if (lit) alpha else alpha * 3 / 4
+        sheenPaint.alpha = (if (lit) alpha else alpha * 3 / 4) / (if (sharpShader != null) 2 else 1) // Clear: its rims show the light, a full sheen hazes it
         c.drawRoundRect(rect, rx, ry, sheenPaint)
         if (edge == 0) return
         edgePaint.alpha = (if (lit) edge + EDGE_LIT else edge) * alpha / 255
