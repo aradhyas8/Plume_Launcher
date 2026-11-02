@@ -16,6 +16,25 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Live wallpapers.** Select **Plume settings → Wallpaper → Live wallpapers**. Choose from NASA, Apple and Amazon scenes, or upload your own MP4. A scene downloads only after you select it.
+- **Wallpaper theme.** Select **Plume settings → Style → Theme → Wallpaper**. Plume picks light or dark from the wallpaper, and the settings take its colour.
+- **A new Plume settings.** The sections have new icons, new groups and clearer names. The wallpaper card is at the top.
+- **The selected tile rises.** The selected tile or card moves up out of its row, so you can find it easily.
+- **New clock.** Date and weather show on one line, with a weather icon. Select **Plume settings → Clock & weather → Clock style** or **Clock size**.
+- **More photos.** Select **Plume settings → Wallpaper → Built-in → More photos**. Plume downloads six photos that look good behind glass.
+- **Glass edges catch light.** The top edge of each glass tile is lit, and a light runs along it when you select it. Text stays easy to read on any wallpaper.
+- **Italian.** Plume is now available in Italian.
+- The wallpaper stays the same when the theme changes from light to dark.
+- HDMI tiles show the NVIDIA SHIELD and Chromecast logos.
+- **Remote keys** can tell apart two buttons that send the same key. To separate them, remove the old key and learn the button again.
+- On some CVTE TVs, the Home button returns to Plume from HDMI or Live TV.
+- On debloated Google TVs, the **Finish setup** card does not come back after a restart. Folder wallpapers load after a restart.
+- A tile is selected when Home first opens.
+- A video wallpaper shows its own first frame while it starts. Before, the default picture showed for a moment.
+- The clock, the weather and the top icons no longer have a dark box behind them on bright wallpapers.
+- The top icons, progress bars and row names change colour to match the wallpaper.
+- With **Large** or **Largest** apps, the apps row no longer covers the Continue watching title.
+- Glass rows no longer show a grey edge after the last tile.
 - **More apps.** Plume shows installed apps that do not have a TV launcher entry. Some apps need touch or a mouse.
 - **Aerial Views screensaver.** Select **Plume settings → Screensaver → Screensaver → Aerial Views**. It plays Apple's aerial videos. It uses the same downloaded scenes as the video wallpaper, so each scene downloads only once.
 - **Bigger apps.** Select **Plume settings → Apps row → Size**, then **Standard**, **Large** or **Largest**. Large shows 6 apps across, and Largest shows 4. Banners and icon tiles both grow.
@@ -31,7 +50,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Plume does not close when a theme change arrives while a picture or the apps list is loading, or when the screen saver ends.
 - **Home returns to your app.** Press Home in an app that you started from a tile or a card. The home screen shows that tile or card in focus, not the first tile. If you started the app in another way, or the tile is gone, Home shows the first tile.
 - Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
-- **Banner icons are easier to read.** The selected banner has a ring and grows a little more. The other banners are slightly darker.
+- **Banner icons are easier to read.** The other banners are slightly darker than the selected banner.
 - **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.
 - On Fire TV, Plume comes back when you press **Home** on the Plume home screen or in the Plume settings. Before, Amazon's home stayed on the screen.
 - On Google TV, Plume covers the app that you watch only when the Google TV home screen opens. Before, a notice or a sign-in screen from the Google TV launcher also brought Plume to the front.
