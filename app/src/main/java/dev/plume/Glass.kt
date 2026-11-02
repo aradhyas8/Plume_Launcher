@@ -63,7 +63,7 @@ internal fun glassTone(px: IntArray, dark: Boolean): IntArray = IntArray(px.size
     val p = px[it]
     val c = IntArray(3) { k -> p shr (16 - 8 * k) and 0xFF }
     val grey = (c[0] * 299 + c[1] * 587 + c[2] * 114) / 1000
-    val even = 128 + (grey - 128) * 60 / 100
+    val even = (if (dark) 108 else 128) + (grey - 128) * 60 / 100
     for (k in 0..2) {
         c[k] = (even + (c[k] - grey) * 135 / 100).coerceIn(0, 255)
         if (!dark) c[k] += (255 - c[k]) / 10
@@ -92,11 +92,11 @@ internal const val GLASS_GREY = 0xFF808080.toInt()
 /**
  * The glass's tint, at [alpha]: dark grey ([dark]) or white with a tenth of the wallpaper's own colour [hue]. Only a
  * hint of it: more turned a red photo's glass brown and a green one's olive, which read as dirty, not as glass. Dark
- * is grey, not black: grey over the frost still reads as frosted glass, black reads as smoked.
+ * is a dark grey, not pure black: it reads as dark frosted glass, black reads as smoked.
  */
 internal fun glassHue(hue: Int, dark: Boolean, alpha: Int): Int {
     val c = IntArray(3) { k -> hue shr (16 - 8 * k) and 0xFF }
-    for (k in 0..2) c[k] = if (dark) 40 + c[k] * 10 / 100 else 255 - (255 - c[k]) * 10 / 100
+    for (k in 0..2) c[k] = if (dark) 24 + c[k] * 8 / 100 else 255 - (255 - c[k]) * 10 / 100
     return (alpha shl 24) or (c[0] shl 16) or (c[1] shl 8) or c[2]
 }
 
@@ -142,10 +142,23 @@ internal enum class Backdrop {
 }
 
 /**
- * Everything glass paints follows from these, so two equal looks need no redraw. [style] is the stored choice (null
- * for off); [hue] is the wallpaper's mean colour, which tints the glass.
+ * The wallpaper's colour [hue] made vivid (twice as saturated) at a set brightness: deep for [dark], pale for light.
+ * The Wallpaper theme's glass and accents: a red photo gives amber or peach, never the brown of a darkened red.
  */
-internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val backdrop: Backdrop, val hue: Int = GLASS_GREY) {
+internal fun vivid(hue: Int, dark: Boolean): Int {
+    val c = IntArray(3) { k -> hue shr (16 - 8 * k) and 0xFF }
+    val grey = (c[0] * 299 + c[1] * 587 + c[2] * 114) / 1000
+    val at = if (dark) 55 else 215
+    for (k in 0..2) c[k] = (at + (c[k] - grey) * 2).coerceIn(0, 255)
+    return (0xFF shl 24) or (c[0] shl 16) or (c[1] shl 8) or c[2]
+}
+
+/**
+ * Everything glass paints follows from these, so two equal looks need no redraw. [style] is the stored choice (null
+ * for off); [hue] is the wallpaper's mean colour, which tints the glass. [coloured] (the Wallpaper theme): the glass
+ * and the settings' accents take that colour, [vivid].
+ */
+internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val backdrop: Backdrop, val hue: Int = GLASS_GREY, val coloured: Boolean = false) {
     /**
      * The style that shows: none on a plain background, which has nothing behind it. Clear needs a still picture: a
      * video moves, so the sharp still under a tile would not match it; there it is Frosted, whose heavy blur of the
@@ -160,10 +173,15 @@ internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val bac
     val lens: Float get() = active?.lens ?: 1f
 
     /** A tile's tint, at rest or [lit]: 0 with glass off. */
-    fun tile(lit: Boolean): Int = active?.let { glassHue(hue, dark, (if (lit) it.tintLit else it.tintRest) * (if (dark) 5 else 8) / 8) } ?: 0
+    fun tile(lit: Boolean): Int = active?.let { tint((if (lit) it.tintLit else it.tintRest) * (if (dark) 9 else 8) / 8) } ?: 0
 
     /** The panel's and menus' tint: as strong in both styles, as they carry text. */
-    fun wash(): Int = glassHue(hue, dark, if (dark) 0x6B else 0x8C)
+    fun wash(): Int = tint(if (dark) 0x99 else 0x8C)
+
+    /** The colour of picked choices and switches: the wallpaper's, bright on dark and deep on light; null for the plain ink. */
+    fun accent(): Int? = if (coloured) vivid(hue, !dark) else null
+
+    private fun tint(alpha: Int) = if (coloured) vivid(hue, dark) and 0xFFFFFF or (alpha shl 24) else glassHue(hue, dark, alpha)
 }
 
 /**

@@ -34,9 +34,9 @@ class GlassTest {
 
     @Test fun theFrostIsEvenedOutAndRicher() {
         val grey = { v: Int -> px(v, v, v) }
-        assertEquals("a bright sky comes down", grey(204), glassTone(intArrayOf(grey(255)), dark = true)[0])
-        assertEquals("a deep shadow comes up", grey(52), glassTone(intArrayOf(grey(0)), dark = true)[0])
-        assertEquals("the middle stays", grey(128), glassTone(intArrayOf(grey(128)), dark = true)[0])
+        assertEquals("a bright sky comes down", grey(184), glassTone(intArrayOf(grey(255)), dark = true)[0])
+        assertEquals("a deep shadow comes up", grey(32), glassTone(intArrayOf(grey(0)), dark = true)[0])
+        assertEquals("dark sits a little lower", grey(108), glassTone(intArrayOf(grey(128)), dark = true)[0])
         val pic = glassTone(intArrayOf(px(200, 100, 50)), dark = true)[0]
         assertTrue("35% more saturation", (pic shr 16 and 0xFF) - (pic and 0xFF) > 150)
         assertTrue("light mode lifts it", luma(glassTone(intArrayOf(grey(100)), dark = false)[0]) > luma(glassTone(intArrayOf(grey(100)), dark = true)[0]))
@@ -53,7 +53,7 @@ class GlassTest {
         val green = px(40, 160, 60)
         val darkTint = glassHue(green, dark = true, alpha = 0x80)
         assertEquals(0x80, darkTint ushr 24)
-        assertTrue("dark tint is dark grey", luma(darkTint) in 40..70)
+        assertTrue("dark tint is charcoal", luma(darkTint) in 20..45)
         assertTrue("and still green", (darkTint shr 8 and 0xFF) > (darkTint shr 16 and 0xFF))
         val light = glassHue(green, dark = false, alpha = 0xFF)
         assertTrue("light tint is near white", luma(light) > 230)
@@ -63,12 +63,22 @@ class GlassTest {
     @Test fun tilesAndPanelsTakeTheWallpapersColour() {
         val hue = px(40, 160, 60)
         val look = GlassLook(GlassStyle.FROSTED, dark = true, backdrop = Backdrop.PICTURE, hue = hue)
-        assertEquals("dark tiles are thinner", glassHue(hue, true, GlassStyle.FROSTED.tintRest * 5 / 8), look.tile(lit = false))
+        assertEquals("dark tiles are a little stronger", glassHue(hue, true, GlassStyle.FROSTED.tintRest * 9 / 8), look.tile(lit = false))
         assertEquals(glassHue(hue, false, GlassStyle.FROSTED.tintLit), look.copy(dark = false).tile(lit = true))
         assertEquals("panels are as strong in both styles", look.wash(), look.copy(style = GlassStyle.CLEAR).wash())
         assertEquals("off: no tint", 0, look.copy(style = null).tile(lit = true))
     }
 
+
+    @Test fun theWallpaperThemeIsColoured() {
+        val sunset = px(120, 100, 105)
+        val look = GlassLook(GlassStyle.FROSTED, dark = true, backdrop = Backdrop.PICTURE, hue = sunset, coloured = true)
+        val wash = look.wash()
+        assertTrue("redder than the grey of Dark", (wash shr 16 and 0xFF) - (wash and 0xFF) > 10)
+        assertEquals("as strong as Dark", look.copy(coloured = false).wash() ushr 24, wash ushr 24)
+        assertTrue("a pale accent on dark", luma(look.accent()!!) > 180)
+        assertEquals("Dark has no accent", null, look.copy(coloured = false).accent())
+    }
 
     @Test fun aSurfaceFindsItsPlaceInTheBlur() {
         // The blur is 16:9 (320x180), so on a 1920x1080 screen it scales by 6 both ways; a view at (300, 200) shifts it back.

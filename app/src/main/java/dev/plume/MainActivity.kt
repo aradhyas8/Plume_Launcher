@@ -1131,7 +1131,8 @@ class MainActivity : Activity() {
      * The style, the theme and what is behind the home screen: all that glass depends on. A video is never captured
      * to blur (that fails on TVs that play video on a hardware overlay, and redrawing costs frames): it gets a tint.
      */
-    private fun glassLook() = GlassLook(glassStyle(), dark, Backdrop.of(currentWallpaper()), prefs.getInt("glass_hue", GLASS_GREY))
+    private fun glassLook() = GlassLook(glassStyle(), dark, Backdrop.of(currentWallpaper()), prefs.getInt("glass_hue", GLASS_GREY),
+        coloured = prefs.getString("theme", null) == "wallpaper")
 
     /** Glass needs something behind it: with a plain background the tiles stay as they are. */
     private fun glassActive() = glassLook().active != null
@@ -2983,10 +2984,11 @@ class MainActivity : Activity() {
                 val c = if (on) (if (focused) focusInk() else restInk()) else valueInk(focused)
                 p.setTextColor(c)
                 p.compoundDrawablesRelative.filterNotNull().forEach { it.setTint(c) }
+                val accent = glassLook().accent()
                 p.background = if (!on) null else GradientDrawable().apply {
                     cornerRadius = dp(9).toFloat()
-                    setColor(ink(if (focused) .16f else .09f))
-                    setStroke(line, ink(if (focused) .85f else .45f))
+                    setColor(accent?.let { it and 0xFFFFFF or ((if (focused) 0x4D else 0x33) shl 24) } ?: ink(if (focused) .16f else .09f))
+                    setStroke(line, accent ?: ink(if (focused) .85f else .45f))
                 }
             }
         }
@@ -3089,7 +3091,7 @@ class MainActivity : Activity() {
             val c = if (on) (if (focused) focusInk() else restInk()) else valueInk(focused)
             track.background = GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
-                if (on) setColor(c) else setStroke(dp(2), c)
+                if (on) setColor(glassLook().accent() ?: c) else setStroke(dp(2), c)
             }
             knob.background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
