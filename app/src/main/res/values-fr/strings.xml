@@ -54,6 +54,11 @@
     <string name="glass_frosted">Dépoli</string>
     <string name="glass_clear">Transparent</string>
     <string name="sort_apps">Trier les applis</string>
+    <string name="row_size">Taille</string>
+    <string name="size_standard">Standard</string>
+    <string name="size_large">Grande</string>
+    <string name="size_largest">Très grande</string>
+    <string name="help_row_size">Agrandit les applis de la ligne. Moins d\'applis tiennent sur la largeur. Appuyez sur ‹ › pour essayer chaque taille.</string>
     <string name="manual">Manuel</string>
     <string name="most_used">Les plus utilisées</string>
     <string name="apps_in_row">Applis dans la ligne</string>

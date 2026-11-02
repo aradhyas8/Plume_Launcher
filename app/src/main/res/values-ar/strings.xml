@@ -50,6 +50,11 @@
     <string name="fade_top">التلاشي العلوي</string>
     <string name="fade_bottom">التلاشي السفلي</string>
     <string name="sort_apps">ترتيب التطبيقات</string>
+    <string name="row_size">الحجم</string>
+    <string name="size_standard">عادي</string>
+    <string name="size_large">كبير</string>
+    <string name="size_largest">الأكبر</string>
+    <string name="help_row_size">يكبّر التطبيقات في الصف. يتسع عرض الشاشة لعدد أقل منها. اضغط ‹ › لتجربة كل حجم.</string>
     <string name="manual">يدوي</string>
     <string name="most_used">الأكثر استخدامًا</string>
     <string name="apps_in_row">التطبيقات في الصف</string>
