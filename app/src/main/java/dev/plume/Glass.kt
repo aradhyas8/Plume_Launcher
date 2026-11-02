@@ -371,7 +371,7 @@ internal class GlassLayer(context: Context) : View(context) {
             if (field != v) invalidate()
             field = v
         }
-    // What makes a pane read as glass without an outline: light caught on its top half, a soft shadow under it, and
+    // What makes a pane read as glass without an outline: light caught on its top half, lit and shaded rims, and
     // the fine grain of frosted glass. All drawn with fixed shaders.
     private val sheenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = android.graphics.LinearGradient(0f, 0f, 0f, 1f, intArrayOf(0x4DFFFFFF, 0x12FFFFFF, 0), floatArrayOf(0f, 0.38f, 0.62f), Shader.TileMode.CLAMP)
@@ -379,9 +379,7 @@ internal class GlassLayer(context: Context) : View(context) {
     private val grainPaint = Paint().apply { shader = grainShader() }
     private val edgePaint = edgePaint(onePx, top = true)
     private val shadePaint = edgePaint(onePx, top = false)
-    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF000000.toInt() }
     private val unit = Matrix()
-    private val pane = android.graphics.Path()
     private var until = 0L // keeps redrawing for a moment after a scroll or a focus change, which move the tiles
     // The glint (see GLINT_MS): the tile focus came to, when, from which side, and the band it draws.
     private var glintTile: WeakReference<View>? = null
@@ -467,7 +465,6 @@ internal class GlassLayer(context: Context) : View(context) {
             val rx = t.radius * sx
             val ry = t.radius * sy
             val lit = v.isFocused
-            shadow(c, rx, ry, alpha, lit, scroller, ox)
             c.save()
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
             val sh = sharpShader
@@ -499,18 +496,6 @@ internal class GlassLayer(context: Context) : View(context) {
         if (SystemClock.uptimeMillis() < until) postInvalidateOnAnimation()
     }
 
-    /** A soft shadow under the pane at [rect], outside it only: inside, it would darken the glass. */
-    private fun shadow(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean, scroller: View?, ox: Int) {
-        pane.reset()
-        pane.addRoundRect(rect, rx, ry, android.graphics.Path.Direction.CW)
-        c.save()
-        c.clipOutPath(pane)
-        // In a row, the shadow stops at the row's ends as the tiles do (see the stub note in onDraw).
-        if (scroller != null) c.clipRect(row.left - ox.toFloat(), 0f, row.right - ox.toFloat(), height.toFloat())
-        shadowPaint.setShadowLayer((if (lit) 22f else 14f) * onePx, 0f, (if (lit) 8f else 5f) * onePx, (if (lit) 0x59 else 0x38) * alpha / 255 shl 24)
-        c.drawRoundRect(rect, rx, ry, shadowPaint)
-        c.restore()
-    }
 
     /** The light on the pane: the sheen on its top half, brighter on the focused tile. */
     private fun light(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean) {
