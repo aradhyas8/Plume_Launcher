@@ -147,6 +147,15 @@ class GlassTest {
         }
     }
 
+    @Test fun clearCacheBoundsMemoryAcrossRowsAndGrids() {
+        for (count in listOf(1, 8, 40, 100)) for ((width, height) in listOf(188 to 152, 600 to 900, 3840 to 2160)) {
+            val (w, h) = clearCacheSize(width, height, count)
+            assertTrue("positive dimensions", w > 0 && h > 0)
+            assertTrue("no oversized textures", w <= 128 && h <= 128)
+            assertTrue("visible tiles fit 2 MB", w.toLong() * h * count * 4 <= 2 * 1024 * 1024)
+        }
+    }
+
     @Test fun theOldGlassSwitchStillMeansSomething() {
         assertEquals(GlassStyle.FROSTED, GlassStyle.of(null, oldOn = true))
         assertTrue(GlassStyle.of(null, oldOn = false) == null)

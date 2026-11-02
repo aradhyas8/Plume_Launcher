@@ -1196,7 +1196,7 @@ class MainActivity : Activity() {
         if (was != null && was.first == look && was.second === px) return
         glassShown = look to px
         val shown = px?.takeIf { look.active != null }
-        glass.setSharp(sharpPixels?.takeIf { look.active == GlassStyle.CLEAR })
+        glass.setSharp(sharpPixels?.takeIf { look.active == GlassStyle.CLEAR }, io)
         glass.setBlur(shown?.let { glassBlur(it, look.active!!.radius, look.dark) })
         val frost = if (look.active == GlassStyle.CLEAR) 4 else GlassStyle.FROSTED.radius
         surfaceBlur = if (look.active?.radius == frost) glass.blur

@@ -252,35 +252,17 @@ internal fun glassSharp(wallpaper: Bitmap, ground: Int): Bitmap {
     c.drawColor(ground or (0xFF shl 24))
     val at = glassCrop(wallpaper.width, wallpaper.height)
     c.drawBitmap(wallpaper, null, RectF(at[0] * k, at[1] * k, at[2] * k, at[3] * k), Paint(Paint.FILTER_BITMAP_FLAG))
-    // In graphics memory once, so the lens samples it each frame without an upload, and the process holds no copy.
-    return try {
-        sharp.copy(Bitmap.Config.HARDWARE, false)?.also { sharp.recycle() } ?: sharp
-    } catch (e: Exception) {
-        sharp
-    }
+    return sharp // Software pixels let the background worker bake tiles on every supported API.
 }
-
-/**
- * Clear's lens on Android 13+, one shader per tile (the way Android's liquid glass libraries do it): the middle
- * magnifies [LENS_MAG] times and toward the rim the picture runs outward, up to [LENS_BEND] beyond the tile's edge,
- * so the rim shows what is just outside, bent in, as the thick edge of real glass does. [box] is the tile.
- */
-internal const val LENS_AGSL = """
-uniform shader picture;
-uniform float4 box;
-uniform float mag;
-uniform float bend;
-half4 main(float2 p) {
-    float2 c = (box.xy + box.zw) * 0.5;
-    float2 u = (p - c) / ((box.zw - box.xy) * 0.5);
-    float e = max(abs(u.x), abs(u.y));
-    return picture.eval(c + (p - c) * (1.0 + bend * e * e * e * e) / mag);
-}"""
-internal const val LENS_MAG = 1.25f
-internal const val LENS_BEND = 0.5f
 
 /** Edge sampling expands outwards while the centre keeps its mild magnification. */
 internal fun clearLensScale(edge: Float) = 1.1f / (1f + 0.35f * edge * edge * edge * edge)
+
+/** At most 2 MB across visible tile images; also cap each image at 128 pixels on its longest side. */
+internal fun clearCacheSize(w: Int, h: Int, visible: Int): Pair<Int, Int> {
+    val factor = minOf(1.0, 128.0 / maxOf(w, h), kotlin.math.sqrt(524288.0 / maxOf(1, visible) / w / h))
+    return maxOf(1, (w * factor).toInt()) to maxOf(1, (h * factor).toInt())
+}
 
 /** The frost for [glassScreen] pixels: about a millisecond, so it is redone on the UI thread when the look changes. */
 internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius, passes = 3), dark)
@@ -305,6 +287,9 @@ internal class GlassLayer(context: Context) : View(context) {
     private class Tile(val view: WeakReference<View>, val radius: Float) {
         var scroller: WeakReference<View>? = null
         var scrollerFound = false // resolved once, when the tile is attached: its row is there by then
+        val area = Rect()
+        val bakedArea = Rect()
+        var image: Bitmap? = null
     }
 
     private val tiles = ArrayList<Tile>()
@@ -324,9 +309,12 @@ internal class GlassLayer(context: Context) : View(context) {
             if (field != v) invalidate()
             field = v
         }
-    // shortcut: Android 12 approximates refraction with four curved bands; use the continuous shader on Android 13+.
     private var sharpShader: BitmapShader? = null
-    private val lensRect = RectF()
+    private var sharp: Bitmap? = null
+    private var worker: java.util.concurrent.Executor? = null
+    private var baking = false
+    private var cacheFailed = false
+    @Volatile private var cacheVersion = 0
     private var sharpSize = 1f to 1f
     private val sharpBase = Matrix()
     // Darken the sharp picture slightly without lifting shadows into a grey haze.
@@ -338,14 +326,12 @@ internal class GlassLayer(context: Context) : View(context) {
             0f, 0f, 0f, 1f, 0f,
         ))
     }
-    private val lens13: android.graphics.RuntimeShader? =
-        if (android.os.Build.VERSION.SDK_INT >= 33) android.graphics.RuntimeShader(LENS_AGSL).apply {
-            setFloatUniform("mag", LENS_MAG)
-            setFloatUniform("bend", LENS_BEND)
-        } else null
-
     /** The sharp wallpaper for Clear ([glassSharp]), or null when Clear is not shown. */
-    fun setSharp(b: Bitmap?) {
+    fun setSharp(b: Bitmap?, executor: java.util.concurrent.Executor) {
+        worker = executor
+        cacheVersion++
+        cacheFailed = false
+        sharp = b
         sharpShader = b?.let { BitmapShader(it, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP) }
         if (b != null) sharpSize = b.width.toFloat() to b.height.toFloat()
         bindSharp()
@@ -353,15 +339,85 @@ internal class GlassLayer(context: Context) : View(context) {
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = bindSharp()
 
-    /** Maps the sharp picture onto this view (the whole screen) and hands it to the lens. */
+    /** Maps the sharp picture for the plain fallback and clears images after a size change. */
     private fun bindSharp() {
         val sh = sharpShader
+        cacheVersion++
         sharpBase.setScale(width / sharpSize.first, height / sharpSize.second)
         sh?.setLocalMatrix(sharpBase)
-        val r = lens13
-        if (android.os.Build.VERSION.SDK_INT >= 33 && r != null && sh != null) r.setInputShader("picture", sh)
-        lensPaint.shader = if (sh == null) null else r ?: sh
+        tiles.forEach { it.image = null; it.bakedArea.setEmpty() }
+        lensPaint.shader = sh
         invalidate()
+    }
+
+    private fun queueBake() {
+        removeCallbacks(bake)
+        postDelayed(bake, maxOf(120L, until - SystemClock.uptimeMillis()))
+    }
+
+    private val bake = Runnable {
+        val source = sharp
+        if (!baking && source != null && isAttachedToWindow && width > 0 && height > 0) {
+            val visibleTiles = tiles.filter { !it.area.isEmpty }
+            val jobs = visibleTiles.filter {
+                val (w, h) = clearCacheSize(it.area.width(), it.area.height(), visibleTiles.size)
+                it.image == null || it.bakedArea != it.area || it.image!!.width != w || it.image!!.height != h
+            }
+                .map { it to Rect(it.area) }
+            val version = cacheVersion
+            val screenW = width
+            val screenH = height
+            if (jobs.isNotEmpty()) {
+                baking = true
+                worker!!.execute {
+                    val results = ArrayList<Triple<Tile, Rect, Bitmap>>()
+                    var failed = false
+                    try {
+                        for ((tile, area) in jobs) {
+                            if (cacheVersion != version) break
+                            val (w, h) = clearCacheSize(area.width(), area.height(), visibleTiles.size)
+                            val image = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                            val canvas = Canvas(image)
+                            val shader = BitmapShader(source, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+                            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { this.shader = shader }
+                            val matrix = Matrix()
+                            val box = RectF(0f, 0f, w.toFloat(), h.toFloat())
+                            val radius = tile.radius * w / area.width()
+                            val band = minOf(w, h) * 0.025f
+                            for (i in 0..4) {
+                                val zoom = clearLensScale(1f - i / 4f)
+                                matrix.setScale(screenW.toFloat() / source.width * w / area.width(), screenH.toFloat() / source.height * h / area.height())
+                                matrix.postTranslate(-area.left.toFloat() * w / area.width(), -area.top.toFloat() * h / area.height())
+                                matrix.postScale(zoom, zoom, w / 2f, h / 2f)
+                                shader.setLocalMatrix(matrix)
+                                canvas.drawRoundRect(box, maxOf(0f, radius - i * band), maxOf(0f, radius - i * band), paint)
+                                box.inset(band, band)
+                            }
+                            results += Triple(tile, area, image)
+                        }
+                    } catch (e: Exception) {
+                        failed = true
+                        android.util.Log.w("Plume", "glass cache failed", e)
+                    } catch (e: OutOfMemoryError) {
+                        failed = true
+                        android.util.Log.w("Plume", "glass cache memory exhausted")
+                    } finally {
+                        post {
+                            baking = false
+                            if (cacheVersion == version && sharp === source && isAttachedToWindow && width == screenW && height == screenH &&
+                                visibleTiles.size == tiles.count { !it.area.isEmpty }) {
+                                cacheFailed = failed // Keep the plain lens after failure; retry on the next wallpaper or style change.
+                                for ((tile, area, image) in results) if (tile in tiles && tile.area == area) {
+                                    tile.image = image
+                                    tile.bakedArea.set(area)
+                                }
+                            }
+                            if (isAttachedToWindow) invalidate() // An outdated job must still let the current viewport request its images.
+                        }
+                    }
+                }
+            }
+        }
     }
 
     var edge = 0 // see GlassStyle.edge; 0 draws no rims
@@ -408,6 +464,7 @@ internal class GlassLayer(context: Context) : View(context) {
     }
 
     fun clearTiles() {
+        cacheVersion++
         tiles.clear()
         invalidate()
     }
@@ -429,12 +486,16 @@ internal class GlassLayer(context: Context) : View(context) {
     }
 
     override fun onDetachedFromWindow() {
+        cacheVersion++
+        removeCallbacks(bake)
+        tiles.forEach { it.image = null; it.area.setEmpty() }
         viewTreeObserver.removeOnGlobalLayoutListener(moved)
         super.onDetachedFromWindow()
     }
 
     /** Tiles move on a scroll or a focus lift: draw again for the next [ms]. */
     fun kick(ms: Long) {
+        cacheVersion++
         until = maxOf(until, SystemClock.uptimeMillis() + ms)
         postInvalidateOnAnimation()
     }
@@ -442,6 +503,8 @@ internal class GlassLayer(context: Context) : View(context) {
     override fun onDraw(c: Canvas) {
         if (tiles.isEmpty()) return
         val s = shader
+        // A new viewport can need smaller images to stay within the shared memory limit.
+        var needsBake = false
         paint.shader = s
         getLocationInWindow(at)
         val ox = at[0]
@@ -449,7 +512,10 @@ internal class GlassLayer(context: Context) : View(context) {
         for (t in tiles) {
             val v = t.view.get() ?: continue
             val alpha = alphaOf(v)
-            if (alpha == 0 || !v.isShown || !v.getGlobalVisibleRect(visible)) continue
+            if (alpha == 0 || !v.isShown || !v.getGlobalVisibleRect(visible)) {
+                t.image = null; t.area.setEmpty()
+                continue
+            }
             // A row scroller doesn't clip its children (room for the focus lift), so the visible rect runs past
             // its edge: cut it there, or the next tile's frost shows as a grey stub at the screen edge.
             if (!t.scrollerFound) {
@@ -458,7 +524,10 @@ internal class GlassLayer(context: Context) : View(context) {
                     ?.let { WeakReference(it) }
             }
             val scroller = t.scroller?.get()
-            if (scroller != null && (!scroller.getGlobalVisibleRect(row) || !visible.intersect(row))) continue
+            if (scroller != null && (!scroller.getGlobalVisibleRect(row) || !visible.intersect(row))) {
+                t.image = null; t.area.setEmpty()
+                continue
+            }
             // A row also scales (it settles after an app closes): the frost must grow with the tile, or it slips.
             parentScale(v)
             val sx = v.scaleX * scale[0]
@@ -469,26 +538,27 @@ internal class GlassLayer(context: Context) : View(context) {
             val rx = t.radius * sx
             val ry = t.radius * sy
             val lit = v.isFocused
+            // Remove the tile's own focus transform from the cache key; its image scales with it.
+            val left = rect.left - v.translationX * scale[0] + v.pivotX * (sx - scale[0])
+            val top = rect.top - v.translationY * scale[1] + v.pivotY * (sy - scale[1])
+            t.area.set(kotlin.math.round(left).toInt(), kotlin.math.round(top).toInt(),
+                kotlin.math.round(left + v.width * scale[0]).toInt(), kotlin.math.round(top + v.height * scale[1]).toInt())
+            if (sharp != null && !t.area.isEmpty && (t.image == null || t.bakedArea != t.area)) needsBake = true
             c.save()
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
             val sh = sharpShader
             if (sh != null) {
-                val r = lens13
                 lensPaint.alpha = alpha
-                if (android.os.Build.VERSION.SDK_INT >= 33 && r != null) {
-                    r.setFloatUniform("box", rect.left, rect.top, rect.right, rect.bottom)
-                    c.drawRoundRect(rect, rx, ry, lensPaint)
+                val image = t.image
+                if (image != null) {
+                    lensPaint.shader = null
+                    c.drawBitmap(image, null, rect, lensPaint)
                 } else {
-                    val band = minOf(rect.width(), rect.height()) * 0.025f
-                    for (i in 0..4) {
-                        val zoom = clearLensScale(1f - i / 4f)
-                        matrix.set(sharpBase)
-                        matrix.postScale(zoom, zoom, rect.centerX(), rect.centerY())
-                        sh.setLocalMatrix(matrix)
-                        lensRect.set(rect)
-                        lensRect.inset(i * band, i * band)
-                        c.drawRoundRect(lensRect, maxOf(0f, rx - i * band), maxOf(0f, ry - i * band), lensPaint)
-                    }
+                    matrix.set(sharpBase)
+                    matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
+                    sh.setLocalMatrix(matrix)
+                    lensPaint.shader = sh
+                    c.drawRoundRect(rect, rx, ry, lensPaint)
                 }
             } else if (s != null) {
                 matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
@@ -504,6 +574,13 @@ internal class GlassLayer(context: Context) : View(context) {
             light(c, rx, ry, alpha, lit)
             if (lit) glint(c, v, rx, ry, alpha)
             c.restore()
+        }
+        if (sharp != null && !cacheFailed) {
+            val count = tiles.count { !it.area.isEmpty }
+            if (needsBake || tiles.any {
+                val image = it.image
+                image != null && !it.area.isEmpty && clearCacheSize(it.area.width(), it.area.height(), count) != (image.width to image.height)
+            }) queueBake()
         }
         if (SystemClock.uptimeMillis() < until) postInvalidateOnAnimation()
     }
