@@ -110,6 +110,11 @@
     <string name="gallery_paintings">لوحات المعرض</string>
     <string name="downloading">جارٍ التنزيل…</string>
     <string name="your_photos">صورك</string>
+    <string name="aerial_views">Aerial Views</string>
+    <string name="use_aerial_views">استخدام Aerial Views</string>
+    <string name="aerial_on_disk">%1$d مشاهد، %2$d ميغابايت</string>
+    <string name="aerial_download_first">نزّل مشهدًا أولًا. اختر مشهدًا أدناه.</string>
+    <string name="aerial_in_use">الخلفية تستخدم هذا المشهد. اختر خلفية أخرى أولًا.</string>
     <string name="choose_gallery_hint">اختر \"المعرض\" شاشةً للتوقف هنا</string>
     <string name="paintings_failed">تعذّر تنزيل اللوحات. تحقق من الاتصال وحاول مجددًا.</string>
     <string name="cant_dream">لا يستطيع هذا التلفاز تشغيل شاشة التوقف عند الطلب</string>

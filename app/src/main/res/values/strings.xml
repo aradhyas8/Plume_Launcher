@@ -155,6 +155,11 @@
     <string name="gallery_paintings">Gallery paintings</string>
     <string name="downloading">Downloading…</string>
     <string name="your_photos">Your photos</string>
+    <string name="aerial_views">Aerial Views</string>
+    <string name="use_aerial_views">Use Aerial Views</string>
+    <string name="aerial_on_disk">%1$d scenes, %2$d MB</string>
+    <string name="aerial_download_first">Download a scene first. Select a scene below.</string>
+    <string name="aerial_in_use">The wallpaper uses this scene. Choose another wallpaper first.</string>
     <string name="choose_gallery_hint">Choose \"Gallery\" as the screensaver here</string>
     <string name="paintings_failed">Couldn\'t download the paintings. Check the connection and try again.</string>
     <string name="cant_dream">This TV can\'t start the screensaver on demand</string>

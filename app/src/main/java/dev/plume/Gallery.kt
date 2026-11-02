@@ -48,22 +48,27 @@ internal fun paintingsReady(c: Context) = PAINTING_FILES.all { File(paintingsDir
 
 /**
  * The Gallery screensaver. Picked in launcher settings, which also restore the previous one when it's off.
- * Shows the paintings, or a folder of your photos when one is chosen there ("ss_folder").
+ * Shows the paintings, a folder of your photos when one is chosen there ("ss_folder"), or the downloaded
+ * Aerial Views scenes when "ss_folder" is [AERIAL_SCREENSAVER].
  * ◀ ▶ step through the pictures; any other key leaves to the launcher's home screen.
  */
 class GalleryDream : DreamService() {
     private var show: GalleryShow? = null
+    private var aerial: AerialShow? = null
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         isInteractive = true // we handle keys ourselves (see dispatchKeyEvent)
         isFullscreen = true
-        show = GalleryShow(this).also { setContentView(it.view) }
+        val prefs = getSharedPreferences("home", MODE_PRIVATE)
+        val scenes = if (prefs.getString("ss_folder", null) == AERIAL_SCREENSAVER) aerialFiles(this) else emptyList()
+        if (scenes.isNotEmpty()) aerial = AerialShow(this, scenes).also { setContentView(it.view) }
+        else show = GalleryShow(this).also { setContentView(it.view) }
     }
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-            if (e.action == KeyEvent.ACTION_DOWN) show?.step(if (e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+            if (e.action == KeyEvent.ACTION_DOWN) (if (e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1).let { show?.step(it); aerial?.step(it) }
             return true
         }
         if (e.action == KeyEvent.ACTION_UP) {
@@ -75,6 +80,7 @@ class GalleryDream : DreamService() {
 
     override fun onDetachedFromWindow() {
         show?.release()
+        aerial?.release()
         super.onDetachedFromWindow()
     }
 }
@@ -95,7 +101,7 @@ private class GalleryShow(private val context: Context) : SurfaceHolder.Callback
     private fun pictures(): List<Picture> {
         val prefs = context.getSharedPreferences("home", Context.MODE_PRIVATE)
         val photos = try {
-            prefs.getString("ss_folder", null)?.let { folderPhotos(context.contentResolver, it) }.orEmpty()
+            prefs.getString("ss_folder", null)?.takeIf { it != AERIAL_SCREENSAVER }?.let { folderPhotos(context.contentResolver, it) }.orEmpty()
         } catch (e: Exception) { // photo access taken away
             emptyList()
         }

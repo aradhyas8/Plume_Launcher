@@ -134,6 +134,11 @@
     <string name="gallery_paintings">Quadri della Galleria</string>
     <string name="downloading">Scaricamento…</string>
     <string name="your_photos">Le tue foto</string>
+    <string name="aerial_views">Aerial Views</string>
+    <string name="use_aerial_views">Usa Aerial Views</string>
+    <string name="aerial_on_disk">%1$d scene, %2$d MB</string>
+    <string name="aerial_download_first">Scarica prima una scena. Seleziona una scena qui sotto.</string>
+    <string name="aerial_in_use">Lo sfondo usa questa scena. Scegli prima un altro sfondo.</string>
     <string name="choose_gallery_hint">Scegli \"Galleria\" come salvaschermo qui</string>
     <string name="paintings_failed">Impossibile scaricare i quadri. Controlla la connessione e riprova.</string>
     <string name="cant_dream">Questa TV non può avviare il salvaschermo su richiesta</string>

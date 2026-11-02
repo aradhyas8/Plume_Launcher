@@ -127,6 +127,11 @@
     <string name="gallery_paintings">Cuadros de la Galería</string>
     <string name="downloading">Descargando…</string>
     <string name="your_photos">Tus fotos</string>
+    <string name="aerial_views">Aerial Views</string>
+    <string name="use_aerial_views">Usar Aerial Views</string>
+    <string name="aerial_on_disk">%1$d escenas, %2$d MB</string>
+    <string name="aerial_download_first">Descarga una escena primero. Selecciona una escena abajo.</string>
+    <string name="aerial_in_use">El fondo usa esta escena. Elige otro fondo primero.</string>
     <string name="choose_gallery_hint">Elige \"Galería\" como salvapantallas aquí</string>
     <string name="paintings_failed">No se pudieron descargar los cuadros. Comprueba la conexión e inténtalo de nuevo.</string>
     <string name="cant_dream">Esta TV no puede iniciar el salvapantallas bajo demanda</string>

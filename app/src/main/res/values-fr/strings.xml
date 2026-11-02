@@ -125,6 +125,11 @@
     <string name="gallery_paintings">Tableaux de la Galerie</string>
     <string name="downloading">Téléchargement…</string>
     <string name="your_photos">Vos photos</string>
+    <string name="aerial_views">Aerial Views</string>
+    <string name="use_aerial_views">Utiliser Aerial Views</string>
+    <string name="aerial_on_disk">%1$d scènes, %2$d Mo</string>
+    <string name="aerial_download_first">Téléchargez d’abord une scène. Sélectionnez une scène ci-dessous.</string>
+    <string name="aerial_in_use">Le fond d’écran utilise cette scène. Choisissez d’abord un autre fond d’écran.</string>
     <string name="choose_gallery_hint">Choisissez « Galerie » comme écran de veille ici</string>
     <string name="paintings_failed">Impossible de télécharger les tableaux. Vérifiez la connexion et réessayez.</string>
     <string name="cant_dream">Cette TV ne peut pas lancer l\'écran de veille à la demande</string>

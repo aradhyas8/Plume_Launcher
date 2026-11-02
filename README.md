@@ -32,7 +32,7 @@ Plume replaces the cluttered stock home screen with the two things you actually 
 - **Sources list.** The Sources icon in the top bar opens the list of the TV inputs. A console or set-top box that names itself over HDMI-CEC (for example "PlayStation 5") shows with its logo, and selecting it switches the TV to that input. A port with no signal says so. Hold OK on an input to put it in the apps row, and again to take it out.
 - **Remote keys.** Change what a button on your remote does, for example the TV, Netflix or Settings button. A key can do one thing on a press and another when you hold it. See [Remote keys](#remote-keys).
 - **Light, dark or automatic theme**, each with its own wallpaper. Auto follows sunrise and sunset where you are (from 7:00 to 19:00 until Plume has a location; it keeps that location if you turn the weather off later). Add your own photos from your phone by scanning a QR code, or show a folder of photos from the TV or a USB drive that changes on a timer.
-- **Optional Gallery screensaver.** Public-domain landscape paintings in 16:9, downloaded only if you choose it, or a folder of your own photos.
+- **Optional Gallery screensaver.** Public-domain landscape paintings in 16:9, downloaded only if you choose it, a folder of your own photos, or Aerial Views: Apple's aerial videos.
 - **Optional weather** under the clock.
 - **Updates itself.** Plume checks GitHub once a day and installs new versions from its settings (from 1.2 on). The first update asks you to allow installs from Plume.
 
@@ -192,6 +192,10 @@ The lock keeps the layout safe, it isn't parental control: apps can still be ope
 
 Select **Plume settings → Screensaver → Screensaver** to switch to Gallery. Plume downloads the paintings (4.7 MB) from this repository's releases and stores them privately. Switching back to another screensaver deletes them again, so they only take space while you use them.
 
+### Aerial Views screensaver
+
+Select **Plume settings → Screensaver → Screensaver → Aerial Views**. Select a scene to download it, then select **Use Aerial Views**. The screensaver plays the downloaded scenes in shuffled order. Press ◀ or ▶ to skip a scene. The screensaver and the video wallpaper use the same files, so Plume downloads each scene only once. Select a downloaded scene to delete it. Plume does not delete the scene that the wallpaper uses.
+
 ## Privacy
 
 Plume has no analytics, no ads and no account. It only connects to the internet to:
@@ -248,6 +252,7 @@ Bug reports, design ideas, translations and pull requests are welcome. Plume sta
   - Jasper Francis Cropsey: *Autumn on the Hudson River*
   - Martin Johnson Heade: *Thunder Storm on Narragansett Bay*
 - **Wallpapers:** "The Lonely Tree, Garda Lake" by [Giuseppe Milo](https://commons.wikimedia.org/wiki/File:The_Lonely_Tree_Garda_Lake_Italy_Fine_Art_Photography_(188093893).jpeg) (CC BY 3.0), and "Mountain Peak, Alaska" by [Godot13](https://commons.wikimedia.org/wiki/File:Mountain_Peak,_Alaska_(1999).jpg) (CC BY-SA 4.0), via Wikimedia Commons
+- **Aerial Views:** the Apple Aerial scene list comes from the [Aerial Views](https://github.com/theothernt/AerialViews) project (GPL-3.0). Plume's Aerial Views screensaver is not part of that app.
 - **App logos:** [Simple Icons](https://simpleicons.org) (CC0). All trademarks belong to their respective owners.
 - **HDMI input and settings icons:** [Material Symbols](https://fonts.google.com/icons) by Google (Apache 2.0)
 
