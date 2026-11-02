@@ -37,7 +37,7 @@ internal class OptionArt(private val kind: String, private val index: Int, priva
                 val m = b.width() * 0.1f
                 val gap = b.width() * 0.025f
                 val w = (b.width() - 2 * m - (n - 1) * gap) / n
-                val h = minOf(w * 0.75f, b.height() * 0.5f)
+                val h = b.height() * 0.4f // one height for all three, so only the tiles' width and count change
                 val top = b.centerY() - h / 2
                 paint.color = tile
                 for (i in 0 until n) c.drawRoundRect(b.left + m + i * (w + gap), top, b.left + m + i * (w + gap) + w, top + h, h * .18f, h * .18f, paint)

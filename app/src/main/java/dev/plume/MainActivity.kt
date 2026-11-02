@@ -473,6 +473,8 @@ class MainActivity : Activity() {
         openedFrom = null
         ensureHomeService()
         homeSetupResumed()
+        // Back from Android's Accessibility screen: show the Home switch as it is now.
+        if (settingsScrim.visibility == View.VISIBLE && lastSettings == R.string.section_remote_home) renderSettings(R.string.home_button)
         if (wantDark() != dark) {
             recreate()
             return
@@ -594,10 +596,13 @@ class MainActivity : Activity() {
             Settings.Secure.putString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
                 on.split(':').filter { ComponentName.unflattenFromString(it) != me }.joinToString(":"))
         }
-        if (homeServiceOn()) {
-            toast(getString(R.string.home_off_hint), long = true, system = true)
-            openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        }
+        // disableSelf takes a moment: only send the user to Accessibility if the service is still on after it.
+        ui.postDelayed({
+            if (homeServiceOn()) {
+                toast(getString(R.string.home_off_hint), long = true, system = true)
+                openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            } else if (settingsScrim.visibility == View.VISIBLE && lastSettings == R.string.section_remote_home) renderSettings(R.string.home_button)
+        }, 800)
         renderSettings(R.string.home_button)
     }
 
@@ -605,7 +610,11 @@ class MainActivity : Activity() {
     private fun turnOnHomeButton() {
         prefs.edit().remove("home_off").apply()
         ensureHomeService() // works where the adb permission was granted
-        if (homeServiceOn()) return renderSettings(R.string.home_button)
+        if (homeServiceOn()) {
+            // A switch-off just before (disableSelf) can land after this write: check again, and write again if it did.
+            ui.postDelayed({ ensureHomeService(); if (settingsScrim.visibility == View.VISIBLE && lastSettings == R.string.section_remote_home) renderSettings(R.string.home_button) }, 800)
+            return renderSettings(R.string.home_button)
+        }
         // The written path is the safety net: some Google TVs (a Xiaomi stick) answer the Accessibility link
         // with "You don't have an app that can do this", which we can't detect from here.
         toast(getString(R.string.home_on_hint), long = true, system = true)
@@ -1418,11 +1427,13 @@ class MainActivity : Activity() {
                 Tile(getString(R.string.choose_from_tv), icon = R.drawable.ms_folder) { pickFolder(forDark) }) +
                 listOfNotNull(current.takeIf { it.startsWith("folder:") }?.let { Tile(wallpaperName(it), it) { previewWallpaper(it) } }) +
                 own.map { pick(it.second) } +
+                Tile(getString(R.string.add_video_from_phone), icon = R.drawable.ms_video_file) { uploadVideoWallpaper(forDark) } +
+                ownVideos.map { f -> Tile(f.nameWithoutExtension, "video:${f.name}") { previewVideo(forDark, f) } } +
                 listOfNotNull(if (own.isEmpty()) null else Tile(getString(R.string.remove_photo_row), icon = R.drawable.ms_delete) { removeWallpaper(own, forDark) }),
-            R.string.wp_group_live to listOfNotNull(
+            R.string.aerial_views to listOfNotNull(
                 Tile(getString(R.string.surprise_me), icon = R.drawable.ms_shuffle) { surpriseVideo(forDark) },
                 scenes.firstOrNull { "video:${it.file}" == current }?.let { Tile(it.name, current) { previewWallpaper(current) } },
-            ) + kinds + Tile(getString(R.string.add_video_from_phone), icon = R.drawable.ms_video_file) { uploadVideoWallpaper(forDark) } + ownVideos.map { f -> Tile(f.nameWithoutExtension, "video:${f.name}") { previewVideo(forDark, f) } } +
+            ) + kinds +
                 Tile(getString(R.string.manage_videos), icon = R.drawable.ms_edit) { pickVideoWallpaper(forDark) },
             R.string.wp_group_daily to listOf(pick(Bing.CHOICE)),
             R.string.wp_group_shows to listOf(pick(ShowsWall.CHOICE)),
@@ -1860,7 +1871,7 @@ class MainActivity : Activity() {
     // Settings > Remote keys: press a key on the remote to pick it, then choose what it does. The work is done by
     // the Home key service (see Remap), which is why the page asks for it to be on.
 
-    private fun keysSummary() = Remap.all(this).size.let { resources.getQuantityString(R.plurals.n_keys, it, it) }
+    private fun keysSummary() = Remap.all(this).size.let { if (it == 0) getString(R.string.key_unset) else resources.getQuantityString(R.plurals.n_keys, it, it) }
 
     private fun pickKeys(focus: Int = 0) {
         val keys = Remap.all(this).entries.toList()
@@ -2349,7 +2360,7 @@ class MainActivity : Activity() {
             // "When hidden" only means something once the row can hide.
             Triple(R.string.bottom_row, "${rowName()} · ${rows[R.string.show_row]!!.second}", listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
                 R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.restore_hidden)),
-            Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${rows[R.string.weather_location]!!.second}",
+            Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${prefs.getString("geo_city", null) ?: rows[R.string.weather_location]!!.second}",
                 listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
@@ -2361,18 +2372,13 @@ class MainActivity : Activity() {
         if (section != null) {
             lastSettings = section.first
             val keys = section.third
-            val noteText = when {
-                section.first == R.string.section_style && theme == "auto" -> autoNote()
-                // Clear needs a still picture (see GlassLook.active): say so where the choice is made.
-                section.first == R.string.section_style && glassStyle() == GlassStyle.CLEAR && currentWallpaper().startsWith("video:") ->
-                    getString(R.string.glass_clear_video)
-                else -> null
-            }
-            val note = if (noteText == null) null else label(noteText, 14f).apply {
-                maxLines = 5
-                setTextColor(valueInk())
-                panelShadow()
-                setPadding(dp(16), dp(4), dp(16), dp(10))
+            // What Auto does today, and that Clear needs a still picture (see GlassLook.active), go in those rows' help.
+            val help = { k: Int ->
+                when {
+                    k == R.string.theme && theme == "auto" -> autoNote()
+                    k == R.string.glass && glassStyle() == GlassStyle.CLEAR && currentWallpaper().startsWith("video:") -> getString(R.string.glass_clear_video)
+                    else -> ROW_HELP[k]?.let { getString(it) }
+                }
             }
             // Choices show side by side (or under the title when long); the row's value is the picked one's name.
             val choices = mapOf(
@@ -2391,9 +2397,11 @@ class MainActivity : Activity() {
             val styles = keys.map { k ->
                 val cost = k == R.string.smooth_volume && prefs.getBoolean("smooth_volume", false)
                 RowStyle(ROW_ICONS[k], sub = if (cost) getString(R.string.smooth_volume_cost) else null, choices = choices[k],
-                    help = ROW_HELP[k]?.let { getString(it) }, area = SECTION_AREAS[section.first], art = ROW_ART[k], ext = k == R.string.screensaver_timing)
+                    help = help(k), area = SECTION_AREAS[section.first], art = ROW_ART[k],
+                    // Without the adb permission, Home opens Plume is switched on in Android's Accessibility screen.
+                    ext = k == R.string.screensaver_timing || k == R.string.home_button && !homeServiceOn() && checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED)
             }
-            return showPage(getString(section.first), keys.map { rows[it]!! }, keys.indexOf(at), top = note, steps = keys.map { steps[it] }, styles = styles,
+            return showPage(getString(section.first), keys.map { rows[it]!! }, keys.indexOf(at), steps = keys.map { steps[it] }, styles = styles,
                 crumb = getString(R.string.plume_settings)) {
                 renderSettings(section.first)
             }
@@ -2421,14 +2429,7 @@ class MainActivity : Activity() {
                 else Triple(R.string.preview_home_setup, page(getString(R.string.preview_home_setup)) { closeLauncherSettings(); previewHomeSetup() },
                     RowStyle(R.drawable.ms_code)))
         lastSettings = 0
-        val hint = label(getString(R.string.top_bar_hint), 13f).apply {
-            setTextColor(valueInk())
-            panelShadow()
-            isSingleLine = false // it wraps onto a second line rather than being cut
-            maxLines = 2
-            setPadding(dp(16), dp(2), dp(16), dp(8))
-        }
-        showPage(getString(R.string.plume_settings), top.map { it.second }, maxOf(0, top.indexOfFirst { it.first == at }), top = hint, styles = top.map { it.third }, back = null)
+        showPage(getString(R.string.plume_settings), top.map { it.second }, maxOf(0, top.indexOfFirst { it.first == at }), styles = top.map { it.third }, back = null)
     }
 
     private var lastSettings = 0 // section used last, focused when settings open again
@@ -2799,7 +2800,7 @@ class MainActivity : Activity() {
         val wrap = LinearLayout.LayoutParams.WRAP_CONTENT
         val options = style?.choices
         // Choices that would squeeze the title go under it, across the row.
-        val stacked = style?.art != null || options != null && options.sumOf { it.first.length + if (it.second != null) 3 else 0 } > 20
+        val stacked = style?.art != null || options != null && (options.size > 2 || title.length + options.sumOf { it.first.length } > 26)
         val restyle = mutableListOf<(Boolean) -> Unit>()
         val name = label(title, 16f).apply { setTextColor(restInk()); panelShadow() }
         val sub = style?.sub?.let { label(it, 13f).apply { setTextColor(valueInk()); panelShadow() } }
@@ -2889,7 +2890,7 @@ class MainActivity : Activity() {
             id = View.generateViewId()
             orientation = LinearLayout.VERTICAL
             setPadding(dp(8), dp(8), dp(8), dp(10))
-            addView(wallpaperThumb(choice, forDark, big = true), LinearLayout.LayoutParams(MATCH_PARENT, dp(118)))
+            addView(wallpaperThumb(choice, forDark, big = true), LinearLayout.LayoutParams(MATCH_PARENT, dp(100)))
             addView(LinearLayout(context).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(8), dp(10), dp(4), 0)

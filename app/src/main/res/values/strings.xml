@@ -154,7 +154,7 @@
     <string name="gallery_paintings">Gallery paintings</string>
     <string name="downloading">Downloading…</string>
     <string name="your_photos">Your photos</string>
-    <string name="aerial_views">Apple Aerial scenes</string>
+    <string name="aerial_views">Aerial Views</string>
     <string name="use_aerial_views">Use Aerial Views</string>
     <plurals name="aerial_on_disk">
         <item quantity="one">%1$d scene, %2$d MB</item>
@@ -331,14 +331,13 @@
     <string name="section_style">Style</string>
     <string name="group_home_screen">Home screen</string>
     <string name="group_tv">TV</string>
-    <string name="help_style">Light or dark, glass, and how apps open.</string>
+    <string name="help_style">Light or dark, glass, and how apps open. Hold OK on a top-bar icon to move, hide or add icons.</string>
     <string name="help_theme">Auto is light from sunrise to sunset and dark at night.</string>
     <string name="help_glass">Off: solid tiles. Frosted: the wallpaper blurred behind the tiles. Clear: the wallpaper sharp behind them.</string>
     <string name="help_app_animations">The app grows out of its tile when it opens.</string>
     <string name="help_wallpaper">The picture behind your apps. Press OK to choose another one.</string>
     <string name="help_wp_tile">Press OK to try it. Press any button to come back.</string>
-    <string name="wp_group_photos">Your photos</string>
-    <string name="wp_group_live">Live</string>
+    <string name="wp_group_photos">Your photos and videos</string>
     <string name="wp_group_daily">Picture of the day</string>
     <string name="wp_group_shows">From your shows</string>
     <string name="wp_group_builtin">Built-in</string>
