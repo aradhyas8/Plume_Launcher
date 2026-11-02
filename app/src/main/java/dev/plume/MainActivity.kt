@@ -3558,6 +3558,7 @@ class MainActivity : Activity() {
         // Found before they leave the bar: findViewById cannot see a view that has been removed.
         val views = TOP_KEYS.keys.associateWith { findViewById<View>(it) }
         val start = views.values.minOf { bar.indexOfChild(it) }
+        val focused = currentFocus?.takeIf { it.parent === bar }
         views.values.forEach { bar.removeView(it) }
         val shown = shownTop(order)
         (order + (TOP_KEYS.keys - order.toSet())).forEachIndexed { i, id ->
@@ -3567,6 +3568,9 @@ class MainActivity : Activity() {
             v.visibility = if (id in shown) View.VISIBLE else View.GONE
             bar.addView(v, start + i, lp)
         }
+        // Taking the focused icon out passed focus on, down to the empty app row's scroller on a cold start, and
+        // then the first fill of the row did not take it. Give it back to the bar.
+        focused?.let { (if (it.visibility == View.VISIBLE) it else findViewById(shown.first())).requestFocus() }
     }
 
     private fun saveTopOrder(order: List<Int>) {
