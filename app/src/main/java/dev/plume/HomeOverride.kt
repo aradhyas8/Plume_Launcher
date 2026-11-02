@@ -83,7 +83,7 @@ class HomeOverride : AccessibilityService() {
             }
             return true
         }
-        val m = Remap.all(this)[id] ?: return false
+        val m = Remap.lookup(Remap.all(this), e.keyCode, e.scanCode) ?: return false
         // Decided on release, like Home: this TV's remote doesn't reliably send key repeats.
         if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) {
             val action = if (e.eventTime - e.downTime >= LONG_PRESS_MS && m.long.isNotEmpty()) m.long else m.short
