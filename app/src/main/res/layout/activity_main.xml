@@ -54,7 +54,7 @@
                     android:format12Hour="h:mm"
                     android:format24Hour="HH:mm"
                     android:includeFontPadding="false"
-                    android:textSize="60sp" />
+                    android:textSize="48sp" />
 
                 <!-- One line: the date, then a weather icon and the temperature. The weather part is off unless turned on in settings. -->
                 <LinearLayout
