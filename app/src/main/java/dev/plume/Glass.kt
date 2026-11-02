@@ -103,13 +103,6 @@ internal fun glassHue(hue: Int, dark: Boolean, alpha: Int): Int {
 /** How much brighter a focused tile's rim is than its rim at rest ([GlassStyle.edge]). */
 internal const val EDGE_LIT = 0x40
 
-/** A neutral veil counters the local wallpaper brightness without changing its hue. */
-internal fun clearVeil(colour: Int, focused: Boolean): Int {
-    val brightness = ((colour shr 16 and 255) * 299 + (colour shr 8 and 255) * 587 + (colour and 255) * 114) / 1000
-    val opacity = 20 + kotlin.math.abs(brightness - 128) / 4 + if (focused) 16 else 0
-    return (opacity shl 24) or if (brightness >= 128) 0 else 0xFFFFFF
-}
-
 /**
  * The glint: once focus has rested on a tile for [GLINT_WAIT] ms (so holding Right through the row does not make it
  * sparkle), a band of light runs once along its top rim in [GLINT_MS], the way focus moved, at most [GLINT_PEAK] white.
@@ -141,7 +134,7 @@ internal enum class GlassStyle(
     val shade: Int,
 ) {
     FROSTED("frosted", 0x38, 0x6B, 0.35f, 0x55, 5, 1f, true, 0x33, 0x1A),
-    CLEAR("clear", 0x18, 0x40, 0.25f, 0x40, 2, 1.1f, false, 0x70, 0x38);
+    CLEAR("clear", 0x0D, 0x20, 0.25f, 0x40, 2, 1.1f, false, 0x70, 0x38);
 
     companion object {
         /** The style a stored choice means; null is off. Before the choice, Glass was a switch ([oldOn]). */
@@ -313,7 +306,6 @@ internal class GlassLayer(context: Context) : View(context) {
 
     private val tiles = ArrayList<Tile>()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val veilPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val matrix = Matrix()
     private val onePx = context.resources.displayMetrics.density
     private val visible = Rect()
@@ -488,19 +480,6 @@ internal class GlassLayer(context: Context) : View(context) {
                 }
                 lensPaint.alpha = alpha
                 c.drawRoundRect(rect, rx, ry, lensPaint)
-                if (s != null && blur != null && width > 0 && height > 0) {
-                    matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
-                    s.setLocalMatrix(matrix)
-                    paint.shader = s
-                    paint.alpha = alpha * (if (lit) 180 else 150) / 255
-                    c.drawRoundRect(rect, rx, ry, paint)
-                    val sample = blur!!.getPixel(
-                        (rect.centerX() * GLASS_W / width).toInt().coerceIn(0, GLASS_W - 1),
-                        (rect.centerY() * GLASS_H / height).toInt().coerceIn(0, GLASS_H - 1))
-                    veilPaint.color = clearVeil(sample, lit)
-                    veilPaint.alpha = veilPaint.alpha * alpha / 255
-                    c.drawRoundRect(rect, rx, ry, veilPaint)
-                }
             } else if (s != null) {
                 matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
                 matrix.postScale(lens, lens, rect.centerX(), rect.centerY())

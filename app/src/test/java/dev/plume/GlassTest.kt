@@ -129,17 +129,6 @@ class GlassTest {
         assertTrue("only frost has grain", frosted.grain && !clear.grain)
     }
 
-    @Test fun clearVeilCountersBrightnessAndStrengthensFocus() {
-        for (colour in listOf(0xFF000000.toInt(), 0xFF808080.toInt(), 0xFFFFFFFF.toInt())) {
-            val rest = clearVeil(colour, false)
-            val focus = clearVeil(colour, true)
-            assertTrue("focus increases separation", (focus ushr 24) > (rest ushr 24))
-            assertTrue("wallpaper remains visible", (focus ushr 24) < 100)
-        }
-        assertEquals(0xFFFFFF, clearVeil(0xFF000000.toInt(), false) and 0xFFFFFF)
-        assertEquals(0, clearVeil(0xFFFFFFFF.toInt(), false) and 0xFFFFFF)
-    }
-
     @Test fun onlyAPictureGetsALens() {
         assertEquals(GlassStyle.CLEAR.lens, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.PICTURE).lens, 0f)
         assertEquals(1f, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.VIDEO).lens, 0f)
