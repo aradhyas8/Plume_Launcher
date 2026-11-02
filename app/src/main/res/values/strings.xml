@@ -201,7 +201,7 @@
     <string name="home_service_label">Plume: Home button</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
-    <string name="theme_auto">Sunset</string>
+    <string name="theme_auto">Auto</string>
     <string name="glass_clear_video">Clear glass needs a still wallpaper. With a video, Plume uses Frosted.</string>
     <string name="auto_note_sun">Auto is light from sunrise to sunset in %1$s. Today: %2$s to %3$s.</string>
     <string name="auto_note_up">Auto stays light today: the sun does not set in %1$s.</string>
@@ -331,15 +331,13 @@
     <string name="section_style">Style</string>
     <string name="group_home_screen">Home screen</string>
     <string name="group_tv">TV</string>
-    <string name="theme_match">Match wallpaper</string>
     <string name="help_style">Light or dark, glass, and how apps open.</string>
-    <string name="help_theme">Match wallpaper picks light or dark from the picture. Sunset is light by day and dark at night.</string>
+    <string name="help_theme">Auto is light from sunrise to sunset and dark at night.</string>
     <string name="help_glass">Off: solid tiles. Frosted: the wallpaper blurred behind the tiles. Clear: the wallpaper sharp behind them.</string>
     <string name="help_app_animations">The app grows out of its tile when it opens.</string>
     <string name="help_wallpaper">The picture behind your apps. Press OK to choose another one.</string>
     <string name="help_wp_tile">Press OK to try it. Press any button to come back.</string>
     <string name="wp_group_photos">Your photos</string>
-    <string name="wp_group_slideshow">Slideshow</string>
     <string name="wp_group_live">Live</string>
     <string name="wp_group_daily">Picture of the day</string>
     <string name="wp_group_shows">From your shows</string>

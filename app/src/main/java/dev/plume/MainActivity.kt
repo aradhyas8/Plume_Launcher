@@ -108,7 +108,6 @@ import org.json.JSONObject
 /** Light/dark from the launcher's theme setting; shared with the Gallery screensaver. */
 internal fun prefersDark(prefs: SharedPreferences) = when (prefs.getString("theme", "light")) {
     "dark" -> true
-    "match" -> prefs.getBoolean("wp_is_dark", false) // measured on the wallpaper, see MainActivity.matchWallpaper
     "auto" -> autoDark(sunPlace(prefs), System.currentTimeMillis(), Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
     else -> false
 }
@@ -434,9 +433,8 @@ class MainActivity : Activity() {
         if (fakeSetup(intent)) {
             // debug: setup for a pretend TV already started
         } else if (prefs.getBoolean("reopen_settings", false)) {
-            val wall = prefs.getBoolean("reopen_wall", false) // Match wallpaper changed the theme while a wallpaper was picked
-            prefs.edit().remove("reopen_settings").remove("reopen_wall").apply()
-            ui.post { openLauncherSettings(if (wall) R.string.wallpaper else R.string.theme) }
+            prefs.edit().remove("reopen_settings").apply()
+            ui.post { openLauncherSettings(R.string.theme) }
         } else if (!homeSetUp() && !prefs.getBoolean("setup_shown", false)) {
             // Fresh install: walk through making Home land on Plume, the one step that has to happen by hand.
             prefs.edit().putBoolean("setup_shown", true).apply()
@@ -1292,7 +1290,6 @@ class MainActivity : Activity() {
                 wpThumb = thumb
                 // The glass is tinted with the wallpaper's mean colour; kept, so the next start has it before the picture.
                 thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
-                if (thumb != null && matchWallpaper()) return@post
                 fitInk()
                 val old = view.drawable
                 if (old == null || shown == null) {
@@ -1410,23 +1407,22 @@ class MainActivity : Activity() {
             ?.filterNot { f -> scenes.any { it.file == f.name } }?.sortedBy { it.name }.orEmpty()
         class Tile(val name: String, val choice: String? = null, val icon: Int? = null, val action: () -> Unit)
         val pick = { c: String -> Tile(wallpaperName(c), c) { setWallpaper(forDark, c); previewWallpaper(c) } }
-        val source = { name: Int, key: String -> Tile(getString(name), icon = R.drawable.ms_movie) {
-            val list = scenes.filter { it.source == key }
-            if (key == "NASA Earth") pickVideoScenesList(forDark, getString(name), list) { pickWallpaper(forDark) }
-            else pickSourceCategories(forDark, getString(name), list) { pickWallpaper(forDark) }
-        } }
+        // Scenes by what they show, whoever filmed them: people look for "the sea", not for a provider.
+        val kinds = scenes.groupBy { it.category }.entries.sortedByDescending { it.value.size }.map { (kind, list) ->
+            Tile(kind, icon = SCENE_ICONS[kind] ?: R.drawable.ms_movie) {
+                pickVideoScenesList(forDark, kind, list.sortedBy { it.name }) { pickWallpaper(forDark) }
+            }
+        }
         val groups = listOf(
-            R.string.wp_group_photos to listOf(Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) { uploadWallpaper(forDark) }) +
+            R.string.wp_group_photos to listOf(Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) { uploadWallpaper(forDark) },
+                Tile(getString(R.string.choose_from_tv), icon = R.drawable.ms_folder) { pickFolder(forDark) }) +
+                listOfNotNull(current.takeIf { it.startsWith("folder:") }?.let { Tile(wallpaperName(it), it) { previewWallpaper(it) } }) +
                 own.map { pick(it.second) } +
                 listOfNotNull(if (own.isEmpty()) null else Tile(getString(R.string.remove_photo_row), icon = R.drawable.ms_delete) { removeWallpaper(own, forDark) }),
-            R.string.wp_group_slideshow to listOf(Tile(getString(R.string.choose_from_tv), icon = R.drawable.ms_folder) { pickFolder(forDark) }) +
-                listOfNotNull(current.takeIf { it.startsWith("folder:") }?.let { Tile(wallpaperName(it), it) { previewWallpaper(it) } }),
             R.string.wp_group_live to listOfNotNull(
                 Tile(getString(R.string.surprise_me), icon = R.drawable.ms_shuffle) { surpriseVideo(forDark) },
                 scenes.firstOrNull { "video:${it.file}" == current }?.let { Tile(it.name, current) { previewWallpaper(current) } },
-                source(R.string.nasa_earth, "NASA Earth"), source(R.string.apple_aerial, "Apple Aerial"), source(R.string.amazon_fire_tv, "Amazon Fire TV"),
-                Tile(getString(R.string.add_video_from_phone), icon = R.drawable.ms_video_file) { uploadVideoWallpaper(forDark) },
-            ) + ownVideos.map { f -> Tile(f.nameWithoutExtension, "video:${f.name}") { previewVideo(forDark, f) } } +
+            ) + kinds + Tile(getString(R.string.add_video_from_phone), icon = R.drawable.ms_video_file) { uploadVideoWallpaper(forDark) } + ownVideos.map { f -> Tile(f.nameWithoutExtension, "video:${f.name}") { previewVideo(forDark, f) } } +
                 Tile(getString(R.string.manage_videos), icon = R.drawable.ms_edit) { pickVideoWallpaper(forDark) },
             R.string.wp_group_daily to listOf(pick(Bing.CHOICE)),
             R.string.wp_group_shows to listOf(pick(ShowsWall.CHOICE)),
@@ -1516,21 +1512,6 @@ class MainActivity : Activity() {
         pickWallpaper(dark, choice)
     }
 
-    /**
-     * Theme "Match wallpaper": dark for a dark picture (mean luminance under half), light for a bright one. Measured on
-     * each picture as it loads; when that flips the theme, the screen is rebuilt like a theme change. True if it was.
-     */
-    private fun matchWallpaper(): Boolean {
-        val c = prefs.getInt("glass_hue", GLASS_GREY)
-        val wpDark = (0.2126f * Color.red(c) + 0.7152f * Color.green(c) + 0.0722f * Color.blue(c)) / 255f < 0.5f
-        prefs.edit().putBoolean("wp_is_dark", wpDark).apply()
-        if (prefs.getString("theme", "light") != "match" || wpDark == dark) return false
-        val open = settingsScrim.visibility == View.VISIBLE
-        prefs.edit().putBoolean("reopen_settings", open).putBoolean("reopen_wall", open && lastSettings == R.string.wallpaper).apply()
-        recreate()
-        return true
-    }
-
     private fun cleanUnusedVideoWallpapers(dir: File) {
         val light = prefs.getString("wp_light", null)
         val dark = prefs.getString("wp_dark", null)
@@ -1554,21 +1535,14 @@ class MainActivity : Activity() {
         val own = files.filterNot { file -> allScenes.any { it.file == file.name } }
         val keepOne = prefs.getBoolean("video_keep_one", false)
 
-        val nasaScenes = allScenes.filter { it.source == "NASA Earth" }
-        val appleScenes = allScenes.filter { it.source == "Apple Aerial" }
-        val amazonScenes = allScenes.filter { it.source == "Amazon Fire TV" }
 
         val rows = listOf(
             page(getString(R.string.surprise_me)) { surpriseVideo(forDark) },
-            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else resources.getQuantityString(R.plurals.n_scenes, nasaScenes.size, nasaScenes.size)) {
-                pickVideoScenesList(forDark, getString(R.string.nasa_earth), nasaScenes) { pickVideoWallpaper(forDark) }
-            },
-            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else resources.getQuantityString(R.plurals.n_scenes, appleScenes.size, appleScenes.size)) {
-                pickSourceCategories(forDark, getString(R.string.apple_aerial), appleScenes) { pickVideoWallpaper(forDark) }
-            },
-            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else resources.getQuantityString(R.plurals.n_scenes, amazonScenes.size, amazonScenes.size)) {
-                pickSourceCategories(forDark, getString(R.string.amazon_fire_tv), amazonScenes) { pickVideoWallpaper(forDark) }
-            },
+        ) + allScenes.groupBy { it.category }.entries.sortedByDescending { it.value.size }.map { (kind, list) ->
+            page(kind, if (currentScene?.category == kind) CHOSEN else resources.getQuantityString(R.plurals.n_scenes, list.size, list.size)) {
+                pickVideoScenesList(forDark, kind, list.sortedBy { it.name }) { pickVideoWallpaper(forDark) }
+            }
+        } + listOf(
             page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) },
         ) + own.map { file ->
             page(file.nameWithoutExtension, if (current == "video:${file.name}") CHOSEN else "") { previewVideo(forDark, file) }
@@ -1597,23 +1571,6 @@ class MainActivity : Activity() {
         showPage(getString(R.string.video_wallpapers), rows, initialIndex, styles = styles,
             top = label(getString(R.string.video_sources_credit), 13f).apply { maxLines = 2; setPadding(dp(14), dp(4), dp(14), dp(12)) }) {
             pickWallpaper(forDark)
-        }
-    }
-
-    private fun pickSourceCategories(forDark: Boolean, source: String, sourceScenes: List<VideoScene>, onBack: () -> Unit) {
-        val current = currentWallpaper(forDark)
-        val currentScene = sourceScenes.firstOrNull { "video:${it.file}" == current }
-        val categories = sourceScenes.map { it.category }.distinct()
-        val rows = categories.map { category ->
-            val catScenes = sourceScenes.filter { it.category == category }
-            page(category, if (currentScene?.category == category) CHOSEN else resources.getQuantityString(R.plurals.n_scenes, catScenes.size, catScenes.size)) {
-                pickVideoScenesList(forDark, category, catScenes) { pickSourceCategories(forDark, source, sourceScenes, onBack) }
-            }
-        }
-        val initialIndex = currentScene?.let { sc -> categories.indexOf(sc.category).coerceAtLeast(0) } ?: 0
-        showPage(source, rows, initialIndex,
-            top = label(getString(R.string.video_sources_credit), 13f).apply { maxLines = 2; setPadding(dp(14), dp(4), dp(14), dp(12)) }) {
-            onBack()
         }
     }
 
@@ -2235,7 +2192,7 @@ class MainActivity : Activity() {
                 renderSettings(R.string.icon_style)
             },
             R.string.theme to { d ->
-                prefs.edit().putString("theme", listOf("match", "light", "dark", "auto").step(theme, d)).putBoolean("reopen_settings", true).apply()
+                prefs.edit().putString("theme", listOf("light", "dark", "auto").step(theme, d)).putBoolean("reopen_settings", true).apply()
                 recreate() // colours are applied once per activity; reopen the panel after
             },
             R.string.row_size to { d ->
@@ -2279,7 +2236,7 @@ class MainActivity : Activity() {
         )
         val rows = linkedMapOf<Int, Triple<String, String, () -> Unit>>(
             R.string.edit_apps_row to Triple(getString(R.string.edit_apps_row), "") { closeLauncherSettings(); startEdit(grab = null) },
-            R.string.theme to Triple(getString(R.string.theme), getString(mapOf("match" to R.string.theme_match, "light" to R.string.theme_light, "dark" to R.string.theme_dark, "auto" to R.string.theme_auto)[theme] ?: R.string.theme_light)) {
+            R.string.theme to Triple(getString(R.string.theme), getString(mapOf("light" to R.string.theme_light, "dark" to R.string.theme_dark, "auto" to R.string.theme_auto)[theme] ?: R.string.theme_light)) {
                 steps[R.string.theme]!!(1)
             },
             R.string.wallpaper to Triple(getString(R.string.wallpaper), wallpaperName(currentWallpaper())) { pickWallpaper(dark) },
@@ -2419,8 +2376,8 @@ class MainActivity : Activity() {
             }
             // Choices show side by side (or under the title when long); the row's value is the picked one's name.
             val choices = mapOf(
-                R.string.theme to listOf(R.string.theme_match to R.drawable.ms_wallpaper, R.string.theme_light to R.drawable.ms_light_mode,
-                    R.string.theme_dark to R.drawable.ms_dark_mode, R.string.theme_auto to R.drawable.ms_routine).map { (s, i) -> getString(s) to i },
+                R.string.theme to listOf(R.string.theme_light to R.drawable.ms_light_mode, R.string.theme_dark to R.drawable.ms_dark_mode,
+                    R.string.theme_auto to R.drawable.ms_routine).map { (s, i) -> getString(s) to i },
                 R.string.glass to listOf(R.string.off, R.string.glass_frosted, R.string.glass_clear).map { getString(it) to null },
                 R.string.sort_apps to listOf(R.string.manual, R.string.most_used).map { getString(it) to null },
                 R.string.app_names to listOf(R.string.on_focus, R.string.always, R.string.never).map { getString(it) to null },
@@ -4214,7 +4171,19 @@ class MainActivity : Activity() {
                 else useGallery(AERIAL_SCREENSAVER)
                 pickAerialScenes(0)
             },
-        ) + aerialScenes(this).mapIndexed { i, scene ->
+        ) + aerialScenes(this).groupBy { it.category }.entries.sortedByDescending { it.value.size }.mapIndexed { i, (kind, list) ->
+            val have = list.count { File(dir, it.file).isFile }
+            page(kind, "${resources.getQuantityString(R.plurals.n_scenes, list.size, list.size)}${if (have > 0) " · $have ✓" else ""}  ›") {
+                pickAerialKind(kind, list.sortedBy { it.name }) { pickAerialScenes(i + 1) }
+            }
+        }
+        showPage(getString(R.string.aerial_views), rows, focus) { pickScreensaver(1) }
+    }
+
+    /** One kind of Apple scene for the screensaver: OK downloads a scene, or offers to remove one that is on the TV. */
+    private fun pickAerialKind(kind: String, scenes: List<VideoScene>, focus: Int = 0, back: () -> Unit) {
+        val dir = wallpaperDir() ?: return
+        showPage(kind, scenes.mapIndexed { i, scene ->
             val file = File(dir, scene.file)
             val value = when {
                 aerialDownload == scene.file -> getString(R.string.downloading)
@@ -4222,11 +4191,10 @@ class MainActivity : Activity() {
                 else -> ""
             }
             page(scene.name, value) {
-                if (file.isFile) removeAerialScene(scene, file) { pickAerialScenes(i + 1) }
-                else downloadAerialScene(scene, file) { pickAerialScenes(i + 1) }
+                if (file.isFile) removeAerialScene(scene, file) { pickAerialKind(kind, scenes, i, back) }
+                else downloadAerialScene(scene, file) { pickAerialKind(kind, scenes, i, back) }
             }
-        }
-        showPage(getString(R.string.aerial_views), rows, focus) { pickScreensaver(1) }
+        }, focus, crumb = getString(R.string.aerial_views)) { back() }
     }
 
     private fun removeAerialScene(scene: VideoScene, file: File, back: () -> Unit) {
@@ -5259,7 +5227,11 @@ class MainActivity : Activity() {
         const val WALLPAPER_CARD = -2
         val WALLPAPER_KEYS = setOf(R.string.wallpaper, R.string.folder_photo_changes, R.string.wp_sources)
         /** Rows whose choices are drawn as pictures (see OptionArt). */
-        val ROW_ART = mapOf(R.string.row_size to "size", R.string.row_position to "position", R.string.glass to "glass")
+        val SCENE_ICONS = mapOf(
+            "Space" to R.drawable.ms_public, "Nature" to R.drawable.ms_forest, "Water & Coast" to R.drawable.ms_water,
+            "Cities" to R.drawable.ms_location_city, "Abstract & Patterns" to R.drawable.ms_texture, "Elements & Fire" to R.drawable.ms_local_fire_department,
+        )
+        val ROW_ART = mapOf(R.string.row_size to "size", R.string.row_position to "position")
         val ROW_ICONS = mapOf(
             R.string.theme to R.drawable.ms_contrast, R.string.glass to R.drawable.ms_blur_on, R.string.app_animations to R.drawable.ms_open_in_full,
             R.string.edit_apps_row to R.drawable.ms_swap_horiz, R.string.apps_in_row to R.drawable.ms_checklist, R.string.sort_apps to R.drawable.ms_sort,
