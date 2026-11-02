@@ -212,7 +212,7 @@
     <string name="help_theme_wallpaper">Duvar kağıdı, resminize göre açık veya koyu seçer; cam onun renklerini alır.</string>
     <string name="clock_style">Saat stili</string>
     <string name="clock_light">İnce</string>
-    <string name="clock_rounded">Yuvarlak</string>
+    <string name="clock_bold">Kalın</string>
     <string name="clock_serif">Serif</string>
     <string name="help_clock_style">Saatteki rakamların görünümü.</string>
 </resources>

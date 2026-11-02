@@ -228,7 +228,7 @@
     <string name="help_theme_wallpaper">تختار الخلفية الوضع الفاتح أو الداكن حسب صورتك، ويأخذ الزجاج ألوانها.</string>
     <string name="clock_style">نمط الساعة</string>
     <string name="clock_light">رفيع</string>
-    <string name="clock_rounded">مستدير</string>
+    <string name="clock_bold">عريض</string>
     <string name="clock_serif">مزخرف</string>
     <string name="help_clock_style">شكل أرقام الساعة.</string>
 </resources>

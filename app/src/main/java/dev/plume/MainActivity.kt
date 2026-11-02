@@ -956,7 +956,7 @@ class MainActivity : Activity() {
 
     /** The clock's digits only: the date keeps the system font, which has every language's month names. */
     private fun clockFace(): Typeface = when (prefs.getString("clock_style", "light")) {
-        "rounded" -> resources.getFont(R.font.clock_rounded) // Nunito, OFL
+        "bold" -> Typeface.create("sans-serif", Typeface.BOLD) // strong on busy wallpapers
         "serif" -> resources.getFont(R.font.clock_serif) // Fraunces, OFL
         else -> Typeface.create("sans-serif-light", Typeface.NORMAL)
     }
@@ -5413,7 +5413,7 @@ class MainActivity : Activity() {
             R.string.setup_home to R.string.help_run_setup, R.string.section_keys to R.string.help_remote_keys,
         )
         val ROW_SHOW = linkedMapOf("always" to R.string.always, "down" to R.string.on_down, "never" to R.string.never) // "Show row"
-        val CLOCK_STYLES = linkedMapOf("light" to R.string.clock_light, "rounded" to R.string.clock_rounded, "serif" to R.string.clock_serif)
+        val CLOCK_STYLES = linkedMapOf("light" to R.string.clock_light, "bold" to R.string.clock_bold, "serif" to R.string.clock_serif)
         const val BADGE = 0xFFFF453A.toInt()
         // Dark mode tokens, for AMOLED: true black, and near-black cards that read as cards because their edge
         // catches light (brightest along the top), the way light-mode cards use a soft shadow.

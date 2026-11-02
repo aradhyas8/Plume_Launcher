@@ -313,7 +313,7 @@
     <string name="help_theme_wallpaper">Sfondo sceglie chiaro o scuro in base alla tua immagine, e il vetro ne prende i colori.</string>
     <string name="clock_style">Stile orologio</string>
     <string name="clock_light">Sottile</string>
-    <string name="clock_rounded">Arrotondato</string>
+    <string name="clock_bold">Grassetto</string>
     <string name="clock_serif">Serif</string>
     <string name="help_clock_style">L’aspetto dei numeri dell’orologio.</string>
 </resources>
