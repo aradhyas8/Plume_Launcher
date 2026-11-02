@@ -80,6 +80,13 @@ class GlassTest {
         assertEquals("Dark has no accent", null, look.copy(coloured = false).accent())
     }
 
+    @Test fun theGlintWaitsThenRunsOnce() {
+        assertEquals("not while focus is still moving", null, glintAt(GLINT_WAIT - 1))
+        assertEquals(0f, glintAt(GLINT_WAIT)!!, 0f)
+        assertEquals(0.5f, glintAt(GLINT_WAIT + GLINT_MS / 2)!!, 0.01f)
+        assertEquals("then it is gone", null, glintAt(GLINT_WAIT + GLINT_MS + 1))
+    }
+
     @Test fun aSurfaceFindsItsPlaceInTheBlur() {
         // The blur is 16:9 (320x180), so on a 1920x1080 screen it scales by 6 both ways; a view at (300, 200) shifts it back.
         val m = glassMapping(1920, 1080, 300, 200)

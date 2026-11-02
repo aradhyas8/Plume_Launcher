@@ -104,6 +104,17 @@ internal fun glassHue(hue: Int, dark: Boolean, alpha: Int): Int {
 internal const val EDGE_LIT = 0x40
 
 /**
+ * The glint: once focus has rested on a tile for [GLINT_WAIT] ms (so holding Right through the row does not make it
+ * sparkle), a band of light runs once along its top rim in [GLINT_MS], the way focus moved, at most [GLINT_PEAK] white.
+ */
+internal const val GLINT_WAIT = 120L
+internal const val GLINT_MS = 350L
+internal const val GLINT_PEAK = 0x33
+
+/** Where the glint's band is, 0 to 1 across the tile, at [ms] after focus came; null before it starts or after it ends. */
+internal fun glintAt(ms: Long): Float? = ((ms - GLINT_WAIT).toFloat() / GLINT_MS).takeIf { it in 0f..1f }
+
+/**
  * The look of glass. [FROSTED]: a heavy blur that keeps the wallpaper's colours, a tint and a fine grain. [CLEAR]: the
  * wallpaper nearly sharp, magnified a little ([lens]), almost no tint. [tintRest] and [tintLit] are the tiles' tint
  * alphas ([glassHue]); [dim] and [scrim] are the settings overlays; [radius] is the blur's. [edge] is the light on
@@ -367,6 +378,16 @@ internal class GlassLayer(context: Context) : View(context) {
     private val unit = Matrix()
     private val pane = android.graphics.Path()
     private var until = 0L // keeps redrawing for a moment after a scroll or a focus change, which move the tiles
+    // The glint (see GLINT_MS): the tile focus came to, when, from which side, and the band it draws.
+    private var glintTile: WeakReference<View>? = null
+    private var glintSince = 0L
+    private var glintRight = true
+    private var glintX = Float.NaN
+    private val glintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = onePx
+        shader = android.graphics.LinearGradient(0f, 0f, 1f, 0f, intArrayOf(0, -1, 0), null, Shader.TileMode.CLAMP)
+    }
 
     fun add(v: View, radius: Float) {
         tiles.removeAll { it.view.get() == null }
@@ -467,6 +488,7 @@ internal class GlassLayer(context: Context) : View(context) {
                 }
             }
             light(c, rx, ry, alpha, lit)
+            if (lit) glint(c, v, rx, ry, alpha)
             c.restore()
         }
         if (SystemClock.uptimeMillis() < until) postInvalidateOnAnimation()
@@ -496,6 +518,35 @@ internal class GlassLayer(context: Context) : View(context) {
         edgePaint.alpha = (if (lit) edge + EDGE_LIT else edge) * alpha / 255
         shadePaint.alpha = shade * alpha / 255
         rims(c, rect, rx, ry, unit, edgePaint, shadePaint)
+    }
+
+    /**
+     * The glint on the focused tile [v]: a new tile starts it, from the side focus came from. Only the top third of the
+     * tile is drawn, so it runs along the top rim and its corners. Off with the system's animations off.
+     */
+    private fun glint(c: Canvas, v: View, rx: Float, ry: Float, alpha: Int) {
+        val now = SystemClock.uptimeMillis()
+        if (glintTile?.get() !== v) {
+            glintTile = WeakReference(v)
+            glintSince = now
+            if (!glintX.isNaN()) glintRight = rect.centerX() >= glintX
+            glintX = rect.centerX()
+            until = maxOf(until, now + GLINT_WAIT + GLINT_MS)
+        }
+        if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return
+        val t = glintAt(now - glintSince) ?: return
+        val band = rect.width() * 0.35f
+        unit.setScale(band, 1f)
+        unit.postTranslate(rect.left - band + (if (glintRight) t else 1 - t) * (rect.width() + band), 0f)
+        glintPaint.shader.setLocalMatrix(unit)
+        glintPaint.alpha = (GLINT_PEAK * kotlin.math.sin(Math.PI * t) * alpha / 255).toInt()
+        c.save()
+        c.clipRect(rect.left, rect.top, rect.right, rect.top + rect.height() / 3)
+        val h = onePx / 2
+        rect.inset(h, h)
+        c.drawRoundRect(rect, rx - h, ry - h, glintPaint)
+        rect.inset(-h, -h)
+        c.restore()
     }
 
     /** The tile's alpha multiplied by every parent's, so a fading row takes its frost with it. */
