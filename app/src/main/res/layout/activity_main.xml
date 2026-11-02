@@ -309,13 +309,13 @@
 
         <dev.plume.GlassBox
             android:id="@+id/settingsPanel"
-            android:layout_width="400dp"
+            android:layout_width="440dp"
             android:layout_height="match_parent"
             android:layout_gravity="end"
             android:orientation="vertical"
             android:paddingStart="28dp"
             android:paddingTop="40dp"
-            android:paddingEnd="48dp"
+            android:paddingEnd="40dp"
             android:paddingBottom="27dp">
 
             <!-- "Plume settings ›" above a section's title, so you know where Back goes. -->
@@ -324,7 +324,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:paddingStart="14dp"
-                android:textSize="13sp"
+                android:textSize="14sp"
                 android:visibility="gone" />
 
             <TextView
@@ -334,7 +334,7 @@
                 android:fontFamily="sans-serif-medium"
                 android:paddingStart="14dp"
                 android:text="@string/plume_settings"
-                android:textSize="20sp" />
+                android:textSize="24sp" />
 
             <!-- Scrolls once the rows outgrow the screen; focus moving down scrolls it along. -->
             <ScrollView
@@ -358,11 +358,12 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:lineSpacingMultiplier="1.15"
+                android:ellipsize="end"
                 android:maxLines="3"
                 android:minLines="3"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:textSize="13sp" />
+                android:textSize="14sp" />
         </dev.plume.GlassBox>
     </FrameLayout>
 </FrameLayout>
