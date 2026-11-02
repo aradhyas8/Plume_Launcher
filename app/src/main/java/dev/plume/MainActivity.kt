@@ -1142,17 +1142,21 @@ class MainActivity : Activity() {
     private fun currentWallpaper(forDark: Boolean = dark) =
         prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it) } ?: defaultWallpaper(forDark)
 
-    /** Removed pictures fall back to a plain colour, even before the new pack downloads. */
-    private fun movedWallpaper(choice: String) = when (choice) {
-        "res:Rockies (day)", "res:Mist (day)", "res:Porcelain Dunes",
-        "pack:niteroi.webp", "pack:valencia-mist.webp", "pack:muralla-roja.webp",
-        "pack:porcelain-dunes.webp", "pack:glacier-silk.webp", "pack:rose-limestone.webp",
-        "pack:sage-tide.webp", "pack:lilac-haze.webp" -> plainWallpaper(false)
-        "res:Rockies (dusk)", "res:Peak (dusk)", "pack:hemisferic.webp",
-        "pack:light-trails.webp", "pack:t-centralen.webp", "pack:obsidian-dunes.webp",
-        "pack:petrol-current.webp", "pack:copper-eclipse.webp", "pack:indigo-ridge.webp",
-        "pack:aubergine-fold.webp" -> plainWallpaper(true)
-        else -> choice
+    /** Keep installed pack photos; only unavailable legacy choices fall back to a plain colour. */
+    private fun movedWallpaper(choice: String): String {
+        val file = choice.removePrefix("pack:")
+        if (choice.startsWith("pack:") && packFileName(file) && File(packDir(), file).isFile) return choice
+        return when (choice) {
+            "res:Rockies (day)", "res:Mist (day)", "res:Porcelain Dunes",
+            "pack:niteroi.webp", "pack:valencia-mist.webp", "pack:muralla-roja.webp",
+            "pack:porcelain-dunes.webp", "pack:glacier-silk.webp", "pack:rose-limestone.webp",
+            "pack:sage-tide.webp", "pack:lilac-haze.webp" -> plainWallpaper(false)
+            "res:Rockies (dusk)", "res:Peak (dusk)", "pack:hemisferic.webp",
+            "pack:light-trails.webp", "pack:t-centralen.webp", "pack:obsidian-dunes.webp",
+            "pack:petrol-current.webp", "pack:copper-eclipse.webp", "pack:indigo-ridge.webp",
+            "pack:aubergine-fold.webp" -> plainWallpaper(true)
+            else -> choice
+        }
     }
 
     /**
@@ -1287,7 +1291,7 @@ class MainActivity : Activity() {
         choice.startsWith("video:") -> videoScenes(this).firstOrNull { "video:${it.file}" == choice }?.name
             ?: choice.removePrefix("video:").substringBeforeLast('.')
         choice.startsWith("folder:") -> getString(R.string.folder_name, choice.substringAfter(':').substringAfter(':'))
-        choice.startsWith("pack:") -> PACK_WALLPAPERS.firstOrNull { "pack:${it.first}" == choice }?.second ?: choice.removePrefix("pack:")
+        choice.startsWith("pack:") -> packPhotoName(choice.removePrefix("pack:"))
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
     }
 
@@ -1553,27 +1557,118 @@ class MainActivity : Activity() {
         (focus ?: grid.getFocusables(View.FOCUS_DOWN).firstOrNull())?.requestFocus()
     }
 
-    /** The pictures that ship with Plume, and the plain colour of the theme. */
-    private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } +
-        PACK_WALLPAPERS.filter { File(packDir(), it.first).isFile }.sortedBy { it.third != forDark }.map { "pack:${it.first}" } + plainWallpaper(forDark)
+    private var packCatalog = emptyList<PackPhoto>()
+    private var packBusy = false
+    private var refreshPackPage: (() -> Unit)? = null
 
     private fun packDir() = File(filesDir, "wallpaper-pack")
-    private fun packReady() = PACK_WALLPAPERS.all { File(packDir(), it.first).exists() }
 
-    /** The pictures that ship with Plume, the downloaded pack, and the plain colour; until the pack is here, a tile fetches it. */
-    private fun pickBuiltIn(forDark: Boolean, focusOn: String? = null) {
+    /** Include local files even when GitHub is unavailable or no longer lists them. */
+    private fun packFiles() = (packCatalog.map { it.file } +
+        packDir().listFiles { f -> f.isFile && packFileName(f.name) }.orEmpty().map { it.name }).distinct().sorted()
+
+    private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } +
+        packFiles().filter { packPhotoName(it) !in BUNDLED_WALLPAPERS && File(packDir(), it).isFile }.map { "pack:$it" } + plainWallpaper(forDark)
+
+    private fun packSize(photos: List<PackPhoto>) = String.format(java.util.Locale.ROOT, "%.1f MB", photos.sumOf { it.size } / 1_000_000.0)
+
+    /** Refresh only on entry. Existing downloads update by content; new photos wait for OK. */
+    private fun pickBuiltIn(forDark: Boolean, focusOn: String? = null, refresh: Boolean = true) {
+        var active = true
         val current = currentWallpaper(forDark)
-        val get = if (packReady()) emptyList() else listOf(
-            Tile(getString(R.string.get_wallpaper_pack, PACK_MB), icon = R.drawable.ms_photo_library, help = R.string.help_wallpaper_pack) {
-                download(PACK_URL, PACK_WALLPAPERS.map { it.first }, packDir(), getString(R.string.downloading_wallpapers, PACK_MB), R.string.wallpapers_failed) { ok ->
-                    if (ok && settingsScrim.visibility == View.VISIBLE) pickBuiltIn(forDark, "pack:${PACK_WALLPAPERS.first { it.third == forDark }.first}")
-                }
+        val missing = packCatalog.filter { !File(packDir(), it.file).isFile }
+        val choices = BUNDLED_WALLPAPERS.keys.map { "res:$it" } +
+            packFiles().filter { packPhotoName(it) !in BUNDLED_WALLPAPERS }.map { "pack:$it" } + plainWallpaper(forDark)
+        val get = if (missing.isEmpty()) emptyList() else listOf(
+            Tile(getString(R.string.get_wallpaper_pack, packSize(missing)), icon = R.drawable.ms_photo_library, help = R.string.help_wallpaper_pack) {
+                downloadPack(missing) { if (it) refreshPackPage?.invoke() }
             })
-        wallGrid(getString(R.string.built_in), listOf(null to builtIns(forDark).map { c ->
+        wallGrid(getString(R.string.built_in), listOf(null to choices.map { c ->
             Tile(wallpaperName(c), c, help = R.string.help_wallpaper_pack.takeIf { c.startsWith("pack:") }) {
-                setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) }
+                val photo = packCatalog.firstOrNull { "pack:${it.file}" == c }
+                if (photo != null && !File(packDir(), photo.file).isFile) {
+                    downloadPack(listOf(photo)) { ok ->
+                        if (ok && active) {
+                            setWallpaper(forDark, c)
+                            previewWallpaper(c) { pickBuiltIn(forDark, c) }
+                        }
+                    }
+                } else {
+                    active = false // A pending download must not replace this newer selection.
+                    setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) }
+                }
             }
         } + get), forDark, current, focusOn) { pickWallpaper(forDark, current) }
+        refreshPackPage = { if (wallPreview == null) pickBuiltIn(forDark, focusOn, false) }
+        pageExit = { active = false; refreshPackPage = null }
+        if (refresh && !packBusy) {
+            packBusy = true
+            io.execute {
+                val changed = mutableSetOf<String>()
+                var updateFailed = false
+                val catalog = try {
+                    // shortcut: GitHub's directory API supports 1,000 entries; use the tree API for a larger pack.
+                    val entries = org.json.JSONArray(openStream("https://api.github.com/repos/$REPO/contents/wallpapers?ref=main").use { it.readBytes().decodeToString() })
+                    require(entries.length() < 1000)
+                    val photos = (0 until entries.length()).mapNotNull { i ->
+                        val entry = entries.getJSONObject(i)
+                        if (entry.optString("type") != "file" || !packFileName(entry.getString("name"))) null
+                        else PackPhoto(entry.getString("name"), entry.getLong("size"), entry.getString("sha"))
+                    }
+                    require(photos.map { it.file }.distinct().size == photos.size)
+                    val updates = photos.filter { File(packDir(), it.file).isFile && !it.current(packDir()) }
+                    if (updates.isNotEmpty()) ui.post { if (!isDestroyed) toast(getString(R.string.downloading_wallpapers, packSize(updates))) }
+                    for (photo in updates) {
+                        try {
+                            if (photo.download(packDir()) { openStream(PACK_URL + photo.file + "?v=" + photo.sha) }) changed += "pack:${photo.file}"
+                        } catch (e: Exception) {
+                            updateFailed = true
+                            android.util.Log.w("Plume", "wallpaper update: ${photo.file}", e)
+                        }
+                    }
+                    photos
+                } catch (e: Exception) {
+                    android.util.Log.w("Plume", "wallpaper catalogue", e)
+                    null
+                }
+                ui.post {
+                    packBusy = false
+                    if (isDestroyed) return@post
+                    if (catalog != null) packCatalog = catalog
+                    if (currentWallpaper() in changed) loadWallpaper()
+                    if (updateFailed || (catalog == null && packFiles().isEmpty())) toast(getString(R.string.wallpapers_failed), long = true)
+                    refreshPackPage?.invoke()
+                }
+            }
+        }
+    }
+
+    private fun downloadPack(photos: List<PackPhoto>, done: (Boolean) -> Unit) {
+        if (packBusy) return toast(getString(R.string.downloading))
+        packBusy = true
+        toast(getString(R.string.downloading_wallpapers, packSize(photos)))
+        io.execute {
+            val changed = mutableSetOf<String>()
+            val ok = try {
+                for (photo in photos) {
+                    if (photo.download(packDir()) { openStream(PACK_URL + photo.file + "?v=" + photo.sha) }) changed += "pack:${photo.file}"
+                }
+                true
+            } catch (e: Exception) {
+                android.util.Log.w("Plume", "wallpaper download", e)
+                false
+            }
+            ui.post {
+                packBusy = false
+                if (isDestroyed) return@post
+                if (currentWallpaper() in changed) loadWallpaper()
+                if (!ok) {
+                    toast(getString(R.string.wallpapers_failed), long = true)
+                    refreshPackPage?.invoke()
+                }
+                done(ok)
+            }
+        }
     }
 
     /** Your uploaded photos and videos, as choices; videos are the MP4s that are not catalogue scenes. */
@@ -5505,16 +5600,7 @@ class MainActivity : Activity() {
             "Pure black" to R.string.wp_pure_black, "Soft white" to R.string.wp_soft_white,
         )
         val BUNDLED_WALLPAPERS = emptyMap<String, Int>()
-        /** The wallpaper pack, fetched only when asked. File, name, dark. */
-        val PACK_WALLPAPERS = listOf(
-            Triple("01_Alpine_Dawn.webp", "Alpine Dawn", false), Triple("02_Forest_Mist.webp", "Forest Mist", false),
-            Triple("03_Coastal_Dusk.webp", "Coastal Dusk", true), Triple("04_Autumn_Canopy.webp", "Autumn Canopy", true),
-            Triple("05_Arctic_Aurora.webp", "Arctic Aurora", true), Triple("06_Sand_Dunes.webp", "Sand Dunes", false),
-            Triple("07_Aerial_River.webp", "Aerial River", false), Triple("08_Ocean_Reef.webp", "Ocean Reef", false),
-            Triple("09_Cherry_Blossom.webp", "Cherry Blossom", false), Triple("10_Moonlit_Ridge.webp", "Moonlit Ridge", true),
-        )
         const val PACK_URL = "https://raw.githubusercontent.com/aradhyas8/Plume_Launcher/main/wallpapers/"
-        const val PACK_MB = "2.2 MB"
         val PIN_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,

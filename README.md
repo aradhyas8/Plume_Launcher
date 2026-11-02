@@ -202,6 +202,7 @@ Plume has no analytics, no ads and no account. It only connects to the internet 
 - load poster images for your Continue Watching items
 - check this repository's GitHub releases for a new version, once a day, and download it when you choose to update
 - download the Gallery paintings from this repository, **only if you choose that screensaver**
+- check this repository for wallpapers **when you open Built-in**. Plume updates photos you already downloaded. New photos download only when you select them.
 - get the Bing picture of the day (about 300 KB), **only if you choose it as your wallpaper**. Plume sends a request to [bing.com](https://www.bing.com) when the home screen opens: once a day, or once an hour until the picture has changed that day, because Bing changes it at a set time for each country. Bing sees the TV's IP address and its language and country, which Plume sends to get the picture for your country. Plume keeps one picture and deletes it when you choose another wallpaper.
 - download one NASA Earth video from [svs.gsfc.nasa.gov](https://svs.gsfc.nasa.gov/4019), **only when you select that scene**. NASA sees the TV's IP address. Plume stores the video on the TV.
 - download an Apple Aerial video from [sylvan.apple.com](https://sylvan.apple.com) or an Amazon Fire TV video from [Amazon's Fire TV CDN](https://aebcs-cdn-prod-na.services.firetv.amazon.dev), **only when you select that scene**. The source sees the TV's IP address. Plume stores the video on the TV.
@@ -251,7 +252,7 @@ Bug reports, design ideas, translations and pull requests are welcome. Plume sta
   - Ivan Shishkin: *Rye*
   - Jasper Francis Cropsey: *Autumn on the Hudson River*
   - Martin Johnson Heade: *Thunder Storm on Narragansett Bay*
-- **Wallpaper pack:** ten 1920 × 1080 WebP images in [`wallpapers/`](wallpapers), available as an optional 2.2 MB download: Alpine Dawn, Forest Mist, Coastal Dusk, Autumn Canopy, Arctic Aurora, Sand Dunes, Aerial River, Ocean Reef, Cherry Blossom, and Moonlit Ridge.
+- **Wallpaper pack:** ten 3840 × 2160 WebP images in [`wallpapers/`](wallpapers), available as an optional 14.9 MB download: Alpine Dawn, Forest Mist, Coastal Dusk, Autumn Canopy, Arctic Aurora, Sand Dunes, Aerial River, Ocean Reef, Cherry Blossom, and Moonlit Ridge.
 - **Aerial Views:** the Apple Aerial scene list comes from the [Aerial Views](https://github.com/theothernt/AerialViews) project (GPL-3.0). Plume's Aerial Views screensaver is not part of that app.
 - **App logos:** [Simple Icons](https://simpleicons.org) (CC0). All trademarks belong to their respective owners.
 - **HDMI input and settings icons:** [Material Symbols](https://fonts.google.com/icons) by Google (Apache 2.0)
