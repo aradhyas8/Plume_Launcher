@@ -1131,8 +1131,7 @@ class MainActivity : Activity() {
      * The style, the theme and what is behind the home screen: all that glass depends on. A video is never captured
      * to blur (that fails on TVs that play video on a hardware overlay, and redrawing costs frames): it gets a tint.
      */
-    private fun glassLook() = GlassLook(glassStyle(), dark, Backdrop.of(currentWallpaper()), prefs.getInt("glass_hue", GLASS_GREY),
-        neutral = prefs.getString("theme", null) == "wallpaper")
+    private fun glassLook() = GlassLook(glassStyle(), dark, Backdrop.of(currentWallpaper()), prefs.getInt("glass_hue", GLASS_GREY))
 
     /** Glass needs something behind it: with a plain background the tiles stay as they are. */
     private fun glassActive() = glassLook().active != null
@@ -1155,7 +1154,7 @@ class MainActivity : Activity() {
         g.flatRight = flatRight
         g.ref = findViewById(R.id.root) // the wallpaper the blur shows, also for a menu in its own window
         g.wash = glassLook().wash()
-        g.highlight = if (dark) 0x14FFFFFF else 0x66FFFFFF
+        g.highlight = if (dark) 0x26FFFFFF else 0x66FFFFFF
         g.setBlur(surfaceBlur)
         glassSurfaces.removeAll { it.get() == null }
         if (glassSurfaces.none { it.get() === g }) glassSurfaces.add(java.lang.ref.WeakReference(g)) // the panel is styled again and again

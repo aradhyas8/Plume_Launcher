@@ -53,7 +53,7 @@ class GlassTest {
         val green = px(40, 160, 60)
         val darkTint = glassHue(green, dark = true, alpha = 0x80)
         assertEquals(0x80, darkTint ushr 24)
-        assertTrue("dark tint is near black", luma(darkTint) < 40)
+        assertTrue("dark tint is dark grey", luma(darkTint) in 40..70)
         assertTrue("and still green", (darkTint shr 8 and 0xFF) > (darkTint shr 16 and 0xFF))
         val light = glassHue(green, dark = false, alpha = 0xFF)
         assertTrue("light tint is near white", luma(light) > 230)
@@ -63,19 +63,12 @@ class GlassTest {
     @Test fun tilesAndPanelsTakeTheWallpapersColour() {
         val hue = px(40, 160, 60)
         val look = GlassLook(GlassStyle.FROSTED, dark = true, backdrop = Backdrop.PICTURE, hue = hue)
-        assertEquals(glassHue(hue, true, GlassStyle.FROSTED.tintRest), look.tile(lit = false))
-        assertEquals(glassHue(hue, true, GlassStyle.FROSTED.tintLit), look.tile(lit = true))
+        assertEquals("dark tiles are thinner", glassHue(hue, true, GlassStyle.FROSTED.tintRest * 5 / 8), look.tile(lit = false))
+        assertEquals(glassHue(hue, false, GlassStyle.FROSTED.tintLit), look.copy(dark = false).tile(lit = true))
         assertEquals("panels are as strong in both styles", look.wash(), look.copy(style = GlassStyle.CLEAR).wash())
         assertEquals("off: no tint", 0, look.copy(style = null).tile(lit = true))
     }
 
-    @Test fun neutralGlassIsThinGrey() {
-        val look = GlassLook(GlassStyle.FROSTED, dark = true, backdrop = Backdrop.PICTURE, hue = px(40, 160, 60), neutral = true)
-        val wash = look.wash()
-        assertEquals("grey, not green", wash shr 8 and 0xFF, wash shr 16 and 0xFF)
-        assertTrue("thinner than the tinted panel", wash ushr 24 < look.copy(neutral = false).wash() ushr 24)
-        assertTrue("thinner tiles", look.tile(lit = true) ushr 24 < look.copy(neutral = false).tile(lit = true) ushr 24)
-    }
 
     @Test fun aSurfaceFindsItsPlaceInTheBlur() {
         // The blur is 16:9 (320x180), so on a 1920x1080 screen it scales by 6 both ways; a view at (300, 200) shifts it back.
