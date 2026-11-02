@@ -134,7 +134,7 @@ internal enum class GlassStyle(
     val shade: Int,
 ) {
     FROSTED("frosted", 0x38, 0x6B, 0.35f, 0x55, 5, 1f, true, 0x33, 0x1A),
-    CLEAR("clear", 0x0D, 0x40, 0.25f, 0x40, 2, 1.1f, false, 0x59, 0x26);
+    CLEAR("clear", 0x18, 0x40, 0.25f, 0x40, 2, 1.1f, false, 0x70, 0x38);
 
     companion object {
         /** The style a stored choice means; null is off. Before the choice, Glass was a switch ([oldOn]). */
