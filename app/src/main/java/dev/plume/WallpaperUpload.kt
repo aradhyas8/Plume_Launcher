@@ -19,10 +19,9 @@ import java.net.Socket
  * A one-page web server for adding wallpapers from a phone. It only runs while the upload panel is open,
  * and only answers on /<code> (the random code is in the QR code), so others on the Wi-Fi can't post.
  * The page sends the photo as the raw request body, so there's no multipart parsing.
- * [onPhoto] runs on the server thread with the uploaded file and returns the new wallpaper's name, or null.
+ * [onUpload] runs on the server thread with the uploaded file and whether it is a video, and returns the new wallpaper's name, or null.
  */
-internal class UploadServer(val code: String, private val temp: File, private val video: Boolean = false,
-                            private val onPhoto: (File) -> String?) {
+internal class UploadServer(val code: String, private val temp: File, private val onUpload: (File, Boolean) -> String?) {
     private val socket = try {
         ServerSocket(8080)
     } catch (e: IOException) {
@@ -68,9 +67,10 @@ internal class UploadServer(val code: String, private val temp: File, private va
         val path = request.substringAfter(' ').substringBefore(' ')
         when {
             path != "/$code" -> reply(out, 404, "text/plain", "Not found. Scan the code on the TV again.")
-            method == "GET" -> reply(out, 200, "text/html; charset=utf-8", if (video) VIDEO_PAGE else PAGE)
+            method == "GET" -> reply(out, 200, "text/html; charset=utf-8", PAGE)
             method == "POST" -> {
                 val length = headers["content-length"]?.toLongOrNull() ?: -1
+                val video = headers["content-type"].orEmpty().startsWith("video/") // the browser sends the file's own type
                 val max = if (video) VIDEO_LIMIT else MAX_BYTES
                 if (length !in 1..max) return reply(out, 413, "text/plain", "That file is too big (${max / 1024 / 1024} MB at most).")
                 temp.outputStream().use { file ->
@@ -84,7 +84,7 @@ internal class UploadServer(val code: String, private val temp: File, private va
                     }
                 }
                 val name = try {
-                    onPhoto(temp)
+                    onUpload(temp, video)
                 } finally {
                     temp.delete()
                 }
@@ -131,13 +131,13 @@ internal class UploadServer(val code: String, private val temp: File, private va
               button:disabled{opacity:.35} input{display:none} #s{min-height:1.5em}
             </style></head><body>
             <h1>Add a wallpaper</h1>
-            <p>Pick a photo. It shows on your TV a moment after you upload it.</p>
-            <label><input id="f" type="file" accept="image/*"><span id="n">Choose photo</span></label>
+            <p>Pick a photo, or an H.264 or HEVC MP4 video up to 1080p and 350 MB. A photo shows on your TV a moment after you upload it; a video plays there first.</p>
+            <label><input id="f" type="file" accept="image/*,video/mp4"><span id="n">Choose photo or video</span></label>
             <button id="b" disabled>Upload to TV</button>
             <div id="s"></div>
             <script>
               const f=document.getElementById('f'),b=document.getElementById('b'),s=document.getElementById('s'),n=document.getElementById('n');
-              f.onchange=()=>{b.disabled=!f.files.length;n.textContent=f.files.length?f.files[0].name:'Choose photo';s.textContent=''};
+              f.onchange=()=>{b.disabled=!f.files.length;n.textContent=f.files.length?f.files[0].name:'Choose photo or video';s.textContent=''};
               b.onclick=async()=>{
                 b.disabled=true;s.textContent='Uploading…';
                 try{const r=await fetch(location.pathname,{method:'POST',body:f.files[0]});
@@ -147,10 +147,6 @@ internal class UploadServer(val code: String, private val temp: File, private va
               };
             </script></body></html>
         """.trimIndent()
-        val VIDEO_PAGE = PAGE.replace("Pick a photo. It shows on your TV a moment after you upload it.",
-            "Pick an H.264 or HEVC MP4 video up to 1080p and 350 MB. Preview it on your TV after upload.")
-            .replace("accept=\"image/*\"", "accept=\"video/mp4\"")
-            .replace("Choose photo", "Choose video")
     }
 }
 

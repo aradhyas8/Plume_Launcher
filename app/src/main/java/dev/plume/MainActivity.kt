@@ -473,8 +473,13 @@ class MainActivity : Activity() {
         openedFrom = null
         ensureHomeService()
         homeSetupResumed()
-        // Back from Android's Accessibility screen: show the Home switch as it is now.
-        if (settingsScrim.visibility == View.VISIBLE && lastSettings == R.string.section_remote_home) renderSettings(R.string.home_button)
+        // Back from a screen that settings opened: settings again, on the same row (and the Home switch as it is now).
+        val back = prefs.getInt("return_settings", 0)
+        if (back != 0 && hidden) {
+            prefs.edit().remove("return_settings").remove("return_dream").apply()
+            if (settingsScrim.visibility == View.VISIBLE) renderSettings(back) else openLauncherSettings(back)
+        }
+        hidden = false
         if (wantDark() != dark) {
             recreate()
             return
@@ -534,6 +539,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        hidden = true
         unlockedUntil = 0L // leaving the home screen locks it again (onPause would also fire for permission dialogs)
         Remap.learn = null // never keep swallowing keys for a page that's no longer on screen
         if (homeTest != 0) leftDuringTest = true
@@ -600,6 +606,7 @@ class MainActivity : Activity() {
         ui.postDelayed({
             if (homeServiceOn()) {
                 toast(getString(R.string.home_off_hint), long = true, system = true)
+                returnTo(R.string.home_button)
                 openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             } else if (settingsScrim.visibility == View.VISIBLE && lastSettings == R.string.section_remote_home) renderSettings(R.string.home_button)
         }, 800)
@@ -618,6 +625,7 @@ class MainActivity : Activity() {
         // The written path is the safety net: some Google TVs (a Xiaomi stick) answer the Accessibility link
         // with "You don't have an app that can do this", which we can't detect from here.
         toast(getString(R.string.home_on_hint), long = true, system = true)
+        returnTo(R.string.home_button)
         openHomeServiceSettings()
     }
 
@@ -652,6 +660,7 @@ class MainActivity : Activity() {
      * this alone is enough.
      */
     private fun makeDefaultHome() {
+        returnTo(R.string.default_launcher)
         val roles = if (Build.VERSION.SDK_INT >= 29) getSystemService(RoleManager::class.java) else null
         if (roles != null && roles.isRoleAvailable(RoleManager.ROLE_HOME) && !roles.isRoleHeld(RoleManager.ROLE_HOME)) {
             @Suppress("DEPRECATION")
@@ -911,6 +920,8 @@ class MainActivity : Activity() {
     /** Home pressed while already home: close whatever is open and go back to the start of the apps row. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Home pressed in Android's settings means home, not settings; the screensaver's end comes in as Home too.
+        if (intent.hasCategory(Intent.CATEGORY_HOME) && !prefs.getBoolean("return_dream", false)) prefs.edit().remove("return_settings").apply()
         if (intent.action == UPDATE_STATUS) return installStatus(intent)
         if (fakeSetup(intent)) return
         if (homeTest != 0 && intent.hasCategory(Intent.CATEGORY_HOME)) { // the Home press reached us: setup works
@@ -1404,18 +1415,17 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Wallpapers as pictures, in groups. OK on a picture sets it and steps the panel aside to show it whole, until any
-     * button. Tiles that add or open something (Add from phone, a folder, the live scenes) come first in their group.
+     * Wallpapers as pictures in three groups: yours (add, a folder, your uploads), Aerial Views (by kind) and more
+     * (photo of the day, your shows, built-in). OK on a picture sets it and steps the panel aside to show it whole,
+     * until any button. A tile that opens more shows the wallpaper in use from there, with its check.
      */
     private fun pickWallpaper(forDark: Boolean, focusOn: String? = null) {
         lastSettings = R.string.wallpaper
         val current = currentWallpaper(forDark)
-        val own = wallpaperChoices(forDark).filter { it.second.startsWith("file:") }
         val scenes = videoScenes(this)
-        val ownVideos = wallpaperDir()?.listFiles { f -> f.extension.equals("mp4", true) }
-            ?.filterNot { f -> scenes.any { it.file == f.name } }?.sortedBy { it.name }.orEmpty()
-        class Tile(val name: String, val choice: String? = null, val icon: Int? = null, val action: () -> Unit)
+        val uploads = ownUploads(forDark, scenes)
         val pick = { c: String -> Tile(wallpaperName(c), c) { setWallpaper(forDark, c); previewWallpaper(c) } }
+        val inUse = { mine: Boolean -> current.takeIf { mine } }
         // Scenes by what they show, whoever filmed them: people look for "the sea", not for a provider.
         val kinds = scenes.groupBy { it.category }.entries.sortedByDescending { it.value.size }.map { (kind, list) ->
             Tile(kind, icon = SCENE_ICONS[kind] ?: R.drawable.ms_movie) {
@@ -1423,39 +1433,46 @@ class MainActivity : Activity() {
             }
         }
         val groups = listOf(
-            R.string.wp_group_photos to listOf(Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) { uploadWallpaper(forDark) },
-                Tile(getString(R.string.choose_from_tv), icon = R.drawable.ms_folder) { pickFolder(forDark) }) +
-                listOfNotNull(current.takeIf { it.startsWith("folder:") }?.let { Tile(wallpaperName(it), it) { previewWallpaper(it) } }) +
-                own.map { pick(it.second) } +
-                Tile(getString(R.string.add_video_from_phone), icon = R.drawable.ms_video_file) { uploadVideoWallpaper(forDark) } +
-                ownVideos.map { f -> Tile(f.nameWithoutExtension, "video:${f.name}") { previewVideo(forDark, f) } } +
-                listOfNotNull(if (own.isEmpty()) null else Tile(getString(R.string.remove_photo_row), icon = R.drawable.ms_delete) { removeWallpaper(own, forDark) }),
+            R.string.wp_group_yours to listOf(
+                Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) { uploadWallpaper(forDark) },
+                Tile(getString(R.string.choose_from_tv), inUse(current.startsWith("folder:")), R.drawable.ms_folder) { pickFolder(forDark) },
+                Tile(getString(R.string.my_uploads), inUse(uploads.any { it.first == current }), R.drawable.ms_photo_library) { pickUploads(forDark) },
+            ),
             R.string.aerial_views to listOfNotNull(
                 Tile(getString(R.string.surprise_me), icon = R.drawable.ms_shuffle) { surpriseVideo(forDark) },
                 scenes.firstOrNull { "video:${it.file}" == current }?.let { Tile(it.name, current) { previewWallpaper(current) } },
-            ) + kinds +
-                Tile(getString(R.string.manage_videos), icon = R.drawable.ms_edit) { pickVideoWallpaper(forDark) },
-            R.string.wp_group_daily to listOf(pick(Bing.CHOICE)),
-            R.string.wp_group_shows to listOf(pick(ShowsWall.CHOICE)),
-            R.string.wp_group_builtin to BUNDLED_WALLPAPERS.keys.map { pick("res:$it") },
-            R.string.wp_group_plain to listOf(pick(plainWallpaper(forDark))),
+            ) + kinds + Tile(getString(R.string.manage_videos), icon = R.drawable.ms_edit) { pickVideoWallpaper(forDark) },
+            R.string.wp_group_more to listOf(pick(Bing.CHOICE), pick(ShowsWall.CHOICE),
+                Tile(getString(R.string.built_in), inUse(current in builtIns(forDark)) ?: builtIns(forDark).first(), R.drawable.ms_landscape) { pickBuiltIn(forDark) }),
         )
+        // The current wallpaper's own settings first: how often a folder or the shows change, and which shows.
+        val extras = listOfNotNull(
+            if (current.startsWith("folder:") || current == ShowsWall.CHOICE) settingsRow(getString(R.string.folder_photo_changes),
+                getString(PHOTO_EVERY[photoEvery()]!!) + "  ›", style = RowStyle(R.drawable.ms_schedule)) { pickPhotoEvery() } else null,
+            if (current == ShowsWall.CHOICE) settingsRow(getString(R.string.wp_sources),
+                getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) + "  ›", style = RowStyle(R.drawable.ms_filter_list)) { pickWpSources() } else null,
+        )
+        wallGrid(getString(R.string.wallpaper), groups, forDark, current, focusOn, extras) { renderSettings(WALLPAPER_CARD) }
+    }
+
+    /** A tile in the wallpaper grid: a [choice]'s picture (for a tile that opens more, the one in use there) or an [icon]. */
+    private class Tile(val name: String, val choice: String? = null, val icon: Int? = null, val action: () -> Unit)
+
+    /** Pages of wallpaper tiles, three across, in titled groups (a null title for none). Focus starts on [focusOn] or the one in use. */
+    private fun wallGrid(title: String, groups: List<Pair<Int?, List<Tile>>>, forDark: Boolean, current: String, focusOn: String?,
+                         extras: List<View> = emptyList(), back: () -> Unit) {
         var focus: View? = null
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            // The current wallpaper's own settings first: how often a folder or the shows change, and which shows.
-            val folder = current.startsWith("folder:") || current == ShowsWall.CHOICE
-            if (folder) addView(settingsRow(getString(R.string.folder_photo_changes), getString(PHOTO_EVERY[photoEvery()]!!) + "  ›",
-                style = RowStyle(R.drawable.ms_schedule)) { pickPhotoEvery() })
-            if (current == ShowsWall.CHOICE) addView(settingsRow(getString(R.string.wp_sources),
-                getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) + "  ›", style = RowStyle(R.drawable.ms_filter_list)) { pickWpSources() })
-            for ((title, tiles) in groups) {
-                addView(groupTitle(getString(title)))
+            extras.forEach { addView(it) }
+            for ((name, tiles) in groups) {
+                name?.let { addView(groupTitle(getString(it))) }
                 tiles.chunked(3).forEach { line ->
                     addView(LinearLayout(context).apply {
                         line.forEach { t ->
-                            val v = wallpaperTile(t.name, t.choice, t.icon, forDark, t.choice != null && t.choice == current, t.action)
-                            if (t.choice != null && t.choice == (focusOn ?: current) && focus == null) focus = v
+                            val chosen = t.choice != null && t.choice == current
+                            val v = wallpaperTile(t.name, t.choice, t.icon, forDark, chosen, t.action)
+                            if (focus == null && t.choice != null && t.choice == (focusOn ?: current)) focus = v
                             addView(v, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
                         }
                         repeat(3 - line.size) { addView(View(context), LinearLayout.LayoutParams(0, 0, 1f)) }
@@ -1463,8 +1480,45 @@ class MainActivity : Activity() {
                 }
             }
         }
-        showPage(getString(R.string.wallpaper), emptyList(), top = grid, crumb = getString(R.string.plume_settings)) { renderSettings(WALLPAPER_CARD) }
+        showPage(title, emptyList(), top = grid, crumb = getString(R.string.plume_settings)) { back() }
         (focus ?: grid.getFocusables(View.FOCUS_DOWN).firstOrNull())?.requestFocus()
+    }
+
+    /** The pictures that ship with Plume, and the plain colour of the theme. */
+    private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } + plainWallpaper(forDark)
+
+    private fun pickBuiltIn(forDark: Boolean, focusOn: String? = null) {
+        val current = currentWallpaper(forDark)
+        wallGrid(getString(R.string.built_in), listOf(null to builtIns(forDark).map { c ->
+            Tile(wallpaperName(c), c) { setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) } }
+        }), forDark, current, focusOn) { pickWallpaper(forDark, current) }
+    }
+
+    /** Your uploaded photos and videos, as choices; videos are the MP4s that are not catalogue scenes. */
+    private fun ownUploads(forDark: Boolean, scenes: List<VideoScene>): List<Pair<String, File?>> {
+        val photos = wallpaperChoices(forDark).filter { it.second.startsWith("file:") }.map { it.second to null as File? }
+        val videos = wallpaperDir()?.listFiles { f -> f.extension.equals("mp4", true) }
+            ?.filterNot { f -> scenes.any { it.file == f.name } }?.sortedBy { it.name }.orEmpty().map { "video:${it.name}" to it }
+        return photos + videos
+    }
+
+    /** Your uploads: OK uses one; the last tiles remove a photo or a video. */
+    private fun pickUploads(forDark: Boolean, focusOn: String? = null) {
+        val current = currentWallpaper(forDark)
+        val uploads = ownUploads(forDark, videoScenes(this))
+        val photos = wallpaperChoices(forDark).filter { it.second.startsWith("file:") }
+        val videos = uploads.mapNotNull { it.second }
+        val tiles = uploads.map { (choice, video) ->
+            Tile(wallpaperName(choice), choice) {
+                if (video != null) previewVideo(forDark, video)
+                else { setWallpaper(forDark, choice); previewWallpaper(choice) { pickUploads(forDark, choice) } }
+            }
+        } + listOf(Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) { uploadWallpaper(forDark) }) +
+            listOfNotNull(
+                if (photos.isEmpty()) null else Tile(getString(R.string.remove_photo_row), icon = R.drawable.ms_delete) { removeWallpaper(photos, forDark) },
+                if (videos.isEmpty()) null else Tile(getString(R.string.remove_video), icon = R.drawable.ms_delete) { removeVideo(forDark, videos) },
+            )
+        wallGrid(getString(R.string.my_uploads), listOf(null to tiles), forDark, current, focusOn) { pickWallpaper(forDark, current) }
     }
 
     /** One wallpaper in the grid: its picture (or an icon for an action), its name, and a check on the one in use. */
@@ -1508,10 +1562,17 @@ class MainActivity : Activity() {
     }
 
     private var wallPreview: String? = null
+    private var hidden = false // stopped since settings opened another screen (a trampoline only pauses us)
+
+    /** Settings is about to open another screen: come back to row [at] after it ([dream]: the screensaver, which ends with Home). */
+    private fun returnTo(at: Int, dream: Boolean = false) = prefs.edit().putInt("return_settings", at).putBoolean("return_dream", dream).apply()
 
     /** A picked wallpaper, shown whole: the panel and the dimming step aside until any button. */
-    private fun previewWallpaper(choice: String) {
+    private var previewBack: (() -> Unit)? = null
+
+    private fun previewWallpaper(choice: String, back: (() -> Unit)? = null) {
         wallPreview = choice
+        previewBack = back
         settingsScrim.animate().alpha(0f).setDuration(220).setInterpolator(DECELERATE).start()
         toast(getString(R.string.wp_preview_hint))
     }
@@ -1520,7 +1581,8 @@ class MainActivity : Activity() {
         val choice = wallPreview ?: return
         wallPreview = null
         settingsScrim.animate().alpha(1f).setDuration(220).setInterpolator(DECELERATE).start()
-        pickWallpaper(dark, choice)
+        previewBack?.invoke() ?: pickWallpaper(dark, choice)
+        previewBack = null
     }
 
     private fun cleanUnusedVideoWallpapers(dir: File) {
@@ -1554,7 +1616,7 @@ class MainActivity : Activity() {
                 pickVideoScenesList(forDark, kind, list.sortedBy { it.name }) { pickVideoWallpaper(forDark) }
             }
         } + listOf(
-            page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) },
+            page(getString(R.string.add_from_phone)) { uploadWallpaper(forDark) },
         ) + own.map { file ->
             page(file.nameWithoutExtension, if (current == "video:${file.name}") CHOSEN else "") { previewVideo(forDark, file) }
         } + listOf(
@@ -2022,19 +2084,25 @@ class MainActivity : Activity() {
      * "Add from phone": a QR code for a page served from this TV. The phone posts a photo, we turn it into a
      * wallpaper and show it at once. The server runs only while this panel is open.
      */
+    /** Add from phone: one QR page that takes a photo (set at once) or an MP4 video (previewed first). */
     private fun uploadWallpaper(forDark: Boolean) {
         val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
         val dir = wallpaperDir() ?: return
         val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_photo), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File.createTempFile("photo-upload-", ".tmp", cacheDir)) { file ->
+            UploadServer((1000..9999).random().toString(), File.createTempFile("upload-", ".tmp", cacheDir)) { file, video ->
                 if (!active.get()) return@UploadServer null
-                val saved = importWallpaper(file, dir) ?: return@UploadServer null
+                val saved = (if (video) importVideoWallpaper(file, dir) else importWallpaper(file, dir)) ?: return@UploadServer null
                 ui.post {
                     if (isDestroyed || !active.get()) { saved.delete(); return@post }
-                    setWallpaper(forDark, "file:${saved.name}")
-                    status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
+                    if (video) {
+                        status.text = getString(R.string.video_added, saved.nameWithoutExtension)
+                        previewVideo(forDark, saved)
+                    } else {
+                        setWallpaper(forDark, "file:${saved.name}")
+                        status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
+                    }
                 }
                 saved.nameWithoutExtension
             }
@@ -2062,42 +2130,6 @@ class MainActivity : Activity() {
             server.stop()
             if (upload === server) upload = null
         }
-    }
-
-    private fun uploadVideoWallpaper(forDark: Boolean) {
-        val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
-        val dir = wallpaperDir() ?: return
-        val active = AtomicBoolean(true)
-        val status = label(getString(R.string.waiting_video), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
-        val server = try {
-            UploadServer((1000..9999).random().toString(), File.createTempFile("video-upload-", ".tmp", cacheDir), video = true) { file ->
-                if (!active.get()) return@UploadServer null
-                val saved = importVideoWallpaper(file, dir) ?: return@UploadServer null
-                ui.post {
-                    if (isDestroyed || !active.get()) { saved.delete(); return@post }
-                    status.text = getString(R.string.video_added, saved.nameWithoutExtension)
-                    previewVideo(forDark, saved)
-                }
-                saved.nameWithoutExtension
-            }
-        } catch (_: IOException) {
-            return toast(getString(R.string.upload_failed), long = true)
-        }
-        upload = server
-        val url = "http://$ip:${server.port}/${server.code}"
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, dp(4), 0, dp(12))
-            addView(ImageView(this@MainActivity).apply { setImageBitmap(qrBitmap(url, dp(200))) })
-            addView(label(url, 14f).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(4)) })
-            addView(label(getString(R.string.scan_hint), 12f).apply { gravity = Gravity.CENTER; maxLines = 3 })
-            addView(status.apply { setPadding(0, dp(12), 0, 0) })
-        }
-        showPage(getString(R.string.add_video_from_phone), listOf(page(getString(R.string.done)) { pickVideoWallpaper(forDark) }), top = box) {
-            pickVideoWallpaper(forDark)
-        }
-        pageExit = { active.set(false); server.stop(); if (upload === server) upload = null }
     }
 
     /** The TV's own address on the home network (IPv4: easy to read and type). */
@@ -4252,6 +4284,7 @@ class MainActivity : Activity() {
 
     /** Android's screensaver settings (timing, sleep): plain Android TV and Google TV name them differently. */
     private fun openScreensaverSettings() {
+        returnTo(R.string.screensaver_timing)
         for (action in listOf(Settings.ACTION_DREAM_SETTINGS, "com.google.android.tv.settings.ambient")) {
             try {
                 return startActivity(Intent(action))
@@ -4295,6 +4328,7 @@ class MainActivity : Activity() {
 
     /** Starts whichever screensaver is set, through SystemUI's "dream now" entry point. */
     private fun testScreensaver() {
+        returnTo(R.string.test_screensaver, dream = true)
         try {
             startActivity(Intent(Intent.ACTION_MAIN).setClassName("com.android.systemui", "com.android.systemui.Somnambulator"))
         } catch (e: Exception) {

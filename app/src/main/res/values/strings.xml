@@ -8,8 +8,6 @@
     <string name="nasa_earth">NASA Earth</string>
     <string name="apple_aerial">Apple Aerial</string>
     <string name="amazon_fire_tv">Amazon Fire TV</string>
-    <string name="add_video_from_phone">Add video from phone</string>
-    <string name="waiting_video">Waiting for a video…</string>
     <string name="video_added">Added \"%1$s\". Choose Use this video to apply it.</string>
     <string name="use_video">Use this video</string>
     <string name="remove_video">Remove a video…</string>
@@ -59,7 +57,7 @@
     <string name="cancel">Cancel</string>
     <string name="delete">Delete</string>
     <string name="connect_network">Connect the TV to Wi-Fi or Ethernet first</string>
-    <string name="waiting_photo">Waiting for a photo…</string>
+    <string name="waiting_photo">Waiting for a photo or video…</string>
     <string name="upload_failed">Couldn\'t start the upload page</string>
     <string name="scan_hint">Scan with your phone\'s camera, or open this address. Phone and TV must be on the same Wi-Fi.</string>
     <string name="add_from_your_phone">Add from your phone</string>
@@ -287,7 +285,7 @@
     <string name="input_added">Added to the row.</string>
     <string name="input_removed">Removed from the row.</string>
     <string name="sources_hint">Hold OK to pin an input to the row.</string>
-    <string name="bing_daily">Bing picture of the day</string>
+    <string name="bing_daily">Photo of the day</string>
     <!-- Remote keys: change what a button on the remote does -->
     <string name="section_clock_weather">Weather</string>
     <string name="section_remote_home">Home &amp; remote</string>
@@ -323,7 +321,7 @@
         <item quantity="other">%d keys</item>
     </plurals>
     <string name="fire_os_no_input">Fire TV didn\'t let Plume switch to this input. Hold Home and pick Inputs.</string>
-    <string name="shows_wallpaper">Shows from your apps</string>
+    <string name="shows_wallpaper">Your shows</string>
     <string name="wp_sources">Shows from</string>
     <string name="wp_usable">%1$d/%2$d</string>
     <string name="featured_now">Featured: %1$s</string>
@@ -337,11 +335,10 @@
     <string name="help_app_animations">The app grows out of its tile when it opens.</string>
     <string name="help_wallpaper">The picture behind your apps. Press OK to choose another one.</string>
     <string name="help_wp_tile">Press OK to try it. Press any button to come back.</string>
-    <string name="wp_group_photos">Your photos and videos</string>
-    <string name="wp_group_daily">Picture of the day</string>
-    <string name="wp_group_shows">From your shows</string>
-    <string name="wp_group_builtin">Built-in</string>
-    <string name="wp_group_plain">Plain</string>
+    <string name="wp_group_yours">Yours</string>
+    <string name="wp_group_more">More</string>
+    <string name="my_uploads">My uploads</string>
+    <string name="built_in">Built-in</string>
     <string name="manage_videos">Manage videos</string>
     <string name="wp_preview_hint">Press any button to go back to settings</string>
     <string name="smooth_volume_cost">Home opens slower</string>
