@@ -49,33 +49,39 @@
                     android:id="@+id/clock"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif"
+                    android:fontFamily="sans-serif-light"
+                    android:fontFeatureSettings="tnum"
                     android:format12Hour="h:mm"
                     android:format24Hour="HH:mm"
                     android:includeFontPadding="false"
-                    android:textSize="30sp" />
+                    android:textSize="38sp" />
 
-                <TextClock
-                    android:id="@+id/date"
+                <!-- One line: "Mon 2 Nov  ·  14° Cloudy". The weather part is off unless turned on in settings. -->
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:fontFamily="sans-serif"
-                    android:format12Hour="EEE d MMM"
-                    android:format24Hour="EEE d MMM"
-                    android:textSize="15sp" />
+                    android:orientation="horizontal">
 
-                <!-- "14° Cloudy · Paris". Off unless turned on in launcher settings. -->
-                <TextView
-                    android:id="@+id/weather"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:alpha="0.7"
-                    android:fontFamily="sans-serif"
-                    android:maxLines="1"
-                    android:textSize="15sp"
-                    android:visibility="gone" />
+                    <TextClock
+                        android:id="@+id/date"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif"
+                        android:fontFeatureSettings="tnum"
+                        android:format12Hour="EEE d MMM"
+                        android:format24Hour="EEE d MMM"
+                        android:textSize="15sp" />
+
+                    <TextView
+                        android:id="@+id/weather"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif"
+                        android:maxLines="1"
+                        android:textSize="15sp"
+                        android:visibility="gone" />
+                </LinearLayout>
 
                 <!-- "Featured: a show". Only with the Shows wallpaper: the show whose picture is on screen. -->
                 <TextView

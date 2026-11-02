@@ -4748,8 +4748,8 @@ class MainActivity : Activity() {
         }
         val c = prefs.getFloat("wx_temp", 0f)
         val temp = Math.round(if (unit == "f") c * 9 / 5 + 32 else c)
-        view.text = listOfNotNull("$temp° ${weatherWord(prefs.getInt("wx_code", 0))}".trim(), prefs.getString("geo_city", null))
-            .joinToString("  ·  ")
+        // Sits after the date on the same line. The city stays in settings: on Home it is noise.
+        view.text = "  ·  $temp° ${weatherWord(prefs.getInt("wx_code", 0))}".trimEnd()
         view.visibility = View.VISIBLE
         view.post { fitInk() }
     }
