@@ -100,10 +100,26 @@ internal fun glassHue(hue: Int, dark: Boolean, alpha: Int): Int {
     return (alpha shl 24) or (c[0] shl 16) or (c[1] shl 8) or c[2]
 }
 
+/** How much brighter a focused tile's rim is than its rim at rest ([GlassStyle.edge]). */
+internal const val EDGE_LIT = 0x40
+
+/**
+ * The glint: once focus has rested on a tile for [GLINT_WAIT] ms (so holding Right through the row does not make it
+ * sparkle), a band of light runs once along its top rim in [GLINT_MS], the way focus moved, at most [GLINT_PEAK] white.
+ */
+internal const val GLINT_WAIT = 120L
+internal const val GLINT_MS = 350L
+internal const val GLINT_PEAK = 0x33
+
+/** Where the glint's band is, 0 to 1 across the tile, at [ms] after focus came; null before it starts or after it ends. */
+internal fun glintAt(ms: Long): Float? = ((ms - GLINT_WAIT).toFloat() / GLINT_MS).takeIf { it in 0f..1f }
+
 /**
  * The look of glass. [FROSTED]: a heavy blur that keeps the wallpaper's colours, a tint and a fine grain. [CLEAR]: the
  * wallpaper nearly sharp, magnified a little ([lens]), almost no tint. [tintRest] and [tintLit] are the tiles' tint
- * alphas ([glassHue]); [dim] and [scrim] are the settings overlays; [radius] is the blur's.
+ * alphas ([glassHue]); [dim] and [scrim] are the settings overlays; [radius] is the blur's. [edge] is the light on
+ * the top rim at rest, [EDGE_LIT] more on focus: stronger on Clear, whose rim is most of what shows it is glass.
+ * [shade] is the bottom rim's shadow, the same lit or not: with the light from above, the pane looks thick.
  */
 internal enum class GlassStyle(
     val key: String,
@@ -114,9 +130,11 @@ internal enum class GlassStyle(
     val radius: Int,
     val lens: Float,
     val grain: Boolean,
+    val edge: Int,
+    val shade: Int,
 ) {
-    FROSTED("frosted", 0x38, 0x6B, 0.35f, 0x55, 5, 1f, true),
-    CLEAR("clear", 0x0D, 0x40, 0.25f, 0x40, 2, 1.1f, false);
+    FROSTED("frosted", 0x38, 0x6B, 0.35f, 0x55, 5, 1f, true, 0x33, 0x1A),
+    CLEAR("clear", 0x0D, 0x40, 0.25f, 0x40, 2, 1.1f, false, 0x59, 0x26);
 
     companion object {
         /** The style a stored choice means; null is off. Before the choice, Glass was a switch ([oldOn]). */
@@ -173,7 +191,12 @@ internal data class GlassLook(val style: GlassStyle?, val dark: Boolean, val bac
     val lens: Float get() = active?.lens ?: 1f
 
     /** A tile's tint, at rest or [lit]: 0 with glass off. */
-    fun tile(lit: Boolean): Int = active?.let { tint((if (lit) it.tintLit else it.tintRest) * (if (dark) 9 else 8) / 8) } ?: 0
+    fun tile(lit: Boolean): Int = active?.let {
+        // Dark tint makes a focused tile darker, not brighter: on Clear and in the Wallpaper theme focus keeps the rest
+        // tint and shows by its light (sheen, rim, glint) and lift instead.
+        val more = lit && !(dark && (coloured || it == GlassStyle.CLEAR))
+        tint((if (more) it.tintLit else it.tintRest) * (if (dark) 9 else 8) / 8)
+    } ?: 0
 
     /** The panel's and menus' tint: as strong in both styles, as they carry text. */
     fun wash(): Int = tint(if (dark) 0x99 else 0x8C)
@@ -301,7 +324,16 @@ internal class GlassLayer(context: Context) : View(context) {
     private var sharpShader: BitmapShader? = null
     private var sharpSize = 1f to 1f
     private val sharpBase = Matrix()
-    private val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    // Clear's picture evened out a little, as the frost is (glassTone) but lighter, so it stays sharp and natural:
+    // brightness pulled 10% toward the middle, so a logo still reads over a bright sky; more turned it milky grey.
+    private val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
+            .9f, 0f, 0f, 0f, 13f,
+            0f, .9f, 0f, 0f, 13f,
+            0f, 0f, .9f, 0f, 13f,
+            0f, 0f, 0f, 1f, 0f,
+        ))
+    }
     private val lens13: android.graphics.RuntimeShader? =
         if (android.os.Build.VERSION.SDK_INT >= 33) android.graphics.RuntimeShader(LENS_AGSL).apply {
             setFloatUniform("mag", LENS_MAG)
@@ -328,21 +360,37 @@ internal class GlassLayer(context: Context) : View(context) {
         invalidate()
     }
 
+    var edge = 0 // see GlassStyle.edge; 0 draws no rims
+        set(v) {
+            if (field != v) invalidate()
+            field = v
+        }
+    var shade = 0 // see GlassStyle.shade
     var grain = false // see GlassStyle.grain
         set(v) {
             if (field != v) invalidate()
             field = v
         }
-    // What makes a pane read as glass without an outline: light caught on its top half, a soft shadow under it, and
+    // What makes a pane read as glass without an outline: light caught on its top half, lit and shaded rims, and
     // the fine grain of frosted glass. All drawn with fixed shaders.
     private val sheenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = android.graphics.LinearGradient(0f, 0f, 0f, 1f, intArrayOf(0x4DFFFFFF, 0x12FFFFFF, 0), floatArrayOf(0f, 0.38f, 0.62f), Shader.TileMode.CLAMP)
     }
     private val grainPaint = Paint().apply { shader = grainShader() }
-    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF000000.toInt() }
+    private val edgePaint = edgePaint(onePx, top = true)
+    private val shadePaint = edgePaint(onePx, top = false)
     private val unit = Matrix()
-    private val pane = android.graphics.Path()
     private var until = 0L // keeps redrawing for a moment after a scroll or a focus change, which move the tiles
+    // The glint (see GLINT_MS): the tile focus came to, when, from which side, and the band it draws.
+    private var glintTile: WeakReference<View>? = null
+    private var glintSince = 0L
+    private var glintRight = true
+    private var glintX = Float.NaN
+    private val glintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = onePx
+        shader = android.graphics.LinearGradient(0f, 0f, 1f, 0f, intArrayOf(0, -1, 0), null, Shader.TileMode.CLAMP)
+    }
 
     fun add(v: View, radius: Float) {
         tiles.removeAll { it.view.get() == null }
@@ -417,7 +465,6 @@ internal class GlassLayer(context: Context) : View(context) {
             val rx = t.radius * sx
             val ry = t.radius * sy
             val lit = v.isFocused
-            shadow(c, rx, ry, alpha, lit, scroller, ox)
             c.save()
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
             val sh = sharpShader
@@ -443,31 +490,53 @@ internal class GlassLayer(context: Context) : View(context) {
                 }
             }
             light(c, rx, ry, alpha, lit)
+            if (lit) glint(c, v, rx, ry, alpha)
             c.restore()
         }
         if (SystemClock.uptimeMillis() < until) postInvalidateOnAnimation()
     }
 
-    /** A soft shadow under the pane at [rect], outside it only: inside, it would darken the glass. */
-    private fun shadow(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean, scroller: View?, ox: Int) {
-        pane.reset()
-        pane.addRoundRect(rect, rx, ry, android.graphics.Path.Direction.CW)
-        c.save()
-        c.clipOutPath(pane)
-        // In a row, the shadow stops at the row's ends as the tiles do (see the stub note in onDraw).
-        if (scroller != null) c.clipRect(row.left - ox.toFloat(), 0f, row.right - ox.toFloat(), height.toFloat())
-        shadowPaint.setShadowLayer((if (lit) 22f else 14f) * onePx, 0f, (if (lit) 8f else 5f) * onePx, (if (lit) 0x59 else 0x38) * alpha / 255 shl 24)
-        c.drawRoundRect(rect, rx, ry, shadowPaint)
-        c.restore()
-    }
 
     /** The light on the pane: the sheen on its top half, brighter on the focused tile. */
     private fun light(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean) {
         unit.setScale(1f, rect.height())
         unit.postTranslate(0f, rect.top)
         sheenPaint.shader.setLocalMatrix(unit)
-        sheenPaint.alpha = if (lit) alpha else alpha * 3 / 4
+        sheenPaint.alpha = (if (lit) alpha else alpha * 3 / 4) / (if (sharpShader != null) 2 else 1) // Clear: its rims show the light, a full sheen hazes it
         c.drawRoundRect(rect, rx, ry, sheenPaint)
+        if (edge == 0) return
+        edgePaint.alpha = (if (lit) edge + EDGE_LIT else edge) * alpha / 255
+        shadePaint.alpha = shade * alpha / 255
+        rims(c, rect, rx, ry, unit, edgePaint, shadePaint)
+    }
+
+    /**
+     * The glint on the focused tile [v]: a new tile starts it, from the side focus came from. Only the top third of the
+     * tile is drawn, so it runs along the top rim and its corners. Off with the system's animations off.
+     */
+    private fun glint(c: Canvas, v: View, rx: Float, ry: Float, alpha: Int) {
+        val now = SystemClock.uptimeMillis()
+        if (glintTile?.get() !== v) {
+            glintTile = WeakReference(v)
+            glintSince = now
+            if (!glintX.isNaN()) glintRight = rect.centerX() >= glintX
+            glintX = rect.centerX()
+            until = maxOf(until, now + GLINT_WAIT + GLINT_MS)
+        }
+        if (!android.animation.ValueAnimator.areAnimatorsEnabled()) return
+        val t = glintAt(now - glintSince) ?: return
+        val band = rect.width() * 0.35f
+        unit.setScale(band, 1f)
+        unit.postTranslate(rect.left - band + (if (glintRight) t else 1 - t) * (rect.width() + band), 0f)
+        glintPaint.shader.setLocalMatrix(unit)
+        glintPaint.alpha = (GLINT_PEAK * kotlin.math.sin(Math.PI * t) * alpha / 255).toInt()
+        c.save()
+        c.clipRect(rect.left, rect.top, rect.right, rect.top + rect.height() / 3)
+        val h = onePx / 2
+        rect.inset(h, h)
+        c.drawRoundRect(rect, rx - h, ry - h, glintPaint)
+        rect.inset(-h, -h)
+        c.restore()
     }
 
     /** The tile's alpha multiplied by every parent's, so a fading row takes its frost with it. */
@@ -497,6 +566,30 @@ internal class GlassLayer(context: Context) : View(context) {
     }
 }
 
+/**
+ * A pane's rim as a hairline: white along the [top], or black along the bottom, fading out by halfway up or down the
+ * sides, so the two never meet as an outline. Its shader runs 0 to 1 down the pane: scaled to the pane before a draw.
+ */
+internal fun edgePaint(onePx: Float, top: Boolean) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    style = Paint.Style.STROKE
+    strokeWidth = onePx
+    shader = android.graphics.LinearGradient(0f, 0f, 0f, 1f, if (top) intArrayOf(-1, 0) else intArrayOf(0, 0xFF000000.toInt()),
+        if (top) floatArrayOf(0f, 0.5f) else floatArrayOf(0.5f, 1f), Shader.TileMode.CLAMP)
+}
+
+/** Draws the light [top] and the shaded [bottom] rim inside [r], with [unit] mapping their shaders to its height. */
+internal fun rims(c: Canvas, r: RectF, rx: Float, ry: Float, unit: Matrix, top: Paint, bottom: Paint) {
+    unit.setScale(1f, r.height())
+    unit.postTranslate(0f, r.top)
+    val h = top.strokeWidth / 2 // inside the pane, so a clip does not cut it in half
+    r.inset(h, h)
+    for (p in arrayOf(top, bottom)) {
+        p.shader.setLocalMatrix(unit)
+        c.drawRoundRect(r, rx - h, ry - h, p)
+    }
+    r.inset(-h, -h)
+}
+
 /** Where a view at ([x], [y]) on a [screenW]x[screenH] screen finds itself in the blurred wallpaper: scale x, scale y, shift x, shift y. */
 internal fun glassMapping(screenW: Int, screenH: Int, x: Int, y: Int) =
     floatArrayOf(screenW.toFloat() / GLASS_W, screenH.toFloat() / GLASS_H, -x.toFloat(), -y.toFloat())
@@ -515,6 +608,9 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
     private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private val grainPaint = Paint().apply { shader = grainShader() }
+    private val edgePaint = edgePaint(host.resources.displayMetrics.density, top = true).apply { alpha = GlassStyle.FROSTED.edge }
+    private val shadePaint = edgePaint(host.resources.displayMetrics.density, top = false).apply { alpha = GlassStyle.FROSTED.shade }
+    private val edgeMatrix = Matrix()
     private val matrix = Matrix()
     private val rect = RectF()
     private val at = IntArray(2)
@@ -582,6 +678,8 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
             c.drawRoundRect(rect, round, round, tintPaint)
             tintPaint.shader = null
         }
+        // The rims, as Frosted tiles have them; a solid surface (no blur) is not glass.
+        if (shader != null) rims(c, rect, round, round, edgeMatrix, edgePaint, shadePaint)
     }
 
     override fun setAlpha(alpha: Int) {}
