@@ -135,6 +135,18 @@ class GlassTest {
         assertEquals(1f, GlassLook(GlassStyle.CLEAR, dark = true, Backdrop.PLAIN).lens, 0f)
     }
 
+    @Test fun clearRefractionKeepsCentreSharpAndBendsTheRimOutward() {
+        assertTrue("centre magnifies", clearLensScale(0f) > 1f)
+        assertTrue("rim samples outside the tile", clearLensScale(1f) < 1f)
+        var previous = clearLensScale(0f)
+        for (step in 1..4) {
+            val zoom = clearLensScale(step / 4f)
+            assertTrue("no reversed bands", zoom < previous)
+            assertTrue("bounded distortion", zoom in 0.8f..1.1f)
+            previous = zoom
+        }
+    }
+
     @Test fun theOldGlassSwitchStillMeansSomething() {
         assertEquals(GlassStyle.FROSTED, GlassStyle.of(null, oldOn = true))
         assertTrue(GlassStyle.of(null, oldOn = false) == null)

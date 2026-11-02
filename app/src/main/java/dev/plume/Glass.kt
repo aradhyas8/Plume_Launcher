@@ -279,6 +279,9 @@ half4 main(float2 p) {
 internal const val LENS_MAG = 1.25f
 internal const val LENS_BEND = 0.5f
 
+/** Edge sampling expands outwards while the centre keeps its mild magnification. */
+internal fun clearLensScale(edge: Float) = 1.1f / (1f + 0.35f * edge * edge * edge * edge)
+
 /** The frost for [glassScreen] pixels: about a millisecond, so it is redone on the UI thread when the look changes. */
 internal fun glassBlur(screen: IntArray, radius: Int, dark: Boolean) = glassTone(boxBlur(screen, GLASS_W, GLASS_H, radius, passes = 3), dark)
 
@@ -321,18 +324,17 @@ internal class GlassLayer(context: Context) : View(context) {
             if (field != v) invalidate()
             field = v
         }
-    // Clear's sharp picture: through the lens shader on Android 13+; before that magnified evenly by [lens], which
-    // is what Android 12 and older can do in one draw. ponytail: no bent rim below 13; a mesh draw doubled the jank.
+    // shortcut: Android 12 approximates refraction with four curved bands; use the continuous shader on Android 13+.
     private var sharpShader: BitmapShader? = null
+    private val lensRect = RectF()
     private var sharpSize = 1f to 1f
     private val sharpBase = Matrix()
-    // Clear's picture evened out a little, as the frost is (glassTone) but lighter, so it stays sharp and natural:
-    // brightness pulled 10% toward the middle, so a logo still reads over a bright sky; more turned it milky grey.
+    // Darken the sharp picture slightly without lifting shadows into a grey haze.
     private val lensPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = android.graphics.ColorMatrixColorFilter(floatArrayOf(
-            .9f, 0f, 0f, 0f, 13f,
-            0f, .9f, 0f, 0f, 13f,
-            0f, 0f, .9f, 0f, 13f,
+            .9f, 0f, 0f, 0f, 0f,
+            0f, .9f, 0f, 0f, 0f,
+            0f, 0f, .9f, 0f, 0f,
             0f, 0f, 0f, 1f, 0f,
         ))
     }
@@ -472,14 +474,22 @@ internal class GlassLayer(context: Context) : View(context) {
             val sh = sharpShader
             if (sh != null) {
                 val r = lens13
-                if (android.os.Build.VERSION.SDK_INT >= 33 && r != null) r.setFloatUniform("box", rect.left, rect.top, rect.right, rect.bottom)
-                else {
-                    matrix.set(sharpBase)
-                    matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
-                    sh.setLocalMatrix(matrix)
-                }
                 lensPaint.alpha = alpha
-                c.drawRoundRect(rect, rx, ry, lensPaint)
+                if (android.os.Build.VERSION.SDK_INT >= 33 && r != null) {
+                    r.setFloatUniform("box", rect.left, rect.top, rect.right, rect.bottom)
+                    c.drawRoundRect(rect, rx, ry, lensPaint)
+                } else {
+                    val band = minOf(rect.width(), rect.height()) * 0.025f
+                    for (i in 0..4) {
+                        val zoom = clearLensScale(1f - i / 4f)
+                        matrix.set(sharpBase)
+                        matrix.postScale(zoom, zoom, rect.centerX(), rect.centerY())
+                        sh.setLocalMatrix(matrix)
+                        lensRect.set(rect)
+                        lensRect.inset(i * band, i * band)
+                        c.drawRoundRect(lensRect, maxOf(0f, rx - i * band), maxOf(0f, ry - i * band), lensPaint)
+                    }
+                }
             } else if (s != null) {
                 matrix.setScale(width.toFloat() / GLASS_W, height.toFloat() / GLASS_H)
                 matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
