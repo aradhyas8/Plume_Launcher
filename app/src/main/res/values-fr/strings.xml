@@ -48,10 +48,15 @@
     <string name="edit_apps_row">Modifier la ligne d\'applis</string>
     <string name="theme">Thème</string>
     <string name="app_animations">Animations des applis</string>
-    <string name="fade_top">Fondu en haut</string>
-    <string name="fade_bottom">Fondu en bas</string>
     <string name="glass">Verre dépoli</string>
+    <string name="glass_frosted">Dépoli</string>
+    <string name="glass_clear">Transparent</string>
     <string name="sort_apps">Trier les applis</string>
+    <string name="row_size">Taille</string>
+    <string name="size_standard">Standard</string>
+    <string name="size_large">Grande</string>
+    <string name="size_largest">Très grande</string>
+    <string name="help_row_size">Agrandit les applis de la ligne. Moins d\'applis tiennent sur la largeur. Appuyez sur ‹ › pour essayer chaque taille.</string>
     <string name="manual">Manuel</string>
     <string name="most_used">Les plus utilisées</string>
     <string name="apps_in_row">Applis dans la ligne</string>
@@ -120,6 +125,20 @@
     <string name="gallery_paintings">Tableaux de la Galerie</string>
     <string name="downloading">Téléchargement…</string>
     <string name="your_photos">Vos photos</string>
+    <string name="aerial_views">Aerial Views</string>
+    <string name="use_aerial_views">Utiliser Aerial Views</string>
+    <plurals name="aerial_on_disk">
+        <item quantity="one">%1$d scène, %2$d Mo</item>
+        <item quantity="many">%1$d scènes, %2$d Mo</item>
+        <item quantity="other">%1$d scènes, %2$d Mo</item>
+    </plurals>
+    <plurals name="n_scenes">
+        <item quantity="one">%1$d scène</item>
+        <item quantity="many">%1$d scènes</item>
+        <item quantity="other">%1$d scènes</item>
+    </plurals>
+    <string name="aerial_download_first">Téléchargez d’abord une scène. Sélectionnez une scène ci-dessous.</string>
+    <string name="aerial_in_use">Le fond d’écran utilise cette scène. Choisissez d’abord un autre fond d’écran.</string>
     <string name="choose_gallery_hint">Choisissez « Galerie » comme écran de veille ici</string>
     <string name="paintings_failed">Impossible de télécharger les tableaux. Vérifiez la connexion et réessayez.</string>
     <string name="cant_dream">Cette TV ne peut pas lancer l\'écran de veille à la demande</string>
@@ -260,11 +279,6 @@
     <string name="wp_usable">%1$d/%2$d</string>
     <string name="featured_now">À l\'affiche : %1$s</string>
     <string name="help_wp_sources">Les sources dont les images deviennent le fond d\'écran : Watch Next d\'Android TV, ou une chaîne d\'une appli. Seules les images larges comptent (les affiches et les carrés sont écartés), et une image introuvable est passée. Le fond change aussi souvent qu\'un dossier de photos.</string>
-    <string name="wp_dim">Assombrissement</string>
-    <string name="dim_auto">Auto</string>
-    <string name="dim_none">Aucun</string>
-    <string name="dim_light">Léger</string>
-    <string name="dim_medium">Moyen</string>
-    <string name="dim_strong">Fort</string>
-    <string name="help_wp_dim">Le noir posé sur une image Bing ou Séries en mode sombre, pour que l\'heure, les icônes et les cartes restent lisibles. Auto regarde chaque image : une image claire reçoit plus de noir, une image très sombre est un peu éclaircie.</string>
+    <string name="theme_wallpaper">Fond d\'écran</string>
+    <string name="help_theme_wallpaper">Fond d\'écran choisit clair ou sombre selon votre image, et le verre prend ses couleurs.</string>
 </resources>

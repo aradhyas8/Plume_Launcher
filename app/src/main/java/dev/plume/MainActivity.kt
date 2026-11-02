@@ -22,6 +22,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
@@ -105,9 +106,10 @@ import java.util.Date
 import java.util.concurrent.Executors
 import org.json.JSONObject
 
-/** Light/dark from the launcher's theme setting; shared with the Gallery screensaver. */
+/** Light/dark from the launcher's theme setting; shared with the Gallery screensaver. Wallpaper: dark on a dark picture. */
 internal fun prefersDark(prefs: SharedPreferences) = when (prefs.getString("theme", "light")) {
     "dark" -> true
+    "wallpaper" -> prefs.getInt("glass_hue", GLASS_GREY).let { (it shr 16 and 0xFF) * 299 + (it shr 8 and 0xFF) * 587 + (it and 0xFF) * 114 } < 128_000
     "auto" -> autoDark(sunPlace(prefs), System.currentTimeMillis(), Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
     else -> false
 }
@@ -385,9 +387,20 @@ class MainActivity : Activity() {
         allApps = findViewById(R.id.allApps)
         allAppsGrid = findViewById(R.id.allAppsGrid)
         wifi = findViewById(R.id.wifi)
+        if (!prefs.getBoolean("wp_shared", false)) {
+            val wasDark = wantDark()
+            val choice = prefs.getString(if (wasDark) "wp_dark" else "wp_light", null)
+                ?: if (wasDark) "res:Rockies (dusk)" else "res:Rockies (day)"
+            val photo = prefs.getLong(if (wasDark) "wp_photo_dark" else "wp_photo_light", -1)
+            val at = prefs.getLong(if (wasDark) "wp_photo_at_dark" else "wp_photo_at_light", System.currentTimeMillis())
+            prefs.edit().putString("wp_light", choice).putString("wp_dark", choice)
+                .putLong("wp_photo_light", photo).putLong("wp_photo_at_light", at)
+                .putBoolean("wp_shared", true).apply()
+        }
         applyTopBar()
         applyTheme()
         setUpTitle() // after the theme: the pill is styled with the theme's card colours
+        glassShown = glassLook() to null // the tiles are built for this look; only the blur is still to come
         loadWallpaper()
         // "Show row: On Down": the row slides in while one of its cards has focus, however focus got there.
         window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, now ->
@@ -410,10 +423,16 @@ class MainActivity : Activity() {
             setColorFilter(fg)
             val ring = GradientDrawable().apply { shape = GradientDrawable.OVAL }
             // Lit, the icon sits on its ring, so it takes the theme colour; otherwise it's on the wallpaper (see fitInk).
-            background = ring
+            // Under the ring, the icon's shadow (see iconShadow); empty until fitInk.
+            background = LayerDrawable(arrayOf(ColorDrawable(Color.TRANSPARENT), ring))
             setOnFocusChangeListener { v, focused ->
                 if (focused) lastTop = v
-                ring.setColor(if (!focused) 0 else if (dark) DARK_CARD_LIT[0] else Color.WHITE)
+                (background as LayerDrawable).getDrawable(0).alpha = if (focused) 0 else 255 // on its disc it needs none
+                // With glass a lit icon sits on a glass disc: the frost, its light and the wallpaper's tint.
+                val disc = glassActive()
+                ring.setColor(if (!focused) 0 else if (disc) glassLook().tile(lit = true) else if (dark) DARK_CARD_LIT[0] else Color.WHITE)
+                if (focused && disc) glass.add(v, v.width / 2f) else glass.remove(v)
+                if (disc) glass.kick(260) // the disc grows with the icon
                 setColorFilter(if (focused) fg else iconInk)
                 animate().scaleX(if (focused) 1.15f else 1f).scaleY(if (focused) 1.15f else 1f)
                     .setDuration(160).setInterpolator(DECELERATE).start()
@@ -464,6 +483,13 @@ class MainActivity : Activity() {
         openedFrom = null
         ensureHomeService()
         homeSetupResumed()
+        // Back from a screen that settings opened: settings again, on the same row (and the Home switch as it is now).
+        val back = prefs.getInt("return_settings", 0)
+        if (back != 0 && hidden) {
+            prefs.edit().remove("return_settings").remove("return_dream").apply()
+            if (settingsScrim.visibility == View.VISIBLE) renderSettings(back) else openLauncherSettings(back)
+        }
+        hidden = false
         if (wantDark() != dark) {
             recreate()
             return
@@ -479,7 +505,7 @@ class MainActivity : Activity() {
         ui.post(wallpaperTick)
         updateFeatured()
         // Gallery chosen but its paintings missing (updated from a version that bundled them): fetch them.
-        if (galleryOn() && photoScreensaver() == null && !paintingsReady(this)) downloadPaintings {}
+        if (galleryOn() && photoScreensaver() == null && !aerialScreensaverOn() && !paintingsReady(this)) downloadPaintings {}
         checkUpdate(force = false)
         Bing.onChanged = bingChanged
         Bing.refresh(applicationContext, prefs)
@@ -523,6 +549,7 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        hidden = true
         unlockedUntil = 0L // leaving the home screen locks it again (onPause would also fire for permission dialogs)
         Remap.learn = null // never keep swallowing keys for a page that's no longer on screen
         if (homeTest != 0) leftDuringTest = true
@@ -585,10 +612,14 @@ class MainActivity : Activity() {
             Settings.Secure.putString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
                 on.split(':').filter { ComponentName.unflattenFromString(it) != me }.joinToString(":"))
         }
-        if (homeServiceOn()) {
-            toast(getString(R.string.home_off_hint), long = true, system = true)
-            openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        }
+        // disableSelf takes a moment: only send the user to Accessibility if the service is still on after it.
+        ui.postDelayed({
+            if (homeServiceOn()) {
+                toast(getString(R.string.home_off_hint), long = true, system = true)
+                returnTo(R.string.home_button)
+                openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            } else if (settingsScrim.visibility == View.VISIBLE && lastSettings == R.string.section_remote_home) renderSettings(R.string.home_button)
+        }, 800)
         renderSettings(R.string.home_button)
     }
 
@@ -596,10 +627,15 @@ class MainActivity : Activity() {
     private fun turnOnHomeButton() {
         prefs.edit().remove("home_off").apply()
         ensureHomeService() // works where the adb permission was granted
-        if (homeServiceOn()) return renderSettings(R.string.home_button)
+        if (homeServiceOn()) {
+            // A switch-off just before (disableSelf) can land after this write: check again, and write again if it did.
+            ui.postDelayed({ ensureHomeService(); if (settingsScrim.visibility == View.VISIBLE && lastSettings == R.string.section_remote_home) renderSettings(R.string.home_button) }, 800)
+            return renderSettings(R.string.home_button)
+        }
         // The written path is the safety net: some Google TVs (a Xiaomi stick) answer the Accessibility link
         // with "You don't have an app that can do this", which we can't detect from here.
         toast(getString(R.string.home_on_hint), long = true, system = true)
+        returnTo(R.string.home_button)
         openHomeServiceSettings()
     }
 
@@ -634,6 +670,7 @@ class MainActivity : Activity() {
      * this alone is enough.
      */
     private fun makeDefaultHome() {
+        returnTo(R.string.default_launcher)
         val roles = if (Build.VERSION.SDK_INT >= 29) getSystemService(RoleManager::class.java) else null
         if (roles != null && roles.isRoleAvailable(RoleManager.ROLE_HOME) && !roles.isRoleHeld(RoleManager.ROLE_HOME)) {
             @Suppress("DEPRECATION")
@@ -836,7 +873,7 @@ class MainActivity : Activity() {
     /** A card in the middle of the screen over the dimmed home screen, in the hold menus' colours. */
     private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>) {
         setupDialog?.let { setupDialog = null; it.dismiss() } // replaced, not closed: the dismiss listener leaves the flow alone
-        val card: LinearLayout = if (frosted()) glassSurface(dp(20).toFloat()) else LinearLayout(this).apply {
+        val card: LinearLayout = if (glassActive()) glassSurface(dp(20).toFloat()) else LinearLayout(this).apply {
             background = if (dark) rimCard(dp(16), false, solid = true) else GradientDrawable().apply {
                 cornerRadius = dp(16).toFloat()
                 setColor(0xFFF7F8FA.toInt())
@@ -862,7 +899,7 @@ class MainActivity : Activity() {
         dialog.window?.run {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setLayout(dp(if (extra != null) 600 else 480), ViewGroup.LayoutParams.WRAP_CONTENT)
-            setDimAmount(if (frosted()) 0.35f else 0.6f) // glass shows what is behind, so it needs less dimming
+            setDimAmount(glassLook().active?.dim ?: 0.6f) // glass shows what is behind, so it needs less dimming
         }
         dialog.setOnDismissListener {
             if (setupDialog !== dialog) return@setOnDismissListener
@@ -893,6 +930,8 @@ class MainActivity : Activity() {
     /** Home pressed while already home: close whatever is open and go back to the start of the apps row. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Home pressed in Android's settings means home, not settings; the screensaver's end comes in as Home too.
+        if (intent.hasCategory(Intent.CATEGORY_HOME) && !prefs.getBoolean("return_dream", false)) prefs.edit().remove("return_settings").apply()
         if (intent.action == UPDATE_STATUS) return installStatus(intent)
         if (fakeSetup(intent)) return
         if (homeTest != 0 && intent.hasCategory(Intent.CATEGORY_HOME)) { // the Home press reached us: setup works
@@ -927,22 +966,25 @@ class MainActivity : Activity() {
     private fun applyTheme() {
         dark = wantDark()
         fg = if (dark) DARK_TEXT else 0xFF111214.toInt()
-        // Cards are see-through, so the wallpaper shows through them like frosted glass: dark ones are rimCard()s at
-        // 70%, light ones frosted grey at 78%, and focus lifts them to 80% and 95%.
-        // Over a blur the light tiles need less colour of their own (43% at rest, 75% selected).
-        val glassy = glassActive()
-        cardRest = if (dark) DARK_CARD else if (glassy) intArrayOf(0x6EE2E5E9, 0x6ED8DCE1) else intArrayOf(0xC8E2E5E9.toInt(), 0xC8D8DCE1.toInt())
-        cardLit = if (dark) DARK_CARD_LIT else if (glassy) intArrayOf(0xBEFFFFFF.toInt(), 0xBEFFFFFF.toInt()) else intArrayOf(0xF2FFFFFF.toInt(), 0xF2FFFFFF.toInt())
-        // Must match the colour each wallpaper fades into, or the bottom edge shows a seam.
-        ground = if (dark) DARK_BG else 0xFFF3F5F7.toInt()
+        // Without glass the cards are nearly solid, so Off looks clearly different from glass: dark ones are rimCard()s
+        // at 90%, light ones grey at 94%, and focus lifts them to 95% and 100%.
+        // Over a blur the light tiles need less colour of their own (43% at rest, 75% selected; Clear is lighter).
+        val look = glassLook()
+        val glassy = look.active
+        // Glass tints with the wallpaper's own colour, and focus brightens a tile without filling it white.
+        cardRest = if (dark) DARK_CARD else if (glassy != null) IntArray(2) { look.tile(lit = false) } else intArrayOf(0xF0E2E5E9.toInt(), 0xF0D8DCE1.toInt())
+        cardLit = if (dark) DARK_CARD_LIT else if (glassy != null) IntArray(2) { look.tile(lit = true) } else intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
+        ground =if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
-        allApps.setBackgroundColor(ground)
+        // With glass, the wallpaper and the frost behind the grid are the point of All apps: let them show.
+        allApps.setBackgroundColor(if (glassy != null) Color.TRANSPARENT else ground)
         for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
             findViewById<TextView>(id).setTextColor(fg)
         }
         iconInk = fg
         for (v in topIcons()) v.setColorFilter(if (v.isFocused) fg else iconInk)
         watchInk = fg
+        appsInk = fg
     }
 
     // ---------- text over the wallpaper ----------
@@ -951,8 +993,10 @@ class MainActivity : Activity() {
     // more from the pixels right behind them. Plain wallpapers keep the theme's colour.
 
     private var wpThumb: Bitmap? = null
+    private var wpFrames: List<Bitmap> = emptyList() // what the text is measured on: the still's thumb, or a video's frames
     private var watchInk = Color.BLACK
     private var iconInk = Color.BLACK
+    private var appsInk = Color.BLACK
 
     private fun topIcons() = TOP_KEYS.keys.toList()
         .map { findViewById<ImageView>(it) }
@@ -963,21 +1007,58 @@ class MainActivity : Activity() {
         for (v in top) ink(v, topInk, fade = true)
         val icons = topIcons()
         iconInk = inkBehind(icons)
-        for (v in icons) if (!v.isFocused) v.setColorFilter(iconInk)
-        val apps = listOf(R.id.appsTitle, R.id.rowLabel).map { findViewById<TextView>(it) }
-        val appsInk = inkBehind(apps)
-        for (v in apps) ink(v, appsInk, fade = true)
-        val watch = listOf(watchTitle) + (0 until watchRow.childCount).flatMap { i ->
-            (watchRow.getChildAt(i) as ViewGroup).let { col -> (0 until col.childCount).mapNotNull { col.getChildAt(it) as? TextView } }
+        for (v in icons) {
+            if (!v.isFocused) v.setColorFilter(iconInk)
+            iconShadow(v)
         }
+        val names = findViewById<LinearLayout>(R.id.nameRow).let { row -> (0 until row.childCount).map { row.getChildAt(it) as TextView } }
+        val apps = listOf(findViewById<TextView>(R.id.appsTitle)) + names
+        // Measured over the whole row, so the On focus name keeps one colour as it moves from tile to tile.
+        appsInk = inkBehind(apps + findViewById<View>(R.id.appScroll))
+        for (v in apps) ink(v, appsInk, fade = true)
+        ink(findViewById(R.id.rowLabel), appsInk, fade = true)
+        val cols = (0 until watchRow.childCount).map { watchRow.getChildAt(it) as ViewGroup }
+        val watch = listOf(watchTitle) + cols.flatMap { col -> (0 until col.childCount).mapNotNull { col.getChildAt(it) as? TextView } }
         watchInk = inkBehind(watch)
         for (v in watch) ink(v, watchInk, fade = true)
+        // The progress bar and the source mark go with the card's text.
+        for (col in cols) for (i in 0 until col.childCount) when (val v = col.getChildAt(i)) {
+            is ProgressBar -> v.progressDrawable = progressBarDrawable(watchInk)
+            is TextView -> if (v.tag == INK_MARK) v.compoundDrawablesRelative[0]?.setTint(watchInk)
+        }
     }
 
-    /** White or near-black, by the average brightness of the wallpaper under [views]; the theme colour without a photo. */
+    /**
+     * A soft shadow in the opposite colour under a top icon, as [ink] gives text, so it holds on busy photos too.
+     * Drawn once into a small bitmap in the icon's background, under its focus ring; none on a plain wallpaper.
+     */
+    private fun iconShadow(v: ImageView) {
+        val layers = v.background as? LayerDrawable ?: return
+        val icon = v.drawable?.constantState?.newDrawable(resources)?.mutate()
+        val box = v.layoutParams.width - v.paddingLeft - v.paddingRight
+        if (wpThumb == null || icon == null || box <= 0) return layers.setDrawable(0, ColorDrawable(Color.TRANSPARENT))
+        val blur = dp(2)
+        val mask = Bitmap.createBitmap(box + blur * 2, box + blur * 2, Bitmap.Config.ARGB_8888)
+        icon.setBounds(blur, blur, blur + box, blur + box)
+        icon.draw(Canvas(mask))
+        val shape = mask.extractAlpha()
+        mask.eraseColor(Color.TRANSPARENT)
+        Canvas(mask).drawBitmap(shape, 0f, dp(1).toFloat(), Paint().apply {
+            color = if (iconInk == Color.WHITE) 0x59000000 else 0x59FFFFFF
+            maskFilter = BlurMaskFilter(blur.toFloat(), BlurMaskFilter.Blur.NORMAL)
+        })
+        shape.recycle()
+        layers.setDrawable(0, BitmapDrawable(resources, mask).apply { alpha = if (v.isFocused) 0 else 255 })
+        val inset = v.paddingLeft - blur
+        layers.setLayerInset(0, inset, inset, inset, inset)
+    }
+
+    /**
+     * White or near-black for text over [views], readable on every frame of the wallpaper (one for a photo, a video's
+     * samples, see [inkFor]); the theme colour without a picture.
+     */
     private fun inkBehind(views: List<View>): Int {
-        if (currentWallpaper().startsWith("video:")) return Color.WHITE
-        val t = wpThumb ?: return fg
+        val t = wpFrames.firstOrNull() ?: return fg
         val wall = findViewById<View>(R.id.wallpaper)
         val at = IntArray(2)
         wall.getLocationInWindow(at)
@@ -994,19 +1075,22 @@ class MainActivity : Activity() {
         val dy = (wall.height - t.height * s) / 2
         fun tx(x: Int) = ((x - dx) / s).toInt().coerceIn(0, t.width - 1)
         fun ty(y: Int) = ((y - dy) / s).toInt().coerceIn(0, t.height - 1)
-        var sum = 0f
-        var n = 0
-        for (y in ty(r.top)..ty(r.bottom)) for (x in tx(r.left)..tx(r.right)) {
-            sum += Color.luminance(t.getPixel(x, y))
-            n++
-        }
-        return inkFor(sum / n)
+        // Every frame has the thumb's size, so one mapping serves all of them.
+        return inkFor(wpFrames.map { f ->
+            val px = ArrayList<Float>()
+            for (y in ty(r.top)..ty(r.bottom)) for (x in tx(r.left)..tx(r.right)) px += Color.luminance(f.getPixel(x, y))
+            px.toFloatArray()
+        })
     }
 
-    /** Text colour plus a soft shadow in the opposite colour, so it holds on busy photos too. */
+    /**
+     * Text colour plus a shadow in the opposite colour. Plume never darkens the picture, so on a busy one this shadow
+     * is what keeps the text readable: wider and stronger than a plain drop shadow.
+     */
     private fun ink(v: TextView, color: Int, fade: Boolean = false) {
         if (wpThumb == null) v.setShadowLayer(0f, 0f, 0f, 0)
-        else v.setShadowLayer(dp(4).toFloat(), 0f, dp(1).toFloat(), if (color == Color.WHITE) 0x80000000.toInt() else 0x80FFFFFF.toInt())
+        // Tight and light: a wide one is cut off at the view's edges and shows as a dark box behind the text.
+        else v.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), if (color == Color.WHITE) 0x73000000 else 0x66FFFFFF)
         if (!fade || v.currentTextColor == color) return v.setTextColor(color)
         ValueAnimator.ofArgb(v.currentTextColor, color).apply {
             duration = 800 // with the wallpaper's crossfade
@@ -1016,10 +1100,10 @@ class MainActivity : Activity() {
     }
 
     // ---------- wallpapers ----------
-    // Bundled ones have their fade baked in. Your own go in Android/data/dev.plume/files/wallpapers/
-    // (adb push, no permission needed) and get the fades drawn over them (see paintFades). A folder on the TV (MediaStore,
-    // so USB drives too) shows its photos in shuffled turns, one decoded at a time.
-    // Each theme remembers its own pick. Decoded off the UI thread, max 1080p (~8 MB). Full colour, not RGB_565:
+    // Shown as they are: Plume never paints over the picture, the text and the glass adapt to it instead.
+    // Your own go in Android/data/dev.plume/files/wallpapers/ (adb push, no permission needed). A folder on the TV
+    // (MediaStore, so USB drives too) shows its photos in shuffled turns, one decoded at a time.
+    // Decoded off the UI thread, max 1080p (~8 MB). Full colour, not RGB_565:
     // 565 rounds a smooth sky's 1-2 level JPEG ripples into visible grey and green blocks.
 
     private fun wallpaperDir() = getExternalFilesDir("wallpapers")
@@ -1049,30 +1133,94 @@ class MainActivity : Activity() {
         else -> choice
     }
 
-    /** Glass: the tiles are see-through over a blur of the wallpaper (a setting, on by default since 1.6). */
-    private fun glassOn() = prefs.getBoolean("glass", true)
+    /**
+     * Glass: the tiles are see-through over a blur of the wallpaper (a setting, on by default since 1.6).
+     * The stored style is Frosted or Clear; the old on/off switch is read until a style is picked.
+     */
+    private fun glassStyle() = GlassStyle.of(prefs.getString("glass_style", null), prefs.getBoolean("glass", true))
 
-    /** Glass needs a picture to blur: with a plain background the tiles stay as they are. */
-    private fun glassActive() = glassOn() && !currentWallpaper().startsWith("plain:") && !currentWallpaper().startsWith("video:")
+    /**
+     * The style, the theme and what is behind the home screen: all that glass depends on. A video is never captured
+     * to blur (that fails on TVs that play video on a hardware overlay, and redrawing costs frames): it gets a tint.
+     */
+    private fun glassLook() = GlassLook(glassStyle(), dark, Backdrop.of(currentWallpaper()), prefs.getInt("glass_hue", GLASS_GREY),
+        coloured = prefs.getString("theme", null) == "wallpaper")
 
-    /** The menus, the cards and the settings panel are glass too when Glass is on. */
-    private fun frosted() = glassActive()
+    /** Glass needs something behind it: with a plain background the tiles stay as they are. */
+    private fun glassActive() = glassLook().active != null
+
+    /** The name of the current style, for the settings row. */
+    private fun glassName() = when (glassStyle()) {
+        null -> R.string.off
+        GlassStyle.CLEAR -> R.string.glass_clear
+        else -> R.string.glass_frosted
+    }
 
     /** The glass surfaces that are on screen, so that a wallpaper change (or a blur that arrives late) reaches them. */
     private val glassSurfaces = ArrayList<java.lang.ref.WeakReference<GlassDrawable>>()
 
-    /** A frosted surface in this theme: the blurred wallpaper under it, a tint, a hairline rim and a little light on top. */
+    /** A glass surface in this theme: the blurred wallpaper under it, a tint, a hairline rim and a little light on top. */
     private fun glassSurface(round: Float, flatRight: Boolean = false): GlassBox = GlassBox(this).also { styleGlass(it.glass, round, flatRight) }
 
     private fun styleGlass(g: GlassDrawable, round: Float, flatRight: Boolean = false) {
         g.round = round
         g.flatRight = flatRight
-        g.wash = if (dark) 0x8C000000.toInt() else 0xA8FFFFFF.toInt() // 55% black, or 66% white
-        g.rim = if (dark) 0x33FFFFFF else 0x1F000000
-        g.highlight = if (dark) 0x14FFFFFF else 0x66FFFFFF
-        g.setBlur(glass.blur)
+        g.ref = findViewById(R.id.root) // the wallpaper the blur shows, also for a menu in its own window
+        g.wash = glassLook().wash()
+        g.highlight = if (dark) 0x26FFFFFF else 0x66FFFFFF
+        g.setBlur(surfaceBlur)
         glassSurfaces.removeAll { it.get() == null }
-        glassSurfaces.add(java.lang.ref.WeakReference(g))
+        if (glassSurfaces.none { it.get() === g }) glassSurfaces.add(java.lang.ref.WeakReference(g)) // the panel is styled again and again
+    }
+
+    /** The shown picture, sharp, for Clear's lens ([glassSharp]); null unless Clear was the style when it loaded. */
+    private var sharpPixels: Bitmap? = null
+
+    /** The shown picture (a video's first frame) as [glassScreen] pixels, not blurred; null for a plain background. */
+    private var glassPixels: IntArray? = null
+
+    /**
+     * The blur for menus, dialogs and the panel: always Frosted's, because text over Clear's sharper picture is hard to
+     * read. With Frosted it is the tiles' own bitmap; with Clear, a second one (230 KB).
+     */
+    private var surfaceBlur: Bitmap? = null
+
+    /** The look and the pixels that glass was last drawn for. */
+    private var glassShown: Pair<GlassLook, IntArray?>? = null
+
+    /**
+     * Brings everything glass paints in line with [glassLook] and [glassPixels]. Call it whenever the style, the theme
+     * or the shown wallpaper changes; it does nothing when neither did.
+     */
+    private fun applyGlass() {
+        val look = glassLook()
+        val px = glassPixels
+        val was = glassShown
+        // The layer's own values first: cheap, and a new screen (a theme change) has none yet even when the look
+        // matches what its tiles were built for.
+        glass.lens = look.lens
+        glass.grain = look.active?.grain == true
+        glass.edge = look.active?.edge ?: 0
+        glass.shade = look.active?.shade ?: 0
+        if (look.active != GlassStyle.CLEAR) sharpPixels = null // 2 MB, kept only for Clear
+        if (was != null && was.first == look && was.second === px) return
+        glassShown = look to px
+        val shown = px?.takeIf { look.active != null }
+        glass.setSharp(sharpPixels?.takeIf { look.active == GlassStyle.CLEAR })
+        glass.setBlur(shown?.let { glassBlur(it, look.active!!.radius, look.dark) })
+        val frost = GlassStyle.FROSTED.radius
+        surfaceBlur = if (look.active?.radius == frost) glass.blur
+            else shown?.let { Bitmap.createBitmap(glassBlur(it, frost, look.dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
+        glassSurfaces.forEach { it.get()?.setBlur(surfaceBlur) } // menus and cards that are open, and the panel
+        if (was?.first != look) { // the card tints and which tiles get frost follow the look
+            applyTheme()
+            baked.clear()
+            glass.clearTiles()
+            renderApps()
+            watchKey = null
+            showWatchNext(Cards(cardSources, cardCurrent, watchList))
+        }
+        showPanelGlass()
     }
 
     private var noteView: View? = null
@@ -1084,7 +1232,7 @@ class MainActivity : Activity() {
      * ([system]): the pill would stay behind that screen and nobody would see it.
      */
     private fun toast(text: CharSequence, long: Boolean = false, system: Boolean = false) {
-        if (system || !frosted()) return Toast.makeText(this, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
+        if (system || !glassActive()) return Toast.makeText(this, text, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show()
         val root = findViewById<FrameLayout>(R.id.root)
         noteHide?.let { ui.removeCallbacks(it) }
         noteView?.let { root.removeView(it) }
@@ -1110,7 +1258,7 @@ class MainActivity : Activity() {
     }
 
     /** Supporting text in dark mode: dim grey on black, lighter on glass, where it sits over a photo. */
-    private fun text2() = if (frosted()) 0xFFCCCCCC.toInt() else DARK_TEXT_2
+    private fun text2() = if (glassActive()) 0xFFCCCCCC.toInt() else DARK_TEXT_2
 
     private fun wallpaperName(choice: String) = when {
         choice == Bing.CHOICE -> getString(R.string.bing_daily)
@@ -1130,16 +1278,17 @@ class MainActivity : Activity() {
         if (!video) videoWallpaper.clear()
         if (choice.startsWith("plain:")) { // the root's ground colour shows through
             view.setImageDrawable(null)
-            glass.setBlur(null)
-            wpRaw = null
-            fadesOn = false
-            refreshFades()
+            glassPixels = null
+            applyGlass() // open menus and the panel lose their frost too
+            wpThumb = null
+            wpFrames = emptyList()
+            fitInk()
             return
         }
         val fallback = defaultWallpaper(dark)
         io.execute {
             val own = try {
-                decodeWallpaper(if (video) fallback else choice)
+                if (video) videoPoster(File(wallpaperDir(), choice.removePrefix("video:"))) else decodeWallpaper(choice)
             } catch (e: Exception) {
                 null
             } catch (e: OutOfMemoryError) { // a picture on a TV short of memory: show the default instead of crashing
@@ -1160,7 +1309,10 @@ class MainActivity : Activity() {
                 ui.post { ui.removeCallbacks(folderRetryTask) }
             }
             val bmp = own ?: decodeWallpaper(fallback)
-            val blur = if (bmp != null && glassActive()) glassPixels(bmp, ground, dark) else null
+            // Kept even with glass off, so turning it on needs no second decode.
+            // A video is frosted from its first frame (own); never from the default picture shown when that failed.
+            val screen = if (bmp != null && (!video || own != null)) glassScreen(bmp, ground) else null
+            val sharp = if (bmp != null && !video && glassStyle() == GlassStyle.CLEAR) glassSharp(bmp, ground) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
             // Nothing reads the pixels from here on: keep the picture in graphics memory only, not once more in the process.
             val shown = bmp?.let { b ->
@@ -1172,14 +1324,21 @@ class MainActivity : Activity() {
             }
             ui.post {
                 if (isDestroyed || load != wallpaperLoad) return@post
-                glass.setBlur(blur)
-                glassSurfaces.forEach { it.get()?.setBlur(glass.blur) } // menus and cards that are open, and the panel
-                if (settingsScrim.visibility == View.VISIBLE) showPanelGlass() // a wallpaper picked from the panel itself
-                wpRaw = thumb
-                fadesOn = video || thumb != null
-                refreshFades()
+                wpThumb = thumb
+                wpFrames = listOfNotNull(thumb)
+                // The glass is tinted with the wallpaper's mean colour; kept, so the next start has it before the picture.
+                thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
+                if (wantDark() != dark) return@post recreate() // the Wallpaper theme follows the new picture
+                fitInk()
                 val old = view.drawable
+                if (video && thumb != null) io.execute {
+                    val frames = videoFrames(File(wallpaperDir(), choice.removePrefix("video:")), thumb.width, thumb.height)
+                    if (frames.isNotEmpty()) ui.post { if (load == wallpaperLoad) { wpFrames = frames; fitInk() } }
+                }
                 if (old == null || shown == null) {
+                    glassPixels = screen
+                    sharpPixels = sharp
+                    applyGlass()
                     view.setImageBitmap(shown)
                     if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
                     return@post
@@ -1188,7 +1347,13 @@ class MainActivity : Activity() {
                 val fade = TransitionDrawable(arrayOf(old, BitmapDrawable(resources, shown))).apply { isCrossFadeEnabled = true }
                 view.setImageDrawable(fade)
                 fade.startTransition(800)
-                ui.postDelayed({ if (view.drawable === fade) view.setImageBitmap(shown) }, 900)
+                ui.postDelayed({
+                    if (isDestroyed || load != wallpaperLoad) return@postDelayed
+                    if (view.drawable === fade) view.setImageBitmap(shown)
+                    glassPixels = screen
+                    sharpPixels = sharp
+                    applyGlass() // the frost changes with the picture, when the crossfade lands
+                }, 900)
                 if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
             }
         }
@@ -1226,12 +1391,61 @@ class MainActivity : Activity() {
         ui.postDelayed(folderRetryTask, delay)
     }
 
+    /**
+     * The first frame of a video wallpaper, shown until the video plays: the player takes a second to start (longer
+     * after a theme change recreates the screen), and the default picture in that second looked like a wrong
+     * wallpaper. The video starts at this same frame, so the switch does not show. Read once, then kept as a JPEG.
+     */
+    private fun videoPoster(video: File): Bitmap? {
+        val cache = File(cacheDir, "poster-${video.name}-${video.length()}-${video.lastModified()}.jpg")
+        if (cache.isFile) BitmapFactory.decodeFile(cache.path)?.let { return it }
+        val r = android.media.MediaMetadataRetriever()
+        return try {
+            r.setDataSource(video.path)
+            val at = android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            val frame = if (Build.VERSION.SDK_INT >= 27) r.getScaledFrameAtTime(0, at, resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
+                else r.getFrameAtTime(0, at)?.let { f -> // Android 8.0 has no scaled read: a 4K frame is 33 MB, shrink it
+                    val w = resources.displayMetrics.widthPixels
+                    if (f.width <= w) f else Bitmap.createScaledBitmap(f, w, maxOf(1, f.height * w / f.width), true).also { f.recycle() }
+                }
+            frame?.also { f ->
+                cacheDir.listFiles { f2 -> f2.name.startsWith("poster-") }?.forEach { it.delete() } // only the shown video's
+                cache.outputStream().use { f.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            }
+        } catch (e: Exception) {
+            null
+        } finally {
+            r.release()
+        }
+    }
+
+    /**
+     * Small frames of a video, one every 4 s (at most 30), read from the file, so the text colour can be one that reads
+     * on all of them: the screen cannot be read on TVs that play video on an overlay, and a colour that changed with
+     * the picture would flicker. ponytail: read again on every load (a few seconds, off the UI thread); cache if it shows.
+     */
+    private fun videoFrames(video: File, w: Int, h: Int): List<Bitmap> {
+        val r = android.media.MediaMetadataRetriever()
+        return try {
+            r.setDataSource(video.path)
+            val ms = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val at = android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            (0L..ms step 4000L).take(30).mapNotNull { t ->
+                val f = if (Build.VERSION.SDK_INT >= 27) r.getScaledFrameAtTime(t * 1000, at, w * 4, h * 4) else r.getFrameAtTime(t * 1000, at)
+                f?.let { Bitmap.createScaledBitmap(it, w, h, true).also { s -> if (s !== it) it.recycle() } }
+            }
+        } catch (e: Exception) {
+            emptyList()
+        } finally {
+            r.release()
+        }
+    }
+
     private fun decodeWallpaper(choice: String): Bitmap? {
         BUNDLED_WALLPAPERS[choice.removePrefix("res:")]?.let { res ->
             return BitmapFactory.decodeResource(resources, res)
         }
-        // fitWallpaper's bitmap is mutable: the Bing dim is painted onto it.
-        val bmp = when {
+        return when {
             choice == Bing.CHOICE -> fitWallpaper { Bing.file(this).inputStream() }
             choice == ShowsWall.CHOICE -> fitWallpaper { ShowsWall.file(this).inputStream() }
             choice.startsWith("folder:") -> {
@@ -1242,119 +1456,187 @@ class MainActivity : Activity() {
                 val file = File(wallpaperDir(), choice.removePrefix("file:"))
                 fitWallpaper { file.inputStream() }
             }
-        } ?: return null
-        // Bing's pictures and the shows' are often bright, which fights true black: dim them in dark mode.
-        if (dark && (choice == Bing.CHOICE || choice == ShowsWall.CHOICE)) tonePicture(bmp)
-        return bmp
+        }
     }
-
-    /** "wp_dim": "auto" or the percentage of black laid over a picture in dark mode. */
-    private fun wpDim() = prefs.getString("wp_dim", "auto")!!.takeIf { it in DIMS } ?: "auto"
 
     /**
-     * Brings a Bing or shows picture to a pleasant brightness in dark mode. A fixed strength lays that much black over it.
-     * Auto looks at the picture: a bright one gets black, and a very dark one, which the fades would leave almost
-     * invisible, is lifted a little (the shadows only: lights stay where they are).
+     * Wallpapers as pictures in three groups: yours (add, a folder, your uploads), Aerial Views (by kind) and more
+     * (photo of the day, your shows, built-in). OK on a picture sets it and steps the panel aside to show it whole,
+     * until any button. A tile that opens more shows the wallpaper in use from there, with its check.
      */
-    private fun tonePicture(bmp: Bitmap) {
-        val d = wpDim()
-        if (d != "auto") {
-            val alpha = d.toInt() * 255 / 100
-            if (alpha > 0) Canvas(bmp).drawColor(Color.argb(alpha, 0, 0, 0))
-            return
-        }
-        val small = Bitmap.createScaledBitmap(bmp, 48, 27, true)
-        val px = IntArray(48 * 27).also { small.getPixels(it, 0, 48, 0, 0, 48, 27) }
-        small.recycle()
-        val mean = Dimming.meanLuma(px)
-        val black = Dimming.autoDim(mean)
-        val lift = Dimming.autoLift(mean)
-        if (black > 0) Canvas(bmp).drawColor(Color.argb(black, 0, 0, 0))
-        if (lift > 0) Canvas(bmp).drawColor(Color.rgb(lift, lift, lift), PorterDuff.Mode.SCREEN)
-    }
-
-    // ---------- fades over your own photos ----------
-    // Drawn as a layer over the wallpaper, not into it, so the sliders in settings change them live.
-
-    private var fadesOn = false // the wallpaper is a picture, so the fades are drawn over it (videos have their own)
-    private var wpRaw: Bitmap? = null // wpThumb before the fades are painted onto it
-
-    private val fades by lazy {
-        object : View(this) {
-            override fun onDraw(c: Canvas) {
-                if (fadesOn) paintFades(c, width.toFloat(), height.toFloat())
-            }
-        }.also { findViewById<ViewGroup>(R.id.root).addView(it, 2, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)) }
-    }
-
-    /** Strength of the "fade_top" or "fade_bottom" layer, 0-100; 0 is off. Starts off for anyone who had Photo fade off. */
-    private fun fade(key: String) = prefs.getInt(key, if (prefs.getBoolean("wp_fade", true)) 100 else 0)
-
-    private fun paintFades(c: Canvas, w: Float, h: Float) {
-        if (currentWallpaper().startsWith("video:")) {
-            c.drawColor(0x33000000)
-            val veil = Paint().apply {
-                shader = LinearGradient(0f, 0f, 0f, h * 0.3f,
-                    0xCC000000.toInt(), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-            }
-            c.drawRect(0f, 0f, w, h * 0.3f, veil)
-            veil.shader = LinearGradient(0f, h * 0.65f, 0f, h,
-                Color.TRANSPARENT, 0xCC000000.toInt(), Shader.TileMode.CLAMP)
-            c.drawRect(0f, h * 0.65f, w, h, veil)
-            return
-        }
-        val base = ground and 0x00FFFFFF
-        val paint = Paint().apply { isDither = true }
-        val top = fade("fade_top") / 100f
-        val bottom = fade("fade_bottom") / 100f
-        if (top <= 0f && bottom <= 0f) return
-        // Eased, so the picture dissolves into the ground instead of stopping at a line: a veil behind the clock and
-        // the top-bar icons, and a bed under the Shows row and its labels. Drawn here, so the sliders reach every
-        // picture, the bundled ones included.
-        val rows = h.toInt().coerceAtLeast(1)
-        for (y in 0 until rows) {
-            val a = maxOf(Fades.topAlpha(y, rows) * top, Fades.bottomAlpha(y, rows) * bottom).toInt()
-            if (a <= 0) continue
-            paint.color = base or (a shl 24)
-            c.drawRect(0f, y.toFloat(), w, (y + 1).toFloat(), paint)
-        }
-    }
-
-    /** Text picks its colour from wpThumb, so it holds the fades too. Run after the photo or a fade changes. */
-    private fun refreshFades() {
-        wpThumb = wpRaw?.let { raw ->
-            if (!fadesOn) raw else raw.copy(Bitmap.Config.ARGB_8888, true).also { paintFades(Canvas(it), it.width.toFloat(), it.height.toFloat()) }
-        }
-        fades.invalidate()
-        fitInk()
-    }
-
-    private fun stepFade(key: String, dir: Int) {
-        prefs.edit().putInt(key, (fade(key) + FADE_STEP * dir).coerceIn(0, 100)).apply()
-        refreshFades()
-    }
-
-    /** Wallpapers page, framed by "Add from phone…" first and, once there are photos, "Remove a photo…" last. */
-    private fun pickWallpaper(forDark: Boolean) {
-        val row = if (forDark) R.string.dark_wallpaper else R.string.light_wallpaper
-        val choices = wallpaperChoices(forDark)
-        val own = choices.filter { it.second.startsWith("file:") }
+    private fun pickWallpaper(forDark: Boolean, focusOn: String? = null) {
+        lastSettings = R.string.wallpaper
         val current = currentWallpaper(forDark)
-        val rows = listOf(page(getString(R.string.add_from_phone)) { uploadWallpaper(forDark) },
-            page(getString(R.string.choose_from_tv)) { pickFolder(forDark) },
-            page(getString(R.string.video_wallpapers), if (current.startsWith("video:")) CHOSEN else "") { pickVideoWallpaper(forDark) }) +
-            choices.map { (name, choice) -> page(name, if (choice == current) CHOSEN else "") { setWallpaper(forDark, choice); renderSettings(row) } } +
-            if (own.isEmpty()) emptyList() else listOf(page(getString(R.string.remove_photo_row)) { removeWallpaper(own, forDark) })
-        showPage(if (forDark) getString(R.string.dark_wallpaper) else getString(R.string.light_wallpaper), rows,
-            if (current.startsWith("video:")) 2 else 3 + choices.indexOfFirst { it.second == current }) {
-            renderSettings(row)
+        val scenes = videoScenes(this)
+        val uploads = ownUploads(forDark, scenes)
+        val pick = { c: String -> Tile(wallpaperName(c), c) { setWallpaper(forDark, c); previewWallpaper(c) } }
+        val inUse = { mine: Boolean -> current.takeIf { mine } }
+        // Scenes by what they show, whoever filmed them: people look for "the sea", not for a provider.
+        val kinds = scenes.groupBy { it.category }.entries.sortedByDescending { it.value.size }.map { (kind, list) ->
+            Tile(kind, icon = SCENE_ICONS[kind] ?: R.drawable.ms_movie, help = R.string.help_scene_kind) {
+                pickVideoScenesList(forDark, kind, list.sortedBy { it.name }) { pickWallpaper(forDark) }
+            }
         }
+        val groups = listOf(
+            R.string.wp_group_yours to listOf(
+                Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate, help = R.string.help_add_from_phone) { uploadWallpaper(forDark) },
+                Tile(getString(R.string.choose_from_tv), inUse(current.startsWith("folder:")), R.drawable.ms_folder, R.string.help_folder) { pickFolder(forDark) },
+                Tile(getString(R.string.my_uploads), inUse(uploads.any { it.first == current }), R.drawable.ms_photo_library, R.string.help_my_uploads) { pickUploads(forDark) },
+            ),
+            R.string.aerial_views to listOfNotNull(
+                Tile(getString(R.string.surprise_me), icon = R.drawable.ms_shuffle, help = R.string.help_surprise) { surpriseVideo(forDark) },
+                scenes.firstOrNull { "video:${it.file}" == current }?.let { Tile(it.name, current) { previewWallpaper(current) } },
+            ) + kinds + Tile(getString(R.string.manage_videos), icon = R.drawable.ms_edit, help = R.string.help_manage_videos) { pickVideoWallpaper(forDark) },
+            R.string.wp_group_more to listOf(pick(Bing.CHOICE), pick(ShowsWall.CHOICE),
+                Tile(getString(R.string.built_in), inUse(current in builtIns(forDark)) ?: builtIns(forDark).first(), R.drawable.ms_landscape, R.string.help_built_in) { pickBuiltIn(forDark) }),
+        )
+        // The current wallpaper's own settings first: how often a folder or the shows change, and which shows.
+        val extras = listOfNotNull(
+            if (current.startsWith("folder:") || current == ShowsWall.CHOICE) settingsRow(getString(R.string.folder_photo_changes),
+                getString(PHOTO_EVERY[photoEvery()]!!) + "  ›", style = RowStyle(R.drawable.ms_schedule, help = getString(R.string.help_photo_every))) { pickPhotoEvery() } else null,
+            if (current == ShowsWall.CHOICE) settingsRow(getString(R.string.wp_sources),
+                getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) + "  ›", style = RowStyle(R.drawable.ms_filter_list, help = getString(R.string.help_wp_sources))) { pickWpSources() } else null,
+        )
+        wallGrid(getString(R.string.wallpaper), groups, forDark, current, focusOn, extras) { renderSettings(WALLPAPER_CARD) }
+    }
+
+    /** A tile in the wallpaper grid: a [choice]'s picture (for a tile that opens more, the one in use there) or an [icon]. */
+    private class Tile(val name: String, val choice: String? = null, val icon: Int? = null, val help: Int? = null, val action: () -> Unit)
+
+    /** Pages of wallpaper tiles, three across, in titled groups (a null title for none). Focus starts on [focusOn] or the one in use. */
+    private fun wallGrid(title: String, groups: List<Pair<Int?, List<Tile>>>, forDark: Boolean, current: String, focusOn: String?,
+                         extras: List<View> = emptyList(), back: () -> Unit) {
+        var focus: View? = null
+        val grid = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            extras.forEach { addView(it) }
+            for ((name, tiles) in groups) {
+                name?.let { addView(groupTitle(getString(it))) }
+                tiles.chunked(3).forEach { line ->
+                    addView(LinearLayout(context).apply {
+                        line.forEach { t ->
+                            val chosen = t.choice != null && t.choice == current
+                            val help = t.help ?: if (t.icon == null) R.string.help_wp_tile else null
+                            val v = wallpaperTile(t.name, t.choice, t.icon, forDark, chosen, help, t.action)
+                            if (focus == null && t.choice != null && t.choice == (focusOn ?: current)) focus = v
+                            addView(v, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                        }
+                        repeat(3 - line.size) { addView(View(context), LinearLayout.LayoutParams(0, 0, 1f)) }
+                    })
+                }
+            }
+        }
+        showPage(title, emptyList(), top = grid, crumb = getString(R.string.plume_settings)) { back() }
+        (focus ?: grid.getFocusables(View.FOCUS_DOWN).firstOrNull())?.requestFocus()
+    }
+
+    /** The pictures that ship with Plume, and the plain colour of the theme. */
+    private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } + plainWallpaper(forDark)
+
+    private fun pickBuiltIn(forDark: Boolean, focusOn: String? = null) {
+        val current = currentWallpaper(forDark)
+        wallGrid(getString(R.string.built_in), listOf(null to builtIns(forDark).map { c ->
+            Tile(wallpaperName(c), c) { setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) } }
+        }), forDark, current, focusOn) { pickWallpaper(forDark, current) }
+    }
+
+    /** Your uploaded photos and videos, as choices; videos are the MP4s that are not catalogue scenes. */
+    private fun ownUploads(forDark: Boolean, scenes: List<VideoScene>): List<Pair<String, File?>> {
+        val photos = wallpaperChoices(forDark).filter { it.second.startsWith("file:") }.map { it.second to null as File? }
+        val videos = wallpaperDir()?.listFiles { f -> f.extension.equals("mp4", true) }
+            ?.filterNot { f -> scenes.any { it.file == f.name } }?.sortedBy { it.name }.orEmpty().map { "video:${it.name}" to it }
+        return photos + videos
+    }
+
+    /** Your uploads: OK uses one; the last tiles remove a photo or a video. */
+    private fun pickUploads(forDark: Boolean, focusOn: String? = null) {
+        val current = currentWallpaper(forDark)
+        val uploads = ownUploads(forDark, videoScenes(this))
+        val photos = wallpaperChoices(forDark).filter { it.second.startsWith("file:") }
+        val videos = uploads.mapNotNull { it.second }
+        val tiles = uploads.map { (choice, video) ->
+            Tile(wallpaperName(choice), choice) {
+                if (video != null) previewVideo(forDark, video)
+                else { setWallpaper(forDark, choice); previewWallpaper(choice) { pickUploads(forDark, choice) } }
+            }
+        } + listOf(Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) { uploadWallpaper(forDark) }) +
+            listOfNotNull(
+                if (photos.isEmpty()) null else Tile(getString(R.string.remove_photo_row), icon = R.drawable.ms_delete) { removeWallpaper(photos, forDark) },
+                if (videos.isEmpty()) null else Tile(getString(R.string.remove_video), icon = R.drawable.ms_delete) { removeVideo(forDark, videos) },
+            )
+        wallGrid(getString(R.string.my_uploads), listOf(null to tiles), forDark, current, focusOn) { pickWallpaper(forDark, current) }
+    }
+
+    /** One wallpaper in the grid: its picture (or an icon for an action), its name, and a check on the one in use. */
+    private fun wallpaperTile(name: String, choice: String?, iconRes: Int?, forDark: Boolean, chosen: Boolean, help: Int?, action: () -> Unit): View {
+        val pic: View = if (choice != null) wallpaperThumb(choice, forDark) else FrameLayout(this).apply {
+            background = GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(ink(.07f)); setStroke(1, ink(.14f)) }
+            addView(icon(iconRes!!, 26, valueInk()), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+        }
+        val frame = FrameLayout(this).apply {
+            addView(pic, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            if (chosen) addView(ImageView(context).apply {
+                setImageResource(R.drawable.ms_check)
+                setColorFilter(if (dark) Color.BLACK else Color.WHITE)
+                setPadding(dp(2), dp(2), dp(2), dp(2))
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(focusInk()) }
+            }, FrameLayout.LayoutParams(dp(20), dp(20), Gravity.TOP or Gravity.END).apply { setMargins(0, dp(5), dp(5), 0) })
+        }
+        val label = label(name, 13f).apply { maxLines = 2; setTextColor(if (chosen) restInk() else valueInk()); panelShadow() }
+        return LinearLayout(this).apply {
+            id = View.generateViewId()
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(6), dp(6), dp(6), dp(8))
+            addView(frame, LinearLayout.LayoutParams(MATCH_PARENT, dp(62)))
+            addView(label, LinearLayout.LayoutParams(MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+            setOnClickListener { action() }
+            panelFocus(this, 12, help?.let { getString(it) }, AREA_ALL) { f ->
+                label.setTextColor(if (f) focusInk() else if (chosen) restInk() else valueInk())
+            }
+            // The panel turns Left and Right into a row's step (dispatchKeyEvent); in the grid they move between pictures.
+            tag = { d: Int -> focusSearch(if (d < 0) View.FOCUS_LEFT else View.FOCUS_RIGHT)?.requestFocus(); Unit }
+        }
+    }
+
+    /** A random live scene: played at once when it's on the TV, downloaded first when not. */
+    private fun surpriseVideo(forDark: Boolean) {
+        val dir = wallpaperDir() ?: return
+        val scene = videoScenes(this).randomOrNull() ?: return
+        val file = File(dir, scene.file)
+        if (file.isFile && validVideo(file)) previewVideo(forDark, file)
+        else downloadVideo(forDark, scene, file) { pickVideoWallpaper(forDark) }
+    }
+
+    private var wallPreview: String? = null
+    private var hidden = false // stopped since settings opened another screen (a trampoline only pauses us)
+
+    /** Settings is about to open another screen: come back to row [at] after it ([dream]: the screensaver, which ends with Home). */
+    private fun returnTo(at: Int, dream: Boolean = false) = prefs.edit().putInt("return_settings", at).putBoolean("return_dream", dream).apply()
+
+    /** A picked wallpaper, shown whole: the panel and the dimming step aside until any button. */
+    private var previewBack: (() -> Unit)? = null
+
+    private fun previewWallpaper(choice: String, back: (() -> Unit)? = null) {
+        wallPreview = choice
+        previewBack = back
+        settingsScrim.animate().alpha(0f).setDuration(220).setInterpolator(DECELERATE).start()
+        toast(getString(R.string.wp_preview_hint))
+    }
+
+    private fun endWallPreview() {
+        val choice = wallPreview ?: return
+        wallPreview = null
+        settingsScrim.animate().alpha(1f).setDuration(220).setInterpolator(DECELERATE).start()
+        previewBack?.invoke() ?: pickWallpaper(dark, choice)
+        previewBack = null
     }
 
     private fun cleanUnusedVideoWallpapers(dir: File) {
         val light = prefs.getString("wp_light", null)
         val dark = prefs.getString("wp_dark", null)
-        val catalogFiles = videoScenes(this).map { it.file }.toSet()
+        // Scenes the Aerial Views screensaver plays share this folder: keep them while it's on.
+        val screensaver = if (aerialScreensaverOn()) aerialScenes(this).map { it.file }.toSet() else emptySet()
+        val catalogFiles = videoScenes(this).map { it.file }.toSet() - screensaver
         dir.listFiles { f -> f.extension.equals("mp4", true) }?.forEach { file ->
             val choice = "video:${file.name}"
             if (file.name in catalogFiles && choice != light && choice != dark) {
@@ -1372,29 +1654,15 @@ class MainActivity : Activity() {
         val own = files.filterNot { file -> allScenes.any { it.file == file.name } }
         val keepOne = prefs.getBoolean("video_keep_one", false)
 
-        val nasaScenes = allScenes.filter { it.source == "NASA Earth" }
-        val appleScenes = allScenes.filter { it.source == "Apple Aerial" }
-        val amazonScenes = allScenes.filter { it.source == "Amazon Fire TV" }
 
         val rows = listOf(
-            page(getString(R.string.surprise_me), getString(R.string.random_scene)) {
-                if (allScenes.isNotEmpty()) {
-                    val randomItem = allScenes.random()
-                    val file = File(dir, randomItem.file)
-                    if (file.isFile && validVideo(file)) previewVideo(forDark, file)
-                    else downloadVideo(forDark, randomItem, file) { pickVideoWallpaper(forDark) }
-                }
-            },
-            page(getString(R.string.nasa_earth), if (currentScene?.source == "NASA Earth") CHOSEN else getString(R.string.n_scenes, nasaScenes.size)) {
-                pickVideoScenesList(forDark, getString(R.string.nasa_earth), nasaScenes) { pickVideoWallpaper(forDark) }
-            },
-            page(getString(R.string.apple_aerial), if (currentScene?.source == "Apple Aerial") CHOSEN else getString(R.string.n_scenes, appleScenes.size)) {
-                pickSourceCategories(forDark, getString(R.string.apple_aerial), appleScenes) { pickVideoWallpaper(forDark) }
-            },
-            page(getString(R.string.amazon_fire_tv), if (currentScene?.source == "Amazon Fire TV") CHOSEN else getString(R.string.n_scenes, amazonScenes.size)) {
-                pickSourceCategories(forDark, getString(R.string.amazon_fire_tv), amazonScenes) { pickVideoWallpaper(forDark) }
-            },
-            page(getString(R.string.add_video_from_phone)) { uploadVideoWallpaper(forDark) },
+            page(getString(R.string.surprise_me)) { surpriseVideo(forDark) },
+        ) + allScenes.groupBy { it.category }.entries.sortedByDescending { it.value.size }.map { (kind, list) ->
+            page(kind, if (currentScene?.category == kind) CHOSEN else resources.getQuantityString(R.plurals.n_scenes, list.size, list.size)) {
+                pickVideoScenesList(forDark, kind, list.sortedBy { it.name }) { pickVideoWallpaper(forDark) }
+            }
+        } + listOf(
+            page(getString(R.string.add_from_phone)) { uploadWallpaper(forDark) },
         ) + own.map { file ->
             page(file.nameWithoutExtension, if (current == "video:${file.name}") CHOSEN else "") { previewVideo(forDark, file) }
         } + listOf(
@@ -1422,23 +1690,6 @@ class MainActivity : Activity() {
         showPage(getString(R.string.video_wallpapers), rows, initialIndex, styles = styles,
             top = label(getString(R.string.video_sources_credit), 13f).apply { maxLines = 2; setPadding(dp(14), dp(4), dp(14), dp(12)) }) {
             pickWallpaper(forDark)
-        }
-    }
-
-    private fun pickSourceCategories(forDark: Boolean, source: String, sourceScenes: List<VideoScene>, onBack: () -> Unit) {
-        val current = currentWallpaper(forDark)
-        val currentScene = sourceScenes.firstOrNull { "video:${it.file}" == current }
-        val categories = sourceScenes.map { it.category }.distinct()
-        val rows = categories.map { category ->
-            val catScenes = sourceScenes.filter { it.category == category }
-            page(category, if (currentScene?.category == category) CHOSEN else getString(R.string.n_scenes, catScenes.size)) {
-                pickVideoScenesList(forDark, category, catScenes) { pickSourceCategories(forDark, source, sourceScenes, onBack) }
-            }
-        }
-        val initialIndex = currentScene?.let { sc -> categories.indexOf(sc.category).coerceAtLeast(0) } ?: 0
-        showPage(source, rows, initialIndex,
-            top = label(getString(R.string.video_sources_credit), 13f).apply { maxLines = 2; setPadding(dp(14), dp(4), dp(14), dp(12)) }) {
-            onBack()
         }
     }
 
@@ -1554,8 +1805,8 @@ class MainActivity : Activity() {
     }
 
     private fun setWallpaper(forDark: Boolean, choice: String) {
-        prefs.edit().putString(if (forDark) "wp_dark" else "wp_light", choice)
-            .remove(photoKey(forDark)).putLong(photoAtKey(forDark), System.currentTimeMillis()).apply()
+        prefs.edit().putString("wp_dark", choice).putString("wp_light", choice)
+            .remove(photoKey()).putLong(photoAtKey(), System.currentTimeMillis()).apply()
         Bing.dropIfUnused(applicationContext, prefs) // choosing another wallpaper deletes the Bing picture at once
         if (choice == Bing.CHOICE) Bing.refresh(applicationContext, prefs, force = true)
         dropShowsIfUnused()
@@ -1567,7 +1818,7 @@ class MainActivity : Activity() {
             wallpaperDir()?.let { cleanUnusedVideoWallpapers(it) }
         }
         updateFeatured()
-        if (forDark == dark) loadWallpaper()
+        loadWallpaper()
     }
 
     private val bingChanged: () -> Unit = { if (currentWallpaper() == Bing.CHOICE) loadWallpaper() }
@@ -1708,8 +1959,8 @@ class MainActivity : Activity() {
     private var afterPhotoAccess: (() -> Unit)? = null // what asked, while Android's permission prompt is up
     private val deck = ArrayDeque<Long>() // photos not shown yet this round; io thread only
 
-    private fun photoKey(forDark: Boolean = dark) = if (forDark) "wp_photo_dark" else "wp_photo_light"
-    private fun photoAtKey(forDark: Boolean = dark) = if (forDark) "wp_photo_at_dark" else "wp_photo_at_light"
+    private fun photoKey(forDark: Boolean = dark) = "wp_photo_light"
+    private fun photoAtKey(forDark: Boolean = dark) = "wp_photo_at_light"
     private fun photoEvery() = prefs.getInt("wp_every", 30)
 
     private fun pickPhotoEvery() {
@@ -1728,7 +1979,7 @@ class MainActivity : Activity() {
     // Settings > Remote keys: press a key on the remote to pick it, then choose what it does. The work is done by
     // the Home key service (see Remap), which is why the page asks for it to be on.
 
-    private fun keysSummary() = Remap.all(this).size.let { resources.getQuantityString(R.plurals.n_keys, it, it) }
+    private fun keysSummary() = Remap.all(this).size.let { if (it == 0) getString(R.string.key_unset) else resources.getQuantityString(R.plurals.n_keys, it, it) }
 
     private fun pickKeys(focus: Int = 0) {
         val keys = Remap.all(this).entries.toList()
@@ -1834,7 +2085,7 @@ class MainActivity : Activity() {
 
     private fun pickFolder(forDark: Boolean) = pickFolder({ pickWallpaper(forDark) }) { choice ->
         setWallpaper(forDark, choice)
-        renderSettings(if (forDark) R.string.dark_wallpaper else R.string.light_wallpaper)
+        renderSettings(R.string.wallpaper)
     }
 
     /** Folders page for wallpapers and the screensaver; [onPick] gets "folder:<bucket id>:<name>". */
@@ -1879,19 +2130,25 @@ class MainActivity : Activity() {
      * "Add from phone": a QR code for a page served from this TV. The phone posts a photo, we turn it into a
      * wallpaper and show it at once. The server runs only while this panel is open.
      */
+    /** Add from phone: one QR page that takes a photo (set at once) or an MP4 video (previewed first). */
     private fun uploadWallpaper(forDark: Boolean) {
         val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
         val dir = wallpaperDir() ?: return
         val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_photo), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File.createTempFile("photo-upload-", ".tmp", cacheDir)) { file ->
+            UploadServer((1000..9999).random().toString(), File.createTempFile("upload-", ".tmp", cacheDir)) { file, video ->
                 if (!active.get()) return@UploadServer null
-                val saved = importWallpaper(file, dir) ?: return@UploadServer null
+                val saved = (if (video) importVideoWallpaper(file, dir) else importWallpaper(file, dir)) ?: return@UploadServer null
                 ui.post {
                     if (isDestroyed || !active.get()) { saved.delete(); return@post }
-                    setWallpaper(forDark, "file:${saved.name}")
-                    status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
+                    if (video) {
+                        status.text = getString(R.string.video_added, saved.nameWithoutExtension)
+                        previewVideo(forDark, saved)
+                    } else {
+                        setWallpaper(forDark, "file:${saved.name}")
+                        status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
+                    }
                 }
                 saved.nameWithoutExtension
             }
@@ -1919,42 +2176,6 @@ class MainActivity : Activity() {
             server.stop()
             if (upload === server) upload = null
         }
-    }
-
-    private fun uploadVideoWallpaper(forDark: Boolean) {
-        val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
-        val dir = wallpaperDir() ?: return
-        val active = AtomicBoolean(true)
-        val status = label(getString(R.string.waiting_video), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
-        val server = try {
-            UploadServer((1000..9999).random().toString(), File.createTempFile("video-upload-", ".tmp", cacheDir), video = true) { file ->
-                if (!active.get()) return@UploadServer null
-                val saved = importVideoWallpaper(file, dir) ?: return@UploadServer null
-                ui.post {
-                    if (isDestroyed || !active.get()) { saved.delete(); return@post }
-                    status.text = getString(R.string.video_added, saved.nameWithoutExtension)
-                    previewVideo(forDark, saved)
-                }
-                saved.nameWithoutExtension
-            }
-        } catch (_: IOException) {
-            return toast(getString(R.string.upload_failed), long = true)
-        }
-        upload = server
-        val url = "http://$ip:${server.port}/${server.code}"
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, dp(4), 0, dp(12))
-            addView(ImageView(this@MainActivity).apply { setImageBitmap(qrBitmap(url, dp(200))) })
-            addView(label(url, 14f).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(4)) })
-            addView(label(getString(R.string.scan_hint), 12f).apply { gravity = Gravity.CENTER; maxLines = 3 })
-            addView(status.apply { setPadding(0, dp(12), 0, 0) })
-        }
-        showPage(getString(R.string.add_video_from_phone), listOf(page(getString(R.string.done)) { pickVideoWallpaper(forDark) }), top = box) {
-            pickVideoWallpaper(forDark)
-        }
-        pageExit = { active.set(false); server.stop(); if (upload === server) upload = null }
     }
 
     /** The TV's own address on the home network (IPv4: easy to read and type). */
@@ -1993,8 +2214,8 @@ class MainActivity : Activity() {
         panelFrom = currentFocus
         // Dark: true black, set apart from the home screen by a hairline on its left edge.
         showPanelGlass()
-        findViewById<TextView>(R.id.settingsTitle).setTextColor(fg)
-        for (id in listOf(R.id.settingsCrumb, R.id.settingsHelp)) findViewById<TextView>(id).apply { setTextColor(fg); secondary(0.6f) }
+        findViewById<TextView>(R.id.settingsTitle).apply { setTextColor(focusInk()); panelShadow() }
+        for (id in listOf(R.id.settingsCrumb, R.id.settingsHelp)) findViewById<TextView>(id).apply { setTextColor(valueInk()); panelShadow() }
         settingsScrim.background = spotlight.apply { reset() }
         pages.clear()
         settingsScrim.visibility = View.VISIBLE
@@ -2004,7 +2225,7 @@ class MainActivity : Activity() {
     /** The panel is frosted glass over the wallpaper when Glass is on, and the plain surface otherwise. */
     private fun showPanelGlass() {
         val panel = findViewById<GlassBox>(R.id.settingsPanel)
-        if (frosted()) {
+        if (glassActive()) {
             panel.background = null
             panel.setWillNotDraw(false)
             styleGlass(panel.glass, dp(22).toFloat(), flatRight = true)
@@ -2022,6 +2243,9 @@ class MainActivity : Activity() {
     }
 
     private fun closeLauncherSettings() {
+        wallPreview = null
+        settingsScrim.animate().cancel()
+        settingsScrim.alpha = 1f
         pageExit?.invoke()
         pageExit = null
         pageBack = null
@@ -2057,25 +2281,23 @@ class MainActivity : Activity() {
                 renderSettings(R.string.icon_style)
             },
             R.string.theme to { d ->
-                prefs.edit().putString("theme", listOf("light", "dark", "auto").step(theme, d)).putBoolean("reopen_settings", true).apply()
+                prefs.edit().putString("theme", THEMES.step(theme, d)).putBoolean("reopen_settings", true).apply()
                 recreate() // colours are applied once per activity; reopen the panel after
+            },
+            R.string.row_size to { d ->
+                prefs.edit().putString("row_size", ROW_SIZES.keys.toList().step(rowSize(), d)).apply()
+                renderApps()
+                renderSettings(R.string.row_size)
             },
             R.string.row_position to { d ->
                 prefs.edit().putString("row_align", ROW_ALIGN.keys.toList().step(rowAlign(), d)).apply()
                 alignRow()
                 renderSettings(R.string.row_position)
             },
-            R.string.fade_top to { d -> stepFade("fade_top", d); renderSettings(R.string.fade_top) },
-            R.string.fade_bottom to { d -> stepFade("fade_bottom", d); renderSettings(R.string.fade_bottom) },
             R.string.app_names to { d ->
                 prefs.edit().putString("names", listOf("focus", "always", "never").step(names, d)).apply()
                 renderApps()
                 renderSettings(R.string.app_names)
-            },
-            R.string.wp_dim to { d ->
-                prefs.edit().putString("wp_dim", DIMS.keys.toList().step(wpDim(), d)).apply()
-                loadWallpaper()
-                renderSettings(R.string.wp_dim)
             },
             R.string.show_row to { d ->
                 prefs.edit().putString("row_show", ROW_SHOW.keys.toList().step(rowShow(), d)).apply()
@@ -2093,43 +2315,28 @@ class MainActivity : Activity() {
                 showWatchNext(Cards(cardSources, cardCurrent, watchList))
                 renderSettings(R.string.show_icons)
             },
-            R.string.glass to { _ ->
-                val next = !glassOn()
-                prefs.edit().putBoolean("glass", next).apply()
-                applyTheme()
-                baked.clear()
-                glass.clearTiles()
-                if (next) {
-                    loadWallpaper()
-                } else {
-                    glass.setBlur(null)
-                    glassSurfaces.forEach { it.get()?.setBlur(null) }
-                }
-                renderApps()
-                watchKey = null
-                showWatchNext(Cards(cardSources, cardCurrent, watchList))
-                showPanelGlass()
+            R.string.glass to { d ->
+                val styles = if (currentWallpaper().startsWith("video:")) GLASS_STYLES - GlassStyle.CLEAR else GLASS_STYLES
+                prefs.edit().putString("glass_style", styles.step(glassStyle().let { if (it in styles) it else GlassStyle.FROSTED }, d)?.key ?: "off").apply()
+                // Clear's sharp picture is made only while Clear is the style: load the wallpaper again to make it.
+                if (glassStyle() == GlassStyle.CLEAR && sharpPixels == null && Backdrop.of(currentWallpaper()) == Backdrop.PICTURE) loadWallpaper()
+                else applyGlass()
                 renderSettings(R.string.glass)
             },
         )
         val rows = linkedMapOf<Int, Triple<String, String, () -> Unit>>(
             R.string.edit_apps_row to Triple(getString(R.string.edit_apps_row), "") { closeLauncherSettings(); startEdit(grab = null) },
-            R.string.theme to Triple(getString(R.string.theme), getString(mapOf("light" to R.string.theme_light, "dark" to R.string.theme_dark, "auto" to R.string.theme_auto)[theme] ?: R.string.theme_light)) {
+            R.string.theme to Triple(getString(R.string.theme), getString(mapOf("light" to R.string.theme_light, "dark" to R.string.theme_dark, "wallpaper" to R.string.theme_wallpaper, "auto" to R.string.theme_auto)[theme] ?: R.string.theme_light)) {
                 steps[R.string.theme]!!(1)
             },
-            R.string.light_wallpaper to Triple(getString(R.string.light_wallpaper), wallpaperName(currentWallpaper(false))) { pickWallpaper(false) },
-            R.string.dark_wallpaper to Triple(getString(R.string.dark_wallpaper), wallpaperName(currentWallpaper(true))) { pickWallpaper(true) },
-            R.string.glass to Triple(getString(R.string.glass), toggle(glassOn())) {
+            R.string.wallpaper to Triple(getString(R.string.wallpaper), wallpaperName(currentWallpaper())) { pickWallpaper(dark) },
+            R.string.glass to Triple(getString(R.string.glass), getString(glassName())) {
                 steps[R.string.glass]!!(1)
             },
-            // Select steps up like Right, and past 100% starts again at 0%.
-            R.string.fade_top to Triple(getString(R.string.fade_top), "$SLIDER${fade("fade_top")}") { steps[R.string.fade_top]!!(if (fade("fade_top") == 100) -100 / FADE_STEP else 1) },
-            R.string.fade_bottom to Triple(getString(R.string.fade_bottom), "$SLIDER${fade("fade_bottom")}") { steps[R.string.fade_bottom]!!(if (fade("fade_bottom") == 100) -100 / FADE_STEP else 1) },
             R.string.app_animations to Triple(getString(R.string.app_animations), toggle(animationsOn())) {
                 prefs.edit().putBoolean("app_anim", !animationsOn()).apply()
                 renderSettings(R.string.app_animations)
             },
-            R.string.wp_dim to Triple(getString(R.string.wp_dim), getString(DIMS.getValue(wpDim()))) { steps[R.string.wp_dim]!!(1) },
             R.string.folder_photo_changes to Triple(getString(R.string.folder_photo_changes), getString(PHOTO_EVERY[photoEvery()]!!)) { pickPhotoEvery() },
             R.string.wp_sources to Triple(getString(R.string.wp_sources), // the count queries the channels: only when the Shows wallpaper is on, so the settings do not wait for it
                 if (ShowsWall.CHOICE in listOf(currentWallpaper(false), currentWallpaper(true))) getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) else "") { pickWpSources() },
@@ -2147,6 +2354,9 @@ class MainActivity : Activity() {
             },
             R.string.icon_style to Triple(getString(R.string.icon_style), getString(ICON_STYLES.getValue(iconStyle()))) {
                 steps[R.string.icon_style]!!(1)
+            },
+            R.string.row_size to Triple(getString(R.string.row_size), getString(ROW_SIZES.getValue(rowSize()).first)) {
+                steps[R.string.row_size]!!(1)
             },
             R.string.restore_hidden to Triple(getString(R.string.restore_hidden), if (hidden == 0) getString(R.string.none_hidden) else resources.getQuantityString(R.plurals.show_again, hidden, hidden)) {
                 prefs.edit().remove("hidden_watch").apply()
@@ -2184,6 +2394,7 @@ class MainActivity : Activity() {
             R.string.screensaver to Triple(getString(R.string.screensaver), when {
                 downloading -> getString(R.string.downloading_gallery)
                 !galleryOn() -> screensaverName()
+                aerialScreensaverOn() -> getString(R.string.aerial_views)
                 else -> photoScreensaver()?.let { wallpaperName(it) } ?: getString(R.string.gallery)
             }) { pickScreensaver() },
             R.string.test_screensaver to Triple(getString(R.string.test_screensaver), "") { testScreensaver() },
@@ -2195,7 +2406,7 @@ class MainActivity : Activity() {
                 HomeOverride.running?.applyKeyFilter()
                 renderSettings(R.string.smooth_volume)
             },
-            R.string.default_launcher to Triple(getString(R.string.default_launcher), if (isDefaultHome()) getString(R.string.plume_press_change) else getString(R.string.press_to_set)) { makeDefaultHome() },
+            R.string.default_launcher to Triple(getString(R.string.default_launcher), if (isDefaultHome()) "Plume" else getString(R.string.press_to_set)) { makeDefaultHome() },
             R.string.updates to Triple(getString(R.string.updates), when {
                 updating -> getString(R.string.updating)
                 checking -> getString(R.string.checking)
@@ -2218,86 +2429,89 @@ class MainActivity : Activity() {
             }
         }
         val on = { b: Boolean -> getString(if (b) R.string.on else R.string.off) }
-        // The fades are for any photo; the timer only for folders, which change photo.
-        val walls = listOf(currentWallpaper(false), currentWallpaper(true))
-        val photo = walls.any { !it.startsWith("res:") && !it.startsWith("plain:") }
-        val folder = walls.any { it.startsWith("folder:") }
-        val shows = walls.any { it == ShowsWall.CHOICE }
-        val dimmed = currentWallpaper(true).let { it == Bing.CHOICE || it == ShowsWall.CHOICE } // the darkening is for the dark Bing or shows picture only
-        // In the order things sit on the home screen, top to bottom, then what isn't on it.
+        // The wallpaper has its own page of pictures; the photo timer and the shows sources live there too.
+        if (at in WALLPAPER_KEYS) return pickWallpaper(dark)
+        // In the order things sit on the home screen, top to bottom, then the TV itself.
         val sections = listOf(
-            Triple(R.string.section_appearance, "${rows[R.string.theme]!!.second} · ${wallpaperName(currentWallpaper(dark))}",
-                listOfNotNull(R.string.theme, R.string.light_wallpaper, R.string.dark_wallpaper, R.string.wp_dim.takeIf { dimmed }, R.string.fade_top.takeIf { photo },
-                    R.string.fade_bottom.takeIf { photo }, R.string.glass, R.string.app_animations,
-                    R.string.folder_photo_changes.takeIf { folder || shows }, R.string.wp_sources.takeIf { shows })),
-            Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${rows[R.string.weather_location]!!.second}",
-                listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
+            Triple(R.string.section_style, "${rows[R.string.theme]!!.second} · ${getString(glassName())}",
+                listOf(R.string.theme, R.string.glass, R.string.app_animations)),
             Triple(R.string.section_app_row, "${rows[R.string.apps_in_row]!!.second} · ${rows[R.string.row_position]!!.second}",
-                listOf(R.string.edit_apps_row, R.string.apps_in_row, R.string.sort_apps, R.string.icon_style, R.string.app_names, R.string.row_position)),
-            // "Apps when row hides" only means something once the row can hide.
-            Triple(R.string.bottom_row, rowName(), listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
+                listOf(R.string.edit_apps_row, R.string.apps_in_row, R.string.sort_apps, R.string.icon_style, R.string.row_size, R.string.app_names, R.string.row_position)),
+            // "When hidden" only means something once the row can hide.
+            Triple(R.string.bottom_row, "${rowName()} · ${rows[R.string.show_row]!!.second}", listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
                 R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.cards_rows, R.string.restore_hidden)),
+            Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${prefs.getString("geo_city", null) ?: rows[R.string.weather_location]!!.second}",
+                listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
-            Triple(R.string.section_remote_home, on(homeServiceOn() || isDefaultHome()),
-                listOf(R.string.home_button, R.string.smooth_volume, R.string.default_launcher, R.string.setup_home, R.string.section_keys)),
-            Triple(R.string.section_lock, on(lockOn()), listOf(R.string.lock_layout)),
+            // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
+            Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
+                listOfNotNull(R.string.home_button, R.string.default_launcher.takeIf { !googleTv() && !fireTv() }, R.string.smooth_volume.takeIf { !fireTv() },
+                    R.string.section_keys, R.string.setup_home)),
         )
         val section = sections.firstOrNull { at in it.third }
         if (section != null) {
             lastSettings = section.first
             val keys = section.third
-            val noteText = when {
-                section.first == R.string.section_lock -> getString(R.string.lock_note)
-                section.first == R.string.section_appearance && theme == "auto" -> autoNote()
-                else -> null
+            // What Auto does today, and that Clear needs a still picture (see GlassLook.active), go in those rows' help.
+            val help = { k: Int ->
+                when {
+                    k == R.string.theme && theme == "auto" -> autoNote()
+                    k == R.string.theme && theme == "wallpaper" -> getString(R.string.help_theme_wallpaper)
+                    k == R.string.glass && glassStyle() == GlassStyle.CLEAR && currentWallpaper().startsWith("video:") -> getString(R.string.glass_clear_video)
+                    else -> ROW_HELP[k]?.let { getString(it) }
+                }
             }
-            val note = if (noteText == null) null else label(noteText, 15f).apply {
-                maxLines = 5
-                setPadding(dp(14), dp(4), dp(14), dp(10))
-            }
-            // Two or three choices show side by side; the row's value is the picked one's name.
+            // Choices show side by side (or under the title when long); the row's value is the picked one's name.
             val choices = mapOf(
-                R.string.theme to listOf(R.string.theme_light to R.drawable.ic_sun, R.string.theme_dark to R.drawable.ic_moon,
-                    R.string.theme_auto to R.drawable.ic_auto).map { (s, i) -> getString(s) to i },
+                R.string.theme to listOf(R.string.theme_light to R.drawable.ms_light_mode, R.string.theme_dark to R.drawable.ms_dark_mode,
+                    R.string.theme_wallpaper to R.drawable.ms_wallpaper, R.string.theme_auto to R.drawable.ms_routine).map { (s, i) -> getString(s) to i },
+                R.string.glass to listOf(R.string.off, R.string.glass_frosted, R.string.glass_clear).map { getString(it) to null },
                 R.string.sort_apps to listOf(R.string.manual, R.string.most_used).map { getString(it) to null },
                 R.string.app_names to listOf(R.string.on_focus, R.string.always, R.string.never).map { getString(it) to null },
+                R.string.row_size to ROW_SIZES.values.map { getString(it.first) to null },
                 R.string.row_position to ROW_ALIGN.values.map { getString(it.first) to null },
                 R.string.show_row to ROW_SHOW.values.map { getString(it) to null },
                 R.string.apps_when_hidden to listOf(R.string.stays_put, R.string.moves_down).map { getString(it) to null },
                 R.string.show_icons to listOf(R.string.monochrome, R.string.colour).map { getString(it) to null },
                 R.string.weather_units to listOf("°C" to null, "°F" to null),
             )
-            val walls = mapOf(R.string.light_wallpaper to false, R.string.dark_wallpaper to true)
             val styles = keys.map { k ->
-                val forDark = walls[k]
-                RowStyle(choices = choices[k], help = ROW_HELP[k]?.let { getString(it) }, area = SECTION_AREAS[section.first],
-                    thumb = forDark?.let { currentWallpaper(it) to it }, sub = forDark?.let { wallpaperName(currentWallpaper(it)) })
+                val cost = k == R.string.smooth_volume && prefs.getBoolean("smooth_volume", false)
+                RowStyle(ROW_ICONS[k], sub = if (cost) getString(R.string.smooth_volume_cost) else null, choices = choices[k],
+                    help = help(k), area = SECTION_AREAS[section.first], art = ROW_ART[k],
+                    dim = getString(R.string.glass_clear).takeIf { k == R.string.glass && currentWallpaper().startsWith("video:") },
+                    // Without the adb permission, Home opens Plume is switched on in Android's Accessibility screen.
+                    ext = k == R.string.screensaver_timing || k == R.string.home_button && !homeServiceOn() && checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED)
             }
-            // A wallpaper row shows its picture and name instead of the name alone.
-            val shown = keys.map { k -> rows[k]!!.let { if (k in walls) page(it.first, "›", it.third) else it } }
-            return showPage(getString(section.first), shown, keys.indexOf(at), top = note, steps = keys.map { steps[it] }, styles = styles,
+            return showPage(getString(section.first), keys.map { rows[it]!! }, keys.indexOf(at), steps = keys.map { steps[it] }, styles = styles,
                 crumb = getString(R.string.plume_settings)) {
                 renderSettings(section.first)
             }
         }
+        val sectionRow = { key: Int ->
+            val (k, value, keys) = sections.first { it.first == key }
+            Triple(k, page(getString(k), "›") { renderSettings(keys[0]) }, RowStyle(SECTION_ICONS[k], value, help = ROW_HELP[k]?.let { getString(it) }, area = SECTION_AREAS[k]))
+        }
+        val group = { text: Int -> Triple(-1, page(getString(text)) {}, RowStyle(header = true)) }
+        val wall = currentWallpaper()
         // Until Home opens Plume one way or the other, a card on top leads to the setup; not after Home was turned off on purpose.
         val top = listOfNotNull(if (homeSetUp() || prefs.getBoolean("home_off", false)) null
                 else Triple(R.string.finish_setup, page(getString(R.string.finish_setup), "›") { closeLauncherSettings(); startHomeSetup() },
-                    RowStyle(R.drawable.ic_home, getString(R.string.finish_setup_value), help = getString(R.string.help_finish_setup)))) +
-            sections.map { (key, value, keys) ->
-                Triple(key, page(getString(key), "›") { renderSettings(keys[0]) }, RowStyle(SECTION_ICONS[key], value, help = ROW_HELP[key]?.let { getString(it) }, area = SECTION_AREAS[key]))
-            } +
-            Triple(R.string.updates, rows[R.string.updates]!!.let { (t, v, a) -> page(t, "›", a) },
-                RowStyle(R.drawable.ic_update, rows[R.string.updates]!!.second, help = getString(R.string.help_updates))) +
+                    RowStyle(R.drawable.ms_home, getString(R.string.finish_setup_value), help = getString(R.string.help_finish_setup)))) +
+            Triple(WALLPAPER_CARD, page(getString(R.string.wallpaper), wallpaperName(wall)) { pickWallpaper(dark) },
+                RowStyle(thumb = wall to dark, help = getString(R.string.help_wallpaper), area = AREA_ALL, hero = true)) +
+            group(R.string.group_home_screen) +
+            listOf(R.string.section_style, R.string.section_app_row, R.string.bottom_row, R.string.section_clock_weather, R.string.section_screensaver).map(sectionRow) +
+            group(R.string.group_tv) +
+            sectionRow(R.string.section_remote_home) +
+            Triple(R.string.lock_layout, rows[R.string.lock_layout]!!, RowStyle(R.drawable.ms_lock, help = getString(R.string.lock_note))) +
+            Triple(R.string.updates, rows[R.string.updates]!!.let { (t, _, a) -> page(t, "›", a) },
+                RowStyle(R.drawable.ms_system_update, rows[R.string.updates]!!.second, help = getString(R.string.help_updates))) +
             listOfNotNull(if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) null
-                else Triple(R.string.preview_home_setup, page(getString(R.string.preview_home_setup)) { closeLauncherSettings(); previewHomeSetup() }, null))
-        val hint = label(getString(R.string.top_bar_hint), 13f).apply {
-            secondary(0.6f)
-            isSingleLine = false // it wraps onto a second line rather than being cut
-            maxLines = 2
-            setPadding(dp(14), dp(2), dp(14), dp(8))
-        }
-        showPage(getString(R.string.plume_settings), top.map { it.second }, maxOf(0, top.indexOfFirst { it.first == at }), top = hint, styles = top.map { it.third }, back = null)
+                else Triple(R.string.preview_home_setup, page(getString(R.string.preview_home_setup)) { closeLauncherSettings(); previewHomeSetup() },
+                    RowStyle(R.drawable.ms_code)))
+        lastSettings = 0
+        showPage(getString(R.string.plume_settings), top.map { it.second }, maxOf(0, top.indexOfFirst { it.first == at }), styles = top.map { it.third }, back = null)
     }
 
     private var lastSettings = 0 // section used last, focused when settings open again
@@ -2359,16 +2573,17 @@ class MainActivity : Activity() {
         rows.forEachIndexed { i, (name, value, action) ->
             val style = styles.getOrNull(i)
             settingsList.addView(settingsRow(name, value, steps.getOrNull(i), style, action),
-                LinearLayout.LayoutParams(MATCH_PARENT, dp(if (style?.sub != null) 54 else 48)).apply { topMargin = dp(4) })
+                LinearLayout.LayoutParams(MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { if (style?.header != true) topMargin = dp(4) })
         }
-        // Focus wraps: Up from the first row goes to the last, Down from the last to the first.
+        // Focus wraps: Up from the first row goes to the last, Down from the last to the first. Group titles are skipped.
         (settingsList.parent as View).scrollTo(0, 0)
         if (rows.isEmpty()) return // a page that's all [top], like the PIN boxes, focuses itself
-        val firstRow = settingsList.getChildAt(first)
-        val lastRow = settingsList.getChildAt(first + rows.size - 1)
-        firstRow.nextFocusUpId = lastRow.id
-        lastRow.nextFocusDownId = firstRow.id
-        settingsList.getChildAt(first + focus.coerceIn(0, rows.size - 1)).requestFocus()
+        val added = (first until settingsList.childCount).map { settingsList.getChildAt(it) }
+        val focusables = added.filter { it.isFocusable }
+        if (focusables.isEmpty()) return
+        focusables.first().nextFocusUpId = focusables.last().id
+        focusables.last().nextFocusDownId = focusables.first().id
+        (added.drop(focus.coerceIn(0, rows.size - 1)).firstOrNull { it.isFocusable } ?: focusables.first()).requestFocus()
     }
 
     // ---------- layout lock ----------
@@ -2546,7 +2761,7 @@ class MainActivity : Activity() {
             }
         }
 
-        private val scrimAlpha get() = if (frosted()) 0x55 else SCRIM_ALPHA
+        private val scrimAlpha get() = glassLook().active?.scrim ?: SCRIM_ALPHA
 
         override fun draw(c: Canvas) {
             val dim = scrimAlpha shl 24
@@ -2589,119 +2804,300 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Extras for a settings row: an [icon] in front, a second line ([sub]), [choices] shown side by side (name and
-     * icon; the row's value says which is picked), a wallpaper picture ([thumb], a wallpaper choice) and a [help] line.
+     * Extras for a settings row: an [icon] in front (outlined, filled while focused), a second line ([sub]), [choices]
+     * side by side or drawn as small pictures ([art]), a wallpaper picture ([thumb]), a [help] line and the home [area]
+     * it changes. [ext] marks a row that opens Android's settings, [header] a group's title and [hero] the big
+     * wallpaper card at the top of the main list.
      */
     private class RowStyle(val icon: Int? = null, val sub: String? = null, val choices: List<Pair<String, Int?>>? = null,
-                           val thumb: Pair<String, Boolean>? = null, val help: String? = null, val area: Int? = null)
+                           val thumb: Pair<String, Boolean>? = null, val help: String? = null, val area: Int? = null,
+                           val art: String? = null, val ext: Boolean = false, val header: Boolean = false, val hero: Boolean = false,
+                           val dim: String? = null)
+
+    // Settings colours, one set for each surface (dark or light, solid or glass). Over glass the text is a little
+    // stronger and has a soft shadow, as the wallpaper's colour shows through the panel. Focus is always the brightest.
+    private fun ink(a: Float) = (fg and 0xFFFFFF) or ((a * 255).toInt() shl 24)
+    private fun restInk() = ink(if (dark) (if (glassActive()) .9f else .82f) else (if (glassActive()) .86f else .8f))
+    private fun valueInk(focused: Boolean = false) =
+        if (focused) ink(if (dark) .85f else .8f) else ink(if (glassActive()) (if (dark) .68f else .64f) else .56f)
+    private fun focusInk() = if (dark) Color.WHITE else fg
+    private fun iconInk(focused: Boolean) = if (focused) focusInk() else ink(if (dark) (if (glassActive()) .8f else .7f) else .65f)
+
+    /** The plate under the focused row: a white veil in dark, a white card in light (its shadow is the view's elevation). */
+    private fun plate(radius: Int) = GradientDrawable().apply {
+        cornerRadius = dp(radius).toFloat()
+        setColor(if (dark) (if (glassActive()) 0x2EFFFFFF else 0x1FFFFFFF) else if (glassActive()) 0xC7FFFFFF.toInt() else Color.WHITE)
+        if (dark) setStroke(1, 0x14FFFFFF) // 1px, a hairline that catches the light
+    }
+
+    private fun TextView.panelShadow() {
+        if (glassActive()) setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), if (dark) 0x73000000 else 0x59FFFFFF)
+    }
+
+    /** The filled twin of an outlined Material Symbols icon (ms_x has ms_x_fill), or the icon itself. */
+    private fun filled(res: Int) =
+        resources.getIdentifier(resources.getResourceEntryName(res) + "_fill", "drawable", packageName).takeIf { it != 0 } ?: res
+
+    private fun icon(res: Int, size: Int, color: Int) = ImageView(this).apply {
+        setImageResource(res)
+        setColorFilter(color)
+        layoutParams = LinearLayout.LayoutParams(dp(size), dp(size))
+    }
+
+    /** A settings group's title, like "Home screen". Not focusable. */
+    private fun groupTitle(text: String) = label(text, 13f).apply {
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        setTextColor(valueInk())
+        panelShadow()
+        setPadding(dp(16), dp(18), dp(16), dp(4))
+    }
+
+    /** Focus fades the plate in and lights the row; the row's own parts restyle themselves in [onFocus]. */
+    private fun panelFocus(v: View, radius: Int, help: String?, area: Int?, onFocus: (Boolean) -> Unit) {
+        val lit = plate(radius)
+        v.isFocusable = true
+        v.isClickable = true
+        v.setOnFocusChangeListener { _, focused ->
+            v.background = if (focused) lit else null
+            if (focused) ValueAnimator.ofInt(0, 255).apply {
+                duration = 140
+                interpolator = DECELERATE
+                addUpdateListener { lit.alpha = it.animatedValue as Int }
+            }.start()
+            if (!dark) { // the white card needs a shadow to stand off the near-white panel
+                v.outlineProvider = ViewOutlineProvider.BACKGROUND
+                v.elevation = if (focused) dp(3).toFloat() else 0f
+            }
+            onFocus(focused)
+            if (focused) {
+                showHelp(help)
+                // Posted: when the panel first opens, the scrim has no size yet in this frame.
+                settingsScrim.post { if (v.hasFocus()) spotlight.show(areaBounds(area)) }
+            }
+        }
+    }
 
     private fun settingsRow(title: String, value: String, step: ((Int) -> Unit)? = null, style: RowStyle? = null, action: () -> Unit): View {
-        val bg = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0, 0)).apply { cornerRadius = dp(8).toFloat() }
-        return LinearLayout(this).apply {
-            id = View.generateViewId()
+        if (style?.header == true) return groupTitle(title)
+        if (style?.hero == true) return heroRow(title, value, style, action)
+        val wrap = LinearLayout.LayoutParams.WRAP_CONTENT
+        val options = style?.choices
+        // Choices that would squeeze the title go under it, across the row.
+        val stacked = style?.art != null || options != null && (options.size > 2 || title.length + options.sumOf { it.first.length } > 26)
+        val restyle = mutableListOf<(Boolean) -> Unit>()
+        val name = label(title, 16f).apply { setTextColor(restInk()); panelShadow() }
+        val sub = style?.sub?.let { label(it, 13f).apply { setTextColor(valueInk()); panelShadow() } }
+        val iconView = style?.icon?.let { icon(it, 24, iconInk(false)) }
+        val line = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), 0, dp(14), 0)
-            background = bg
-            isFocusable = true
-            isClickable = true
-            val icon = style?.icon?.let { res -> ImageView(context).apply { setImageResource(res); setColorFilter(if (dark) text2() else fg); if (!dark) alpha = 0.7f } }
-            icon?.let { addView(it, LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(14) }) }
-            val name = label(title, 15f).apply { if (dark) setTextColor(text2()) }
-            addView(style?.sub?.let { sub ->
-                LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    addView(name)
-                    addView(label(sub, 13f).apply { secondary(0.6f) })
-                }
-            } ?: name, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            val pct = value.takeIf { it.startsWith(SLIDER) }?.removePrefix(SLIDER)?.toInt()
-            val text = pct?.let { "$it%" } ?: value
-            if (pct != null) addView(slider(pct), LinearLayout.LayoutParams(dp(SLIDER_DP), dp(14)).apply { marginStart = dp(12) })
-            val shown = if (style?.choices != null || value == TOGGLE_ON || value == TOGGLE_OFF) null else label(text, 14f).apply { secondary(0.6f) }
-            val wrap = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            style?.thumb?.let { (choice, forDark) -> addView(wallpaperThumb(choice, forDark), LinearLayout.LayoutParams(dp(64), dp(36)).apply { marginStart = dp(12) }) }
-            when {
-                style?.choices != null -> addView(choices(style.choices, value), wrap.apply { marginStart = dp(12) })
-                // A slider's value gets a fixed width, room for "‹  100%  ›", so the slider stays put as it changes and on focus.
-                pct != null -> addView(shown!!.apply { gravity = Gravity.END }, LinearLayout.LayoutParams(dp(SLIDER_VALUE_DP), LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(8) })
-                shown == null -> addView(switch(value == TOGGLE_ON), LinearLayout.LayoutParams(dp(36), dp(20)))
-                else -> addView(shown, wrap.apply { if (value.isNotEmpty()) marginStart = dp(16) }) // room between a long title and its value
+            iconView?.let { addView(it, LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginEnd = dp(16) }) }
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(name)
+                sub?.let { addView(it, LinearLayout.LayoutParams(wrap, wrap).apply { topMargin = dp(2) }) }
+            }, LinearLayout.LayoutParams(0, wrap, 1f))
+        }
+        val end = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        fun endIcon(res: Int, size: Int) = icon(res, size, valueInk()).also { v ->
+            end.addView(v, LinearLayout.LayoutParams(dp(size), dp(size)).apply { marginStart = dp(6) })
+            restyle += { f -> v.setColorFilter(valueInk(f)) }
+        }
+        style?.thumb?.let { (choice, forDark) ->
+            end.addView(wallpaperThumb(choice, forDark), LinearLayout.LayoutParams(dp(80), dp(45)))
+        }
+        var below: View? = null
+        when {
+            options != null -> {
+                val (view, paint) = if (style.art != null) artChoices(style.art, options, value) else choices(options, value, stacked, style.dim)
+                restyle += paint
+                if (stacked) below = view else end.addView(view)
             }
+            value == TOGGLE_ON || value == TOGGLE_OFF -> {
+                val (view, paint) = switch(value == TOGGLE_ON)
+                restyle += paint
+                end.addView(view, LinearLayout.LayoutParams(dp(44), dp(24)))
+            }
+            value == CHOSEN -> endIcon(R.drawable.ms_check, 22)
+            else -> {
+                val opens = value.endsWith("›") // a row that opens a page ends in a chevron, not the "›" character
+                val text = value.removeSuffix("›").trim()
+                if (text.isNotEmpty()) {
+                    val shown = label(text, 15f).apply { setTextColor(valueInk()); panelShadow() }
+                    end.addView(shown, LinearLayout.LayoutParams(wrap, wrap).apply { marginStart = dp(16) })
+                    restyle += { f ->
+                        shown.setTextColor(valueInk(f))
+                        // A row stepped with Left and Right shows its arrows while focused.
+                        if (step != null) shown.setCompoundDrawablesRelative(if (f) arrow(R.drawable.ms_chevron_left, valueInk(f)) else null, null,
+                            if (f) arrow(R.drawable.ms_chevron_right, valueInk(f)) else null, null)
+                    }
+                }
+                if (opens) endIcon(R.drawable.ms_chevron_right, 22)
+            }
+        }
+        if (style?.ext == true) endIcon(R.drawable.ms_open_in_new, 18)
+        if (end.childCount > 0) line.addView(end, LinearLayout.LayoutParams(wrap, wrap).apply { marginStart = dp(12) })
+        return LinearLayout(this).apply {
+            id = View.generateViewId()
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(if (stacked) 12 else 6), dp(16), dp(if (stacked) 14 else 6))
+            minimumHeight = dp(if (sub != null) 68 else 56)
+            addView(line, LinearLayout.LayoutParams(MATCH_PARENT, wrap))
+            below?.let { addView(it, LinearLayout.LayoutParams(MATCH_PARENT, wrap).apply { topMargin = dp(10); marginStart = if (iconView != null) dp(40) else 0 }) }
             setOnClickListener { action() }
-            setOnFocusChangeListener { _, focused ->
-                // Focus: a lit rimCard in dark (and the title brightens), a white pill in light.
-                if (dark) background = if (focused) rimCard(dp(8), true) else bg
-                else bg.colors = if (focused) intArrayOf(Color.WHITE, Color.WHITE) else intArrayOf(0, 0)
+            panelFocus(this, 12, style?.help, style?.area) { focused ->
                 // The title glides to bright rather than snapping, so moving through the list feels smooth.
-                if (dark) ValueAnimator.ofArgb(name.currentTextColor, if (focused) DARK_TEXT else text2()).apply {
+                ValueAnimator.ofArgb(name.currentTextColor, if (focused) focusInk() else restInk()).apply {
                     duration = 160
                     interpolator = DECELERATE
-                    addUpdateListener { a ->
-                        val c = a.animatedValue as Int
-                        name.setTextColor(c)
-                        icon?.setColorFilter(c)
-                    }
+                    addUpdateListener { a -> name.setTextColor(a.animatedValue as Int) }
                 }.start()
-                if (step != null) shown?.text = if (focused) "‹  $text  ›" else text
-                if (focused) {
-                    showHelp(style?.help)
-                    // Posted: when the panel first opens, the scrim has no size yet in this frame.
-                    settingsScrim.post { if (hasFocus()) spotlight.show(areaBounds(style?.area)) }
-                }
+                iconView?.let { v -> style.icon?.let { v.setImageResource(if (focused) filled(it) else it) }; v.setColorFilter(iconInk(focused)) }
+                sub?.setTextColor(valueInk(focused))
+                restyle.forEach { it(focused) }
             }
             tag = step // dispatchKeyEvent calls it for Left (-1) and Right (+1)
         }
     }
 
-    /** Every choice in a row at once, the picked one filled; Left and Right still step through them. */
-    private fun choices(options: List<Pair<String, Int?>>, picked: String) = LinearLayout(this).apply {
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(2), dp(2), dp(2), dp(2))
-        background = GradientDrawable().apply {
-            cornerRadius = dp(8).toFloat()
-            setStroke(1, fg and 0xFFFFFF or 0x33000000)
-        }
-        for ((text, iconRes) in options) addView(label(text, 13f).apply {
-            val on = text == picked
-            gravity = Gravity.CENTER
-            setPadding(dp(8), dp(3), dp(8), dp(3))
-            if (on) {
-                setTextColor(if (dark) DARK_BG else Color.WHITE)
-                background = GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(if (dark) DARK_TEXT else fg) }
-            } else secondary(0.6f)
-            iconRes?.let { res ->
-                setCompoundDrawablesRelative(getDrawable(res)!!.mutate().apply { setBounds(0, 0, dp(14), dp(14)); setTint(currentTextColor) }, null, null, null)
-                compoundDrawablePadding = dp(4)
+    private fun arrow(res: Int, color: Int) = getDrawable(res)!!.mutate().apply { setBounds(0, 0, dp(18), dp(18)); setTint(color) }
+
+    /** The wallpaper as a big picture at the top of the main list, its name under it: what people change most. */
+    private fun heroRow(title: String, name: String, style: RowStyle, action: () -> Unit): View {
+        val (choice, forDark) = style.thumb!!
+        val t = label(title, 16f).apply { setTextColor(restInk()); panelShadow() }
+        val n = label(name, 13f).apply { setTextColor(valueInk()); panelShadow() }
+        val chevron = icon(R.drawable.ms_chevron_right, 22, valueInk())
+        return LinearLayout(this).apply {
+            id = View.generateViewId()
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(10))
+            addView(wallpaperThumb(choice, forDark, big = true), LinearLayout.LayoutParams(MATCH_PARENT, dp(100)))
+            addView(LinearLayout(context).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(8), dp(10), dp(4), 0)
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(t)
+                    addView(n)
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(chevron)
+            }, LinearLayout.LayoutParams(MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            setOnClickListener { action() }
+            panelFocus(this, 18, style.help, style.area) { f ->
+                t.setTextColor(if (f) focusInk() else restInk())
+                n.setTextColor(valueInk(f))
+                chevron.setColorFilter(valueInk(f))
             }
-        })
+        }
     }
 
-    /** A small picture of a wallpaper (plain ones are their colour), decoded small off the UI thread. */
-    private fun wallpaperThumb(choice: String, forDark: Boolean) = ImageView(this).apply {
+    /**
+     * Every choice at once. The picked one has an outline and a light tint, never a solid fill, so the focused row stays
+     * the brightest thing on the panel. Left and Right still step through them. Returns the view and its focus restyle.
+     */
+    private fun choices(options: List<Pair<String, Int?>>, picked: String, stacked: Boolean = false, dim: String? = null): Pair<View, (Boolean) -> Unit> {
+        val pills = options.map { (text, iconRes) ->
+            label(text, 14f).apply {
+                if (text == dim) alpha = .35f // there but not available here (Clear on a video)
+                gravity = Gravity.CENTER
+                // Under the title the choices share the row's width, icon above name, so four of them still fit.
+                if (stacked) { maxLines = 2; setPadding(dp(4), dp(6), dp(4), dp(6)) } else setPadding(dp(10), dp(5), dp(10), dp(5))
+                panelShadow()
+                if (text == picked) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                iconRes?.let { res ->
+                    val d = getDrawable(if (text == picked) filled(res) else res)!!.mutate().apply { setBounds(0, 0, dp(if (stacked) 20 else 16), dp(if (stacked) 20 else 16)) }
+                    if (stacked) setCompoundDrawablesRelative(null, d, null, null) else setCompoundDrawablesRelative(d, null, null, null)
+                    compoundDrawablePadding = dp(if (stacked) 4 else 5)
+                }
+            }
+        }
+        val box = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            pills.forEachIndexed { i, p ->
+                addView(p, LinearLayout.LayoutParams(if (stacked) 0 else LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, if (stacked) 1f else 0f)
+                    .apply { if (i > 0) marginStart = dp(4) })
+            }
+        }
+        val line = (resources.displayMetrics.density * 1.5f).toInt()
+        val paint = { focused: Boolean ->
+            pills.forEachIndexed { i, p ->
+                val on = options[i].first == picked
+                val c = if (on) (if (focused) focusInk() else restInk()) else valueInk(focused)
+                p.setTextColor(c)
+                p.compoundDrawablesRelative.filterNotNull().forEach { it.setTint(c) }
+                val accent = glassLook().accent()
+                p.background = if (!on) null else GradientDrawable().apply {
+                    cornerRadius = dp(9).toFloat()
+                    setColor(accent?.let { it and 0xFFFFFF or ((if (focused) 0x4D else 0x33) shl 24) } ?: ink(if (focused) .16f else .09f))
+                    setStroke(line, accent ?: ink(if (focused) .85f else .45f))
+                }
+            }
+        }
+        paint(false)
+        return box to paint
+    }
+
+    /** Choices drawn as small pictures of what they do ([OptionArt]), each with its name under it. */
+    private fun artChoices(kind: String, options: List<Pair<String, Int?>>, picked: String): Pair<View, (Boolean) -> Unit> {
+        val cells = options.mapIndexed { i, (text, _) ->
+            Triple(OptionArt(kind, i, resources.displayMetrics.density), label(text, 13f).apply { gravity = Gravity.CENTER; panelShadow() }, text == picked)
+        }
+        val box = LinearLayout(this).apply {
+            for ((art, name, _) in cells) addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                addView(View(context).apply { background = art }, LinearLayout.LayoutParams(dp(76), dp(42)))
+                addView(name, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        val paint = { focused: Boolean ->
+            for ((art, name, on) in cells) {
+                art.ink = fg
+                art.on = on
+                art.focused = focused
+                art.invalidateSelf()
+                name.setTextColor(if (on) (if (focused) focusInk() else restInk()) else valueInk(focused))
+                name.typeface = Typeface.create(if (on) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
+            }
+        }
+        paint(false)
+        return box to paint
+    }
+
+    /** A small picture of a wallpaper (plain ones are their colour), decoded small off the UI thread; [big] for the hero card. */
+    private fun wallpaperThumb(choice: String, forDark: Boolean, big: Boolean = false) = ImageView(this).apply {
         background = GradientDrawable().apply {
-            cornerRadius = dp(6).toFloat()
-            setColor(if (choice.startsWith("plain:")) (if (forDark) DARK_BG else 0xFFF3F5F7.toInt()) else if (dark) DARK_SURFACE else 0xFFE4E7EB.toInt())
-            setStroke(1, fg and 0xFFFFFF or 0x33000000)
+            cornerRadius = dp(if (big) 14 else 8).toFloat()
+            setColor(if (choice.startsWith("plain:")) (if (forDark) DARK_BG else 0xFFF3F5F7.toInt()) else ink(.08f))
+            setStroke(1, ink(.16f))
         }
         clipToOutline = true
         if (!choice.startsWith("plain:")) {
             // A picture icon while it loads, and if it can't (Bing not downloaded yet, file gone).
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             setPadding(dp(10), dp(6), dp(10), dp(6))
-            setImageResource(R.drawable.ic_wallpaper)
-            setColorFilter(fg and 0xFFFFFF or 0x66000000)
+            setImageResource(R.drawable.ms_wallpaper)
+            setColorFilter(ink(.4f))
         }
         if (!choice.startsWith("plain:")) io.execute {
             val bmp = try {
-                val small = BitmapFactory.Options().apply { inSampleSize = 16 } // 1920 px wide comes out 120: plenty for 64 dp
+                // 1920 px wide comes out 120 for a row, 480 for the hero card
+                val small = BitmapFactory.Options().apply { inSampleSize = if (big) 4 else 16 }
                 when {
                     choice.startsWith("res:") -> BUNDLED_WALLPAPERS[choice.removePrefix("res:")]?.let { BitmapFactory.decodeResource(resources, it, small) }
                     choice == Bing.CHOICE -> BitmapFactory.decodeFile(Bing.file(this@MainActivity).path, small)
+                    choice == ShowsWall.CHOICE -> BitmapFactory.decodeFile(ShowsWall.file(this@MainActivity).path, small)
                     choice.startsWith("file:") -> BitmapFactory.decodeFile(File(wallpaperDir(), choice.removePrefix("file:")).path, small)
+                    choice.startsWith("video:") -> File(wallpaperDir(), choice.removePrefix("video:")).takeIf { it.isFile }?.let { videoPoster(it) }?.let { p ->
+                        val w = if (big) 480 else 160
+                        Bitmap.createScaledBitmap(p, w, maxOf(1, w * p.height / p.width), true).also { if (it !== p) p.recycle() }
+                    }
                     // A folder shows the photo it's on now (the other theme's has none yet: its first photo); Android has a ready thumbnail.
                     choice.startsWith("folder:") -> (prefs.getLong(photoKey(forDark), -1).takeIf { it >= 0 } ?: folderPhotos(contentResolver, choice).firstOrNull())?.let {
-                        if (Build.VERSION.SDK_INT >= 29) contentResolver.loadThumbnail(ContentUris.withAppendedId(PHOTOS, it), android.util.Size(dp(64) * 2, dp(36) * 2), null)
+                        val size = if (big) android.util.Size(dp(372), dp(150)) else android.util.Size(dp(80) * 2, dp(45) * 2)
+                        if (Build.VERSION.SDK_INT >= 29) contentResolver.loadThumbnail(ContentUris.withAppendedId(PHOTOS, it), size, null)
                         else @Suppress("DEPRECATION") MediaStore.Images.Thumbnails.getThumbnail(contentResolver, it, MediaStore.Images.Thumbnails.MINI_KIND, null)
                     }
                     else -> null
@@ -2725,38 +3121,34 @@ class MainActivity : Activity() {
 
     private fun toggle(on: Boolean) = if (on) TOGGLE_ON else TOGGLE_OFF
 
-    /** A mono slider, like [switch]: a faint track, filled up to [pct] in the text colour, with a knob at the end. */
-    private fun slider(pct: Int) = FrameLayout(this).apply {
-        val faint = fg and 0xFFFFFF or 0x66000000
-        fun bar(color: Int) = View(context).apply { background = GradientDrawable().apply { cornerRadius = dp(2).toFloat(); setColor(color) } }
-        addView(bar(faint), FrameLayout.LayoutParams(MATCH_PARENT, dp(4), Gravity.CENTER_VERTICAL))
-        addView(bar(fg), FrameLayout.LayoutParams(dp(SLIDER_DP) * pct / 100, dp(4), Gravity.CENTER_VERTICAL))
-        addView(View(context).apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(fg) }
-        }, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.CENTER_VERTICAL).apply { marginStart = dp(SLIDER_DP - 14) * pct / 100 })
-    }
-
-    /** A mono switch for on/off rows: filled track with the knob right when on, outlined and left when off. */
-    private fun switch(on: Boolean) = FrameLayout(this).apply {
-        val faint = fg and 0xFFFFFF or 0x66000000
-        background = GradientDrawable().apply {
-            cornerRadius = dp(10).toFloat()
-            if (on) setColor(fg) else setStroke(dp(2), faint)
+    /** On/off: a filled track with a big knob right when on, an outline with a small knob left when off. */
+    private fun switch(on: Boolean): Pair<View, (Boolean) -> Unit> {
+        val knob = View(this)
+        val track = FrameLayout(this).apply {
+            addView(knob, FrameLayout.LayoutParams(dp(if (on) 18 else 12), dp(if (on) 18 else 12), Gravity.CENTER_VERTICAL or if (on) Gravity.END else Gravity.START).apply {
+                marginStart = dp(6)
+                marginEnd = dp(3)
+            })
         }
-        addView(View(context).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(if (!on) faint else if (dark) DARK_BG else Color.WHITE)
+        val paint = { focused: Boolean ->
+            val c = if (on) (if (focused) focusInk() else restInk()) else valueInk(focused)
+            track.background = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                if (on) setColor(glassLook().accent() ?: c) else setStroke(dp(2), c)
             }
-        }, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.CENTER_VERTICAL or if (on) Gravity.END else Gravity.START).apply {
-            marginStart = dp(3)
-            marginEnd = dp(3)
-        })
+            knob.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(if (!on) c else if (dark) Color.BLACK else Color.WHITE)
+            }
+        }
+        paint(false)
+        return track to paint
     }
 
     private fun showNet(caps: NetworkCapabilities?) {
         val ethernet = caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
         wifi.setImageResource(if (ethernet) R.drawable.ic_ethernet else R.drawable.ic_wifi)
+        iconShadow(wifi) // the shadow takes the new picture's shape
         // Dim only the icon: the focus ring is the background and should stay full strength.
         wifi.imageAlpha = if (caps == null) 90 else 255
     }
@@ -2899,7 +3291,7 @@ class MainActivity : Activity() {
     private fun alignRow() {
         val content = appRow.parent as View
         (content.layoutParams as FrameLayout.LayoutParams).gravity =
-            if (appTileCount() > ROW_TILES) Gravity.START else ROW_ALIGN[rowAlign()]!!.second
+            if (appTileCount() > rowTiles()) Gravity.START else ROW_ALIGN[rowAlign()]!!.second
         content.requestLayout()
     }
 
@@ -2911,11 +3303,12 @@ class MainActivity : Activity() {
         val takeFocus = currentFocus == null || currentFocus?.parent === appRow || firstFill
         val gap = dp(GRID_GAP)
         val width = rowTileWidth()
-        val tileH = if (isBannerStyle(iconStyle())) width * 9 / 16 else dp(76) // 16:9 like a banner
+        val tileH = if (isBannerStyle(iconStyle())) width * 9 / 16 else (dp(76) * rowScale()).toInt() // 16:9 like a banner
         // The row sits on the bottom of its space. A banner row is shorter, so lift it by half the difference: its
-        // centre stays where the card row's is, between the clock and Continue Watching.
+        // centre stays where the card row's is, between the clock and Continue Watching. A taller row (Large,
+        // Largest) grows upward only, or it would cover Continue Watching's title.
         findViewById<View>(R.id.appScroll).apply {
-            (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(-24) + (dp(76) - tileH) / 2
+            (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(-24) + maxOf(0, dp(76) - tileH) / 2
             requestLayout()
         }
         appRow.removeAllViews()
@@ -2952,12 +3345,21 @@ class MainActivity : Activity() {
     /** A brand or app colour made deep enough to carry a white mark. */
     private fun deepen(c: Int) = Color.rgb((Color.red(c) * 0.6f).toInt(), (Color.green(c) * 0.6f).toInt(), (Color.blue(c) * 0.6f).toInt())
 
-    /** Width of a home row tile: eight across the screen. */
-    private fun rowTileWidth() = (resources.displayMetrics.widthPixels - dp(96) - dp(GRID_GAP) * (ROW_TILES - 1)) / ROW_TILES
+    /** "standard", "large" or "largest": how big the home row's tiles and banners are. */
+    private fun rowSize() = prefs.getString("row_size", "standard")!!.takeIf { it in ROW_SIZES } ?: "standard"
+
+    private fun rowTiles() = ROW_SIZES.getValue(rowSize()).second
+
+    /** Width of a home row tile: [across] of them fill the screen, eight at Standard size. */
+    private fun rowTileWidth(across: Int = rowTiles()) = (resources.displayMetrics.widthPixels - dp(96) - dp(GRID_GAP) * (across - 1)) / across
+
+    /** How much bigger the row's tiles are than at Standard size: their height and the space around the mark grow with it. */
+    private fun rowScale() = rowTileWidth().toFloat() / rowTileWidth(ROW_TILES)
 
     /**
-     * Apple TV style: the app's own banner fills the tile, rounded. Only when the banner is at least as wide as the
-     * tile, or it would be upscaled and soft (4K); null then, and the tile shows the app's mark as usual.
+     * Apple TV style: the app's own banner fills the tile, rounded. Only when the banner is at least as wide as a
+     * Standard-size tile, or it would be upscaled and soft (4K); null then, and the tile shows the app's mark as usual.
+     * Large and Largest stretch a banner of that width a little (most are 320 px, Largest is ~400 px on a 1080p TV).
      */
     private fun bannerTile(a: App): View? {
         if (a.pkg.startsWith(HDMI)) return null
@@ -2967,7 +3369,7 @@ class MainActivity : Activity() {
             null
         } ?: return null
         val w = rowTileWidth()
-        if (banner.intrinsicWidth in 1 until w) return null
+        if (banner.intrinsicWidth in 1 until rowTileWidth(ROW_TILES)) return null
         // Drawn once, centre-cropped, at the tile's exact size: a row of banners then costs ~80 KB each, not the
         // banner's own size, and the full-size banner isn't kept.
         val h = w * 9 / 16
@@ -2988,26 +3390,16 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.FIT_XY
             if (grey) { colorFilter = GREYSCALE; alpha = rest }
         }
-        // A colour banner has nothing else to tell the selected tile from the others: the rest are dimmed a little,
-        // and the selected one gets a ring in the text colour. Both fade over the same 160 ms as the lift.
+        // A colour banner rests dimmed a little, so the selected one, risen out of the row, also stands out in
+        // brightness. The dim fades over the same 160 ms as the lift.
         val dim = View(this).apply { setBackgroundColor(Color.BLACK); alpha = if (grey) 0f else BANNER_DIM }
-        val ring = View(this).apply {
-            background = GradientDrawable().apply {
-                cornerRadius = dp(8).toFloat()
-                setStroke(dp(3), fg)
-                setColor(Color.TRANSPARENT)
-            }
-            alpha = 0f
-        }
         val col = FrameLayout(this).apply {
             addView(pic, MATCH_PARENT, MATCH_PARENT)
             addView(dim, MATCH_PARENT, MATCH_PARENT)
-            addView(ring, MATCH_PARENT, MATCH_PARENT)
             tag = a.pkg
             setOnClickListener { launch(a) }
         }
         style(col, dp(8), card = false, lift = 1.12f) { focused ->
-            ring.animate().alpha(if (focused) 1f else 0f).setDuration(160).start()
             if (!grey) dim.animate().alpha(if (focused) 0f else BANNER_DIM).setDuration(160).start()
             if (!grey) return@style
             pic.colorFilter = if (focused) null else GREYSCALE
@@ -3032,7 +3424,7 @@ class MainActivity : Activity() {
             a.pkg.startsWith(HDMI) -> tile(name, a.icon, true, a.pkg,
                 tint = BRAND_COLOURS[hdmiIcon(a.label, true)]?.takeIf { colour }) { launch(a) }
             logo != null -> tile(name.takeIf { !logo.second }, getDrawable(logo.first)!!, true, a.pkg,
-                wordmarkInset = if (!logo.second) null else dp(if (labeled) 28 else 14),
+                wordmarkInset = if (!logo.second) null else if (labeled) dp(28) else (dp(14) * rowScale()).toInt(),
                 tint = if (onColour && BRAND_COLOURS[a.pkg] != null) Color.WHITE else BRAND_COLOURS[a.pkg]?.takeIf { colour }) { launch(a) }
                 .also { if (onColour) BRAND_COLOURS[a.pkg]?.let { c -> it.backgroundTintList = ColorStateList.valueOf(deepen(c)) } }
             else -> cachedGlyph(a)?.let { g ->
@@ -3061,8 +3453,10 @@ class MainActivity : Activity() {
             row.addView(fittingLabel(t.contentDescription.toString(), 13f).apply {
                 gravity = Gravity.CENTER
                 alpha = if (dark) 0.85f else 1f
+                ink(this, appsInk)
             }, LinearLayout.LayoutParams(t.layoutParams as LinearLayout.LayoutParams).apply { height = MATCH_PARENT })
         }
+        row.post { fitInk() } // measured again over the names' own place on the wallpaper
     }
 
     /** Slides the shared name label under the focused row tile; fades it out once focus leaves the row. */
@@ -3082,6 +3476,7 @@ class MainActivity : Activity() {
                 label.box = v.width // the name stays inside its tile: when it is wider it scrolls
                 label.translationX = v.left + v.width / 2f - label.width / 2f
                 label.setActive(true)
+                ink(label, appsInk) // the row's colour (see fitInk): one colour, not a new one under each tile
             }
             if (v.width > 0 && label.width > 0) place() else v.post { if (v.isFocused) place() }
             label.animate().alpha(if (dark) 0.85f else 1f).setDuration(160).start()
@@ -3130,8 +3525,10 @@ class MainActivity : Activity() {
                 img.scaleType = ImageView.ScaleType.CENTER_CROP
                 img.setPadding(wordmarkInset, 0, wordmarkInset, 0)
             } else {
-                val v = if (isBannerStyle(iconStyle())) dp(8) else dp(20) // banner rows are shorter
-                img.setPadding(dp(16), v, dp(16), v)
+                val s = rowScale() // only home row tiles have no name: All apps keeps its one size
+                val v = ((if (isBannerStyle(iconStyle())) dp(8) else dp(20)) * s).toInt() // banner rows are shorter
+                val h = (dp(16) * s).toInt()
+                img.setPadding(h, v, h, v)
             }
             col.addView(img, LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         } else {
@@ -3227,6 +3624,10 @@ class MainActivity : Activity() {
      * listener in style() is a fallback for remotes that send no repeats. [holdFired] stops both firing.
      */
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        if (wallPreview != null) { // a picked wallpaper shown whole: any button brings the panel back
+            if (e.action == KeyEvent.ACTION_UP) endWallPreview()
+            return true
+        }
         val confirm = e.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || e.keyCode == KeyEvent.KEYCODE_ENTER ||
             e.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
         if (movingTop != null && topMoveKey(e, confirm)) return true
@@ -3403,7 +3804,7 @@ class MainActivity : Activity() {
 
     /** A small Plume-styled menu just above [anchor] (under it when [below]); Back closes it. [rows] builds its rows. */
     private fun popupMenu(anchor: View, below: Boolean = false, rows: (dismiss: () -> Unit) -> List<View>) {
-        val list: LinearLayout = if (frosted()) glassSurface(dp(14).toFloat()) else LinearLayout(this).apply {
+        val list: LinearLayout = if (glassActive()) glassSurface(dp(14).toFloat()) else LinearLayout(this).apply {
             background = if (dark) rimCard(dp(12), false, solid = true) else GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
                 setColor(0xFFF7F8FA.toInt())
@@ -3462,6 +3863,7 @@ class MainActivity : Activity() {
         // Found before they leave the bar: findViewById cannot see a view that has been removed.
         val views = TOP_KEYS.keys.associateWith { findViewById<View>(it) }
         val start = views.values.minOf { bar.indexOfChild(it) }
+        val focused = currentFocus?.takeIf { it.parent === bar }
         views.values.forEach { bar.removeView(it) }
         val shown = shownTop(order)
         (order + (TOP_KEYS.keys - order.toSet())).forEachIndexed { i, id ->
@@ -3471,6 +3873,9 @@ class MainActivity : Activity() {
             v.visibility = if (id in shown) View.VISIBLE else View.GONE
             bar.addView(v, start + i, lp)
         }
+        // Taking the focused icon out passed focus on, down to the empty app row's scroller on a cold start, and
+        // then the first fill of the row did not take it. Give it back to the bar.
+        focused?.let { (if (it.visibility == View.VISIBLE) it else findViewById(shown.first())).requestFocus() }
     }
 
     private fun saveTopOrder(order: List<Int>) {
@@ -3770,6 +4175,8 @@ class MainActivity : Activity() {
         row.alpha = 0.4f
         // A moment late: the app's own window is still fading out over us for the first part.
         row.animate().scaleX(1f).scaleY(1f).alpha(1f).setStartDelay(90).setDuration(420).setInterpolator(DECELERATE).start()
+        // The row scales and fades with no layout and no focus change: the frost must redraw as it settles.
+        glass.kick(600)
     }
 
     // ---------- all apps ----------
@@ -3787,12 +4194,16 @@ class MainActivity : Activity() {
             })
         }
         allApps.visibility = View.VISIBLE
+        // Glass shows the wallpaper here, so the home screen under the grid has to go; without glass the opaque
+        // background covers it anyway.
+        findViewById<View>(R.id.content).visibility = if (glassActive()) View.INVISIBLE else View.VISIBLE
         homeFocusable(false)
         allAppsGrid.getChildAt(0)?.requestFocus()
     }
 
     private fun closeAllApps() {
         allApps.visibility = View.GONE
+        findViewById<View>(R.id.content).visibility = View.VISIBLE
         homeFocusable(true)
         renderApps()
         findViewById<View>(R.id.allAppsButton).requestFocus() // back where it was opened from
@@ -3818,10 +4229,12 @@ class MainActivity : Activity() {
     }
 
     /** The folder the Gallery screensaver shows instead of paintings, or null for paintings. */
-    private fun photoScreensaver() = prefs.getString("ss_folder", null)
+    private fun photoScreensaver() = prefs.getString("ss_folder", null)?.takeIf { it != AERIAL_SCREENSAVER }
+
+    private fun aerialScreensaverOn() = galleryOn() && prefs.getString("ss_folder", null) == AERIAL_SCREENSAVER
 
     private fun pickScreensaver(focus: Int = 0) {
-        val paintings = galleryOn() && photoScreensaver() == null
+        val paintings = galleryOn() && photoScreensaver() == null && !aerialScreensaverOn()
         val photos = galleryOn() && photoScreensaver() != null
         val other = if (galleryOn()) prefs.getString("prev_screensaver", "").orEmpty() else currentScreensaver()
         showPage(getString(R.string.screensaver), listOf(
@@ -3829,17 +4242,91 @@ class MainActivity : Activity() {
                 useGallery(null)
                 pickScreensaver(0)
             },
+            page(getString(R.string.aerial_views), if (aerialScreensaverOn()) CHOSEN else aerialFiles(this).size.let { resources.getQuantityString(R.plurals.n_scenes, it, it) }) {
+                pickAerialScenes()
+            },
             page(getString(R.string.your_photos), if (photos) "${wallpaperName(photoScreensaver()!!)} $CHOSEN" else "") {
-                pickFolder({ pickScreensaver(1) }) { choice ->
+                pickFolder({ pickScreensaver(2) }) { choice ->
                     useGallery(choice)
-                    pickScreensaver(1)
+                    pickScreensaver(2)
                 }
             },
             page(screensaverName(other), if (galleryOn()) "" else CHOSEN) {
                 if (galleryOn()) stopGallery()
-                pickScreensaver(2)
+                pickScreensaver(3)
             },
         ), focus) { renderSettings(R.string.screensaver) }
+    }
+
+    @Volatile private var aerialDownload: String? = null // the scene file being fetched, one at a time
+
+    /**
+     * Aerial Views: turn it on, then the Apple scenes. A scene on disk (from here or from the video wallpaper)
+     * plays at once; selecting it offers Remove. A scene not on disk downloads into the shared wallpaper folder.
+     */
+    private fun pickAerialScenes(focus: Int = 0) {
+        val dir = wallpaperDir() ?: return
+        val onDisk = aerialFiles(this)
+        val mb = onDisk.sumOf { it.length() } / (1024 * 1024)
+        val rows = listOf(
+            page(getString(R.string.use_aerial_views), if (aerialScreensaverOn()) CHOSEN else resources.getQuantityString(R.plurals.aerial_on_disk, onDisk.size, onDisk.size, mb)) {
+                if (onDisk.isEmpty()) toast(getString(R.string.aerial_download_first), long = true)
+                else useGallery(AERIAL_SCREENSAVER)
+                pickAerialScenes(0)
+            },
+        ) + aerialScenes(this).groupBy { it.category }.entries.sortedByDescending { it.value.size }.mapIndexed { i, (kind, list) ->
+            val have = list.count { File(dir, it.file).isFile }
+            page(kind, "${resources.getQuantityString(R.plurals.n_scenes, list.size, list.size)}${if (have > 0) " · $have ✓" else ""}  ›") {
+                pickAerialKind(kind, list.sortedBy { it.name }) { pickAerialScenes(i + 1) }
+            }
+        }
+        showPage(getString(R.string.aerial_views), rows, focus) { pickScreensaver(1) }
+    }
+
+    /** One kind of Apple scene for the screensaver: OK downloads a scene, or offers to remove one that is on the TV. */
+    private fun pickAerialKind(kind: String, scenes: List<VideoScene>, focus: Int = 0, back: () -> Unit) {
+        val dir = wallpaperDir() ?: return
+        showPage(kind, scenes.mapIndexed { i, scene ->
+            val file = File(dir, scene.file)
+            val value = when {
+                aerialDownload == scene.file -> getString(R.string.downloading)
+                file.isFile -> "${file.length() / (1024 * 1024)} MB"
+                else -> ""
+            }
+            page(scene.name, value) {
+                if (file.isFile) removeAerialScene(scene, file) { pickAerialKind(kind, scenes, i, back) }
+                else downloadAerialScene(scene, file) { pickAerialKind(kind, scenes, i, back) }
+            }
+        }, focus, crumb = getString(R.string.aerial_views)) { back() }
+    }
+
+    private fun removeAerialScene(scene: VideoScene, file: File, back: () -> Unit) {
+        showPage(scene.name, listOf(page(getString(R.string.delete)) {
+            val choice = "video:${file.name}"
+            // The wallpaper still uses it: keep it, or Home would lose its picture.
+            if (choice == prefs.getString("wp_light", null) || choice == prefs.getString("wp_dark", null)) {
+                toast(getString(R.string.aerial_in_use), long = true)
+            } else {
+                file.delete()
+                if (aerialScreensaverOn() && aerialFiles(this).isEmpty()) stopGallery()
+            }
+            back()
+        })) { back() }
+    }
+
+    private fun downloadAerialScene(scene: VideoScene, file: File, back: () -> Unit) {
+        if (aerialDownload != null) return toast(getString(R.string.downloading))
+        aerialDownload = scene.file
+        back()
+        io.execute {
+            val ok = downloadVideoScene(scene, file, AtomicBoolean(false)) {}
+            ui.post {
+                aerialDownload = null
+                if (isDestroyed) return@post
+                if (!ok) toast(getString(R.string.video_download_failed), long = true)
+                if (settingsScrim.visibility == View.VISIBLE) back()
+            }
+        }
     }
 
     /** Gallery on, with paintings ([folder] null, downloaded first if needed) or a folder of photos. */
@@ -3867,6 +4354,7 @@ class MainActivity : Activity() {
 
     /** Android's screensaver settings (timing, sleep): plain Android TV and Google TV name them differently. */
     private fun openScreensaverSettings() {
+        returnTo(R.string.screensaver_timing)
         for (action in listOf(Settings.ACTION_DREAM_SETTINGS, "com.google.android.tv.settings.ambient")) {
             try {
                 return startActivity(Intent(action))
@@ -3910,6 +4398,7 @@ class MainActivity : Activity() {
 
     /** Starts whichever screensaver is set, through SystemUI's "dream now" entry point. */
     private fun testScreensaver() {
+        returnTo(R.string.test_screensaver, dream = true)
         try {
             startActivity(Intent(Intent.ACTION_MAIN).setClassName("com.android.systemui", "com.android.systemui.Somnambulator"))
         } catch (e: Exception) {
@@ -4617,7 +5106,7 @@ class MainActivity : Activity() {
     private fun sourceIcon(pkg: String?): Drawable? {
         if (pkg == null) return null
         val colour = cwColour()
-        val tint = BRAND_COLOURS[pkg]?.takeIf { colour } ?: fg
+        val tint = BRAND_COLOURS[pkg]?.takeIf { colour } ?: watchInk // a mark without its brand colour goes with the card's text
         LOGOS[pkg]?.takeIf { !it.second }?.let { return getDrawable(it.first)!!.mutate().apply { setTint(tint) } }
         return try {
             packageManager.getApplicationIcon(pkg).mutate().apply { if (!colour) colorFilter = GREYSCALE }
@@ -4713,6 +5202,8 @@ class MainActivity : Activity() {
         move(appScroll, appY, 1f)
         move(watchTitle, rowY, if (hidden) 0f else if (watchTitle.isFocused) 1f else titleAlpha)
         move(watchScroll, rowY, if (hidden) 0f else 1f)
+        // The rows are layers: they move and fade without a layout, so the frost has to be told to follow them.
+        glass.kick(if (animate) 320 else 0)
     }
 
     /**
@@ -4753,7 +5244,8 @@ class MainActivity : Activity() {
             ink(this, watchInk)
         }
         val frame = FrameLayout(this)
-        style(frame, dp(8), card = true, lift = 1.1f) { focused ->
+        // The poster fills the card, so frost under it would never show and would only cost work on every frame.
+        style(frame, dp(8), card = true, lift = 1.1f, frost = false) { focused ->
             title.isSelected = focused
             if (focused) {
                 lastCard = frame
@@ -4767,7 +5259,7 @@ class MainActivity : Activity() {
         // Thin bar under the poster, card width. Kept (invisible) when there's no progress so titles line up.
         col.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
-            progressDrawable = progressBarDrawable()
+            progressDrawable = progressBarDrawable(watchInk)
         }, LinearLayout.LayoutParams(w, dp(3)).apply { topMargin = dp(8) })
         col.addView(title)
         col.addView(label(p.sub, 12f).apply {
@@ -4800,6 +5292,9 @@ class MainActivity : Activity() {
             sub.text = p.sub
             icon?.setBounds(0, 0, dp(12), dp(12))
             sub.setCompoundDrawablesRelative(icon, null, null, null)
+            // A plain mark (not the app's own icon, not in brand colour) follows the text, as fitInk tints it.
+            sub.tag = if (LOGOS[p.pkg]?.second == false && (!cwColour() || BRAND_COLOURS[p.pkg] == null)) INK_MARK else null
+            if (sub.tag == INK_MARK) icon?.setTint(watchInk)
             // Split by source, a card without details keeps their space, or the row would change height with the source.
             sub.visibility = if (p.sub.isNotEmpty() || icon != null) View.VISIBLE else if (cardsMode() == ShowRows.MIXED) View.GONE else View.INVISIBLE
             img.setImageDrawable(null)
@@ -4842,11 +5337,12 @@ class MainActivity : Activity() {
         ui.post { if (watchKey == key) addCardsTo(CARDS_AHEAD - 1) }
     }
 
-    private fun progressBarDrawable(): Drawable {
+    /** [ink] fills it; the track is a faint version on the same side, light behind white and dark behind near-black. */
+    private fun progressBarDrawable(ink: Int = fg): Drawable {
         fun bar(color: Int) = GradientDrawable().apply { cornerRadius = dp(2).toFloat(); setColor(color) }
         return LayerDrawable(arrayOf(
-            bar(if (dark) 0x40FFFFFF else 0x26000000),
-            ClipDrawable(bar(fg), Gravity.START, ClipDrawable.HORIZONTAL),
+            bar(if (Color.luminance(ink) > 0.5f) 0x40FFFFFF else 0x26000000),
+            ClipDrawable(bar(ink), Gravity.START, ClipDrawable.HORIZONTAL),
         )).apply {
             setId(0, android.R.id.background)
             setId(1, android.R.id.progress)
@@ -4944,7 +5440,7 @@ class MainActivity : Activity() {
      * top sheen; dark mode brightens the glass gradient instead (a white sheen would haze it grey).
      * Only transform/alpha/colour change, so it stays on the GPU and costs no re-layout.
      */
-    private fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, onFocus: ((Boolean) -> Unit)? = null) {
+    private fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, frost: Boolean = true, onFocus: ((Boolean) -> Unit)? = null) {
         fun gradient(colors: IntArray) = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, colors).apply {
             cornerRadius = radius.toFloat()
             setDither(true)
@@ -4953,7 +5449,7 @@ class MainActivity : Activity() {
         val sheen = Baked("sheen $radius", gradient(sheenColors)).apply { alpha = 0 }
         val rest = if (card) Baked("card $radius ${cardRest.contentToString()}", gradient(cardRest)) else null
         val lit = if (card) Baked("card $radius ${cardLit.contentToString()}", gradient(cardLit)) else null
-        val frosted = card && glassActive()
+        val frosted = frost && card && glassActive()
         if (frosted) glass.add(v, radius.toFloat())
         v.background = if (dark && card) rimCard(radius, false, frosted = frosted) else rest ?: GradientDrawable().apply { cornerRadius = radius.toFloat() }
         if (!dark) v.foreground = sheen
@@ -4967,8 +5463,12 @@ class MainActivity : Activity() {
             if (card && dark) v.background = rimCard(radius, focused, frosted = frosted)
             else if (card) v.background = if (focused) lit else rest
             if (frosted) glass.kick(260) // the lift moves the tile: its blur follows
+            // The selected tile rises out of the row's line. Its growth stops short of the gap, so at the
+            // largest size it still doesn't cover its neighbours.
+            val grow = if (focused && v.width > 0) minOf(lift, 1 + dp(GRID_GAP) * 1.2f / v.width) else 1f
             v.animate()
-                .scaleX(if (focused) lift else 1f).scaleY(if (focused) lift else 1f)
+                .scaleX(grow).scaleY(grow)
+                .translationY(if (focused) -maxOf(v.height * 0.06f, dp(4).toFloat()) else 0f)
                 .translationZ(if (focused) dp(14).toFloat() else 0f)
                 .setDuration(160).setInterpolator(DECELERATE).start()
             onFocus?.invoke(focused)
@@ -4981,16 +5481,19 @@ class MainActivity : Activity() {
      * dialogs, which sit over other things and have to stay readable (light mode's are solid too).
      */
     private fun rimCard(radius: Int, lit: Boolean, solid: Boolean = false, frosted: Boolean = false): Drawable {
+        val style = if (frosted) glassLook().active ?: GlassStyle.FROSTED else null
         val glass = (if (lit) DARK_CARD_LIT else DARK_CARD).let { c ->
             if (solid) IntArray(c.size) { c[it] or 0xFF000000.toInt() }
-            else if (frosted) IntArray(c.size) { c[it] and 0xFFFFFF or ((if (lit) 0x66 else 0x40) shl 24) } // 25% at rest, 40% selected, over the blur
+            else if (style != null) IntArray(c.size) { glassLook().tile(lit) }
             else c
         }
         val body = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, glass).apply {
             cornerRadius = radius.toFloat()
-            setStroke(1, if (lit) RIM_SIDE_LIT else RIM_SIDE) // 1px, not 1dp: a hairline stays crisp
+            if (style == null) setStroke(1, if (lit) RIM_SIDE_LIT else RIM_SIDE) // 1px, not 1dp: a hairline stays crisp
             setDither(true) // near black the gradient has ~8 steps; dithered, they don't show as bands
         }
+        // Glass has no outline (its sheen and shadow give its shape, see GlassLayer); a solid card keeps its rim.
+        if (style != null) return Baked("rim $radius $lit $solid $frosted", body)
         return Baked("rim $radius $lit $solid $frosted", LayerDrawable(arrayOf(body, ColorDrawable(if (lit) RIM_TOP_LIT else RIM_TOP))).apply {
             setLayerGravity(1, Gravity.TOP or Gravity.FILL_HORIZONTAL)
             setLayerHeight(1, 1)
@@ -5066,24 +5569,49 @@ class MainActivity : Activity() {
         const val AREA_SHOWS = 3
         /** The part of the home screen each section changes, lit by the spotlight; other sections dim it all. */
         val SECTION_AREAS = mapOf(
-            R.string.section_appearance to AREA_ALL, R.string.section_clock_weather to AREA_CLOCK,
+            R.string.section_style to AREA_ALL, R.string.section_clock_weather to AREA_CLOCK,
             R.string.section_app_row to AREA_APPS, R.string.bottom_row to AREA_SHOWS,
         )
+        /** Main-list key of the wallpaper card; the keys that open the wallpaper page. */
+        const val WALLPAPER_CARD = -2
+        val WALLPAPER_KEYS = setOf(R.string.wallpaper, R.string.folder_photo_changes, R.string.wp_sources)
+        /** Rows whose choices are drawn as pictures (see OptionArt). */
+        val SCENE_ICONS = mapOf(
+            "Space" to R.drawable.ms_public, "Nature" to R.drawable.ms_forest, "Water & Coast" to R.drawable.ms_water,
+            "Cities" to R.drawable.ms_location_city, "Abstract & Patterns" to R.drawable.ms_texture, "Elements & Fire" to R.drawable.ms_local_fire_department,
+        )
+        val ROW_ART = mapOf(R.string.row_size to "size", R.string.row_position to "position")
+        val ROW_ICONS = mapOf(
+            R.string.theme to R.drawable.ms_contrast, R.string.glass to R.drawable.ms_blur_on, R.string.app_animations to R.drawable.ms_open_in_full,
+            R.string.edit_apps_row to R.drawable.ms_swap_horiz, R.string.apps_in_row to R.drawable.ms_checklist, R.string.sort_apps to R.drawable.ms_sort,
+            R.string.icon_style to R.drawable.ms_apps, R.string.row_size to R.drawable.ms_format_size, R.string.app_names to R.drawable.ms_label,
+            R.string.row_position to R.drawable.ms_format_align_left,
+            R.string.show_row to R.drawable.ms_visibility, R.string.apps_when_hidden to R.drawable.ms_vertical_align_bottom, R.string.row_name to R.drawable.ms_edit,
+            R.string.show_icons to R.drawable.ms_badge, R.string.cw_apps to R.drawable.ms_widgets, R.string.cw_channels to R.drawable.ms_podcasts,
+            R.string.restore_hidden to R.drawable.ms_visibility_off,
+            R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
+            R.string.screensaver to R.drawable.ms_bedtime, R.string.test_screensaver to R.drawable.ms_play_circle, R.string.screensaver_timing to R.drawable.ms_timer,
+            R.string.home_button to R.drawable.ms_home, R.string.default_launcher to R.drawable.ms_home_app_logo, R.string.smooth_volume to R.drawable.ms_volume_up,
+            R.string.section_keys to R.drawable.ms_keyboard, R.string.setup_home to R.drawable.ms_restart_alt,
+        )
         val SECTION_ICONS = mapOf(
-            R.string.section_appearance to R.drawable.ic_wallpaper, R.string.section_clock_weather to R.drawable.ic_clock,
-            R.string.section_app_row to R.drawable.ic_apps, R.string.bottom_row to R.drawable.ic_shows,
-            R.string.section_screensaver to R.drawable.ic_screensaver, R.string.section_remote_home to R.drawable.ic_remote,
-            R.string.section_lock to R.drawable.ic_lock,
+            R.string.section_style to R.drawable.ms_palette, R.string.section_clock_weather to R.drawable.ms_partly_cloudy_day,
+            R.string.section_app_row to R.drawable.ms_view_carousel, R.string.bottom_row to R.drawable.ms_video_library,
+            R.string.section_screensaver to R.drawable.ms_bedtime, R.string.section_remote_home to R.drawable.ms_settings_remote,
         )
         /** The help line shown at the bottom of Plume settings while a row is selected. */
         val ROW_HELP = mapOf(
-            R.string.section_appearance to R.string.help_appearance, R.string.section_clock_weather to R.string.help_clock_weather,
+            R.string.section_style to R.string.help_style, R.string.section_clock_weather to R.string.help_clock_weather,
+            R.string.theme to R.string.help_theme, R.string.glass to R.string.help_glass, R.string.app_animations to R.string.help_app_animations,
+            R.string.app_names to R.string.help_app_names, R.string.row_position to R.string.help_row_position, R.string.show_row to R.string.help_show_row,
+            R.string.weather to R.string.help_weather, R.string.weather_units to R.string.help_units, R.string.screensaver to R.string.help_screensaver_pick,
+            R.string.test_screensaver to R.string.help_preview, R.string.folder_photo_changes to R.string.help_photo_every,
             R.string.section_app_row to R.string.help_apps_row, R.string.bottom_row to R.string.help_shows_row,
             R.string.section_screensaver to R.string.help_screensaver, R.string.section_remote_home to R.string.help_remote_home,
             R.string.section_lock to R.string.help_lock,
-            R.string.wp_dim to R.string.help_wp_dim, R.string.fade_top to R.string.help_fade_top, R.string.fade_bottom to R.string.help_fade_bottom, R.string.weather_location to R.string.help_location,
+            R.string.weather_location to R.string.help_location,
             R.string.edit_apps_row to R.string.help_rearrange, R.string.apps_in_row to R.string.help_choose_apps,
-            R.string.sort_apps to R.string.help_order, R.string.icon_style to R.string.help_icon_style,
+            R.string.sort_apps to R.string.help_order, R.string.icon_style to R.string.help_icon_style, R.string.row_size to R.string.help_row_size,
             R.string.apps_when_hidden to R.string.help_apps_when_hidden, R.string.row_name to R.string.help_row_name,
             R.string.show_icons to R.string.help_show_icons,
             R.string.cw_apps to R.string.help_from_apps, R.string.cw_channels to R.string.help_channels, R.string.cards_rows to R.string.help_cards_rows,
@@ -5104,8 +5632,8 @@ class MainActivity : Activity() {
         // Translucent (70% at rest, 80% selected), so the wallpaper shows through the tiles like frosted glass.
         /** Android's own Watch Next list, listed with the channels so it can be turned off too. */
         const val WATCH_NEXT = "watchnext"
-        val DARK_CARD = intArrayOf(0xB30B0B0B.toInt(), 0xB3040404.toInt())
-        val DARK_CARD_LIT = intArrayOf(0xCC141414.toInt(), 0xCC070707.toInt())
+        val DARK_CARD = intArrayOf(0xE60B0B0B.toInt(), 0xE6040404.toInt())
+        val DARK_CARD_LIT = intArrayOf(0xF2141414.toInt(), 0xF2070707.toInt())
         const val RIM_TOP = 0x17FFFFFF // white 9%
         const val RIM_SIDE = 0x0AFFFFFF // white 4%
         const val RIM_TOP_LIT = 0x38FFFFFF // white 22%
@@ -5114,17 +5642,11 @@ class MainActivity : Activity() {
         const val HELP_URL = "https://github.com/aradhyas8/Plume_Launcher#home-button-on-android-13-and-newer"
         const val TOGGLE_ON = "\u0000on" // row values drawn as a switch instead of text
         const val TOGGLE_OFF = "\u0000off"
-        const val SLIDER = "\u0000%" // row value drawn as a slider: SLIDER + 0-100
-        const val FADE_STEP = 5 // percent per Left/Right on a fade slider
-        const val SLIDER_DP = 96 // a slider's width
-        const val SLIDER_VALUE_DP = 72 // width of the value beside a slider
         const val BANNER_DIM = 0.3f // black laid over a colour banner at rest, so the selected one stands out
         const val FETCH_OK = 0
         const val FETCH_DEAD = 1
         const val FETCH_NETWORK = 2
         const val SHOW_MAX = 12_000_000 // bytes: a bigger show picture is left out
-        /** "Darkening" of a Bing or shows picture in dark mode: Auto, or a percentage of black. Medium is what Plume always did for Bing. */
-        val DIMS = linkedMapOf("auto" to R.string.dim_auto, "0" to R.string.dim_none, "20" to R.string.dim_light, "45" to R.string.dim_medium, "65" to R.string.dim_strong)
         const val PIN_TRIES = 5 // wrong PINs before a 30 s wait
         const val UNLOCKED_MS = 5 * 60_000L
         const val MEDIA_REQUEST = 3
@@ -5148,10 +5670,16 @@ class MainActivity : Activity() {
         const val WRITE_EPG ="com.android.providers.tv.permission.WRITE_EPG_DATA"
         const val TV_SETTINGS = "com.android.tv.settings"
         const val HDMI = "hdmi:" // App.pkg prefix for HDMI device tiles; the rest is the TV input id
-        const val ROW_TILES = 8
+        const val ROW_TILES = 8 // across at Standard size; the other sizes scale from it
+        /** "Size" setting -> its name, and how many tiles fit across. 8 and 4 keep the columns over the four cards. */
+        val ROW_SIZES = linkedMapOf("standard" to (R.string.size_standard to 8), "large" to (R.string.size_large to 6), "largest" to (R.string.size_largest to 4))
         /** Icon style setting -> its name. */
         val ICON_STYLES = linkedMapOf(ICON_STYLE_KEYS[0] to R.string.monochrome, ICON_STYLE_KEYS[1] to R.string.colour, ICON_STYLE_KEYS[2] to R.string.banner, ICON_STYLE_KEYS[3] to R.string.banner_mono)
+        /** Glass setting -> its styles in cycling order; null is off. */
+        val GLASS_STYLES: List<GlassStyle?> = listOf(null, GlassStyle.FROSTED, GlassStyle.CLEAR)
+        val THEMES = listOf("light", "dark", "wallpaper", "auto")
         const val GRID_GAP = 16 // dp; shared by the apps row and the cards so their columns line up
+        const val INK_MARK = "ink mark" // tag on a card's detail line whose source mark takes the text colour
         /** Shown names for the wallpaper keys saved in prefs (the keys stay English). */
         val WALLPAPER_NAMES = mapOf(
             "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,
@@ -5234,8 +5762,18 @@ class MainActivity : Activity() {
 }
 
 /** White or near-black over a background of luminance [lum], whichever has the higher contrast (WCAG). */
-internal fun inkFor(lum: Float): Int {
+/**
+ * White or near-black text over [frames] (the luminances behind the text, one array per frame). Each colour is judged
+ * by its worst case: white by the bright end (80th percentile) of the brightest frame, dark by the dim end (20th) of
+ * the darkest, so one white thread or one bright scene counts, not the average. White wins unless dark reads clearly
+ * better (1.5x), as white with its shadow holds up best on busy pictures.
+ */
+internal fun inkFor(frames: List<FloatArray>): Int {
     val dark = 0xFF111214.toInt()
     val darkLum = 0.0063f // luminance of #111214
-    return if (1.05f / (lum + 0.05f) >= (lum + 0.05f) / (darkLum + 0.05f)) Color.WHITE else dark
+    val ends = frames.filter { it.isNotEmpty() }.map { f -> f.sorted().let { it[it.size / 5] to it[(it.size - 1) * 4 / 5] } }
+    if (ends.isEmpty()) return Color.WHITE
+    val white = 1.05f / (ends.maxOf { it.second } + 0.05f)
+    val black = (ends.minOf { it.first } + 0.05f) / (darkLum + 0.05f)
+    return if (black > white * 1.5f) dark else Color.WHITE
 }
