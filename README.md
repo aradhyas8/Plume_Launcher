@@ -252,6 +252,13 @@ Bug reports, design ideas, translations and pull requests are welcome. Plume sta
   - Jasper Francis Cropsey: *Autumn on the Hudson River*
   - Martin Johnson Heade: *Thunder Storm on Narragansett Bay*
 - **Wallpapers:** "The Lonely Tree, Garda Lake" by [Giuseppe Milo](https://commons.wikimedia.org/wiki/File:The_Lonely_Tree_Garda_Lake_Italy_Fine_Art_Photography_(188093893).jpeg) (CC BY 3.0), and "Mountain Peak, Alaska" by [Godot13](https://commons.wikimedia.org/wiki/File:Mountain_Peak,_Alaska_(1999).jpg) (CC BY-SA 4.0), via Wikimedia Commons
+- **Wallpaper pack** (optional download, cropped to 16:9 and saved as WebP; files in [`wallpapers/`](wallpapers), shared under the same licences), via Wikimedia Commons:
+  - "Niterói" from [Contemporary Art Museum in Niteroi City 5](https://commons.wikimedia.org/wiki/File:Contemporary_Art_Museum_in_Niteroi_City_5.jpg) by Donatas Dabravolskas (CC BY-SA 4.0)
+  - "Valencia mist" from [Ciudad de las Artes y las Ciencias1-edit](https://commons.wikimedia.org/wiki/File:Ciudad_de_las_Artes_y_las_Ciencias1-edit.jpg) by Elemaki, modifications by Alvaro qc (CC BY-SA 3.0)
+  - "Muralla Roja" from [Muralla Roja, Calp](https://commons.wikimedia.org/wiki/File:Muralla_Roja,_Calp.JPG) by Joanbanjo (CC BY-SA 4.0)
+  - "Hemisfèric" from [Hemisfèric 27112006](https://commons.wikimedia.org/wiki/File:Hemisf%C3%A8ric_27112006.jpg) by Javier Yaya Tur (CC BY 2.0)
+  - "Light trails" from [Krzeszowice by night long exposure photo, Poland](https://commons.wikimedia.org/wiki/File:Krzeszowice_by_night_long_exposure_photo,_Poland.jpg) by Piviso (CC0)
+  - "T-Centralen" from [T-centralen metro station december 2017 01](https://commons.wikimedia.org/wiki/File:T-centralen_metro_station_december_2017_01.jpg) by Arild Vågen (CC BY-SA 4.0)
 - **Aerial Views:** the Apple Aerial scene list comes from the [Aerial Views](https://github.com/theothernt/AerialViews) project (GPL-3.0). Plume's Aerial Views screensaver is not part of that app.
 - **App logos:** [Simple Icons](https://simpleicons.org) (CC0). All trademarks belong to their respective owners.
 - **HDMI input and settings icons:** [Material Symbols](https://fonts.google.com/icons) by Google (Apache 2.0)

@@ -1257,6 +1257,7 @@ class MainActivity : Activity() {
         choice.startsWith("video:") -> videoScenes(this).firstOrNull { "video:${it.file}" == choice }?.name
             ?: choice.removePrefix("video:").substringBeforeLast('.')
         choice.startsWith("folder:") -> getString(R.string.folder_name, choice.substringAfter(':').substringAfter(':'))
+        choice.startsWith("pack:") -> PACK_WALLPAPERS.firstOrNull { "pack:${it.first}" == choice }?.second ?: choice.removePrefix("pack:")
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
     }
 
@@ -1439,6 +1440,7 @@ class MainActivity : Activity() {
         return when {
             choice == Bing.CHOICE -> fitWallpaper { Bing.file(this).inputStream() }
             choice == ShowsWall.CHOICE -> fitWallpaper { ShowsWall.file(this).inputStream() }
+            choice.startsWith("pack:") -> fitWallpaper { File(packDir(), choice.removePrefix("pack:")).inputStream() }
             choice.startsWith("folder:") -> {
                 val uri = ContentUris.withAppendedId(PHOTOS, folderPhoto(choice) ?: return null)
                 fitWallpaper { contentResolver.openInputStream(uri) ?: throw IOException("gone: $uri") }
@@ -1522,13 +1524,26 @@ class MainActivity : Activity() {
     }
 
     /** The pictures that ship with Plume, and the plain colour of the theme. */
-    private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } + plainWallpaper(forDark)
+    private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } +
+        (if (packReady()) PACK_WALLPAPERS.sortedBy { it.third != forDark }.map { "pack:${it.first}" } else emptyList()) + plainWallpaper(forDark)
 
+    private fun packDir() = File(filesDir, "wallpaper-pack")
+    private fun packReady() = PACK_WALLPAPERS.all { File(packDir(), it.first).exists() }
+
+    /** The pictures that ship with Plume, the downloaded pack, and the plain colour; until the pack is here, a tile fetches it. */
     private fun pickBuiltIn(forDark: Boolean, focusOn: String? = null) {
         val current = currentWallpaper(forDark)
+        val get = if (packReady()) emptyList() else listOf(
+            Tile(getString(R.string.get_wallpaper_pack, PACK_MB), icon = R.drawable.ms_photo_library, help = R.string.help_wallpaper_pack) {
+                download(PACK_URL, PACK_WALLPAPERS.map { it.first }, packDir(), getString(R.string.downloading_wallpapers, PACK_MB), R.string.wallpapers_failed) { ok ->
+                    if (ok && settingsScrim.visibility == View.VISIBLE) pickBuiltIn(forDark, "pack:${PACK_WALLPAPERS.first { it.third == forDark }.first}")
+                }
+            })
         wallGrid(getString(R.string.built_in), listOf(null to builtIns(forDark).map { c ->
-            Tile(wallpaperName(c), c) { setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) } }
-        }), forDark, current, focusOn) { pickWallpaper(forDark, current) }
+            Tile(wallpaperName(c), c, help = R.string.help_wallpaper_pack.takeIf { c.startsWith("pack:") }) {
+                setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) }
+            }
+        } + get), forDark, current, focusOn) { pickWallpaper(forDark, current) }
     }
 
     /** Your uploaded photos and videos, as choices; videos are the MP4s that are not catalogue scenes. */
@@ -3080,6 +3095,7 @@ class MainActivity : Activity() {
                     choice == Bing.CHOICE -> BitmapFactory.decodeFile(Bing.file(this@MainActivity).path, small)
                     choice == ShowsWall.CHOICE -> BitmapFactory.decodeFile(ShowsWall.file(this@MainActivity).path, small)
                     choice.startsWith("file:") -> BitmapFactory.decodeFile(File(wallpaperDir(), choice.removePrefix("file:")).path, small)
+                    choice.startsWith("pack:") -> BitmapFactory.decodeFile(File(packDir(), choice.removePrefix("pack:")).path, small)
                     choice.startsWith("video:") -> File(wallpaperDir(), choice.removePrefix("video:")).takeIf { it.isFile }?.let { videoPoster(it) }?.let { p ->
                         val w = if (big) 480 else 160
                         Bitmap.createScaledBitmap(p, w, maxOf(1, w * p.height / p.width), true).also { if (it !== p) p.recycle() }
@@ -4343,28 +4359,35 @@ class MainActivity : Activity() {
      * Fetches the Gallery paintings into a temporary folder and only swaps it in once every file arrived,
      * so a dropped connection never leaves a half-filled Gallery behind.
      */
-    private fun downloadPaintings(then: () -> Unit) {
+    private fun downloadPaintings(then: () -> Unit) =
+        download(PAINTINGS_URL, PAINTING_FILES, paintingsDir(this), getString(R.string.downloading_paintings, PAINTINGS_MB), R.string.paintings_failed) { ok ->
+            if (ok) then()
+            if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.screensaver)
+        }
+
+    /** Fetches [files] from [url] into [dir], all or nothing; [done] runs on the UI thread with whether they all arrived. */
+    private fun download(url: String, files: List<String>, dir: File, start: String, failed: Int, done: (Boolean) -> Unit) {
         if (downloading) return
         downloading = true
-        toast(getString(R.string.downloading_paintings, PAINTINGS_MB))
+        toast(start)
         Thread {
-            val part = File(filesDir, "paintings.part").apply { deleteRecursively(); mkdirs() }
+            val part = File(dir.path + ".part").apply { deleteRecursively(); mkdirs() }
             val ok = try {
-                for (f in PAINTING_FILES) openStream(PAINTINGS_URL + f).use { input ->
+                for (f in files) openStream(url + f).use { input ->
                     File(part, f).outputStream().use { input.copyTo(it) }
                 }
-                paintingsDir(this).deleteRecursively()
-                part.renameTo(paintingsDir(this))
+                dir.deleteRecursively()
+                part.renameTo(dir)
             } catch (e: Exception) {
-                android.util.Log.w("Plume", "paintings download failed ($e)")
+                android.util.Log.w("Plume", "download from $url failed ($e)")
                 part.deleteRecursively()
                 false
             }
             ui.post {
                 if (isDestroyed) return@post
                 downloading = false
-                if (ok) then() else toast(getString(R.string.paintings_failed), long = true)
-                if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.screensaver)
+                if (!ok) toast(getString(failed), long = true)
+                done(ok)
             }
         }.start()
     }
@@ -5411,6 +5434,14 @@ class MainActivity : Activity() {
             "Mist (day)" to R.drawable.wallpaper,
             "Peak (dusk)" to R.drawable.wallpaper_dark,
         )
+        /** The wallpaper pack: photos picked on a TV to suit Clear and Frosted glass, fetched only when asked. File, name, dark. */
+        val PACK_WALLPAPERS = listOf(
+            Triple("niteroi.webp", "Niterói", false), Triple("valencia-mist.webp", "Valencia mist", false),
+            Triple("muralla-roja.webp", "Muralla Roja", false), Triple("hemisferic.webp", "Hemisfèric", true),
+            Triple("light-trails.webp", "Light trails", true), Triple("t-centralen.webp", "T-Centralen", true),
+        )
+        const val PACK_URL = "https://github.com/aradhyas8/Plume_Launcher/releases/download/wallpapers-1/"
+        const val PACK_MB = "1.2 MB"
         val PIN_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
