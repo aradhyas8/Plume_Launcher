@@ -2301,11 +2301,13 @@ class MainActivity : Activity() {
             R.string.clock_size to { d ->
                 prefs.edit().putString("clock_size", CLOCK_SIZES.keys.toList().step(clockSize(), d).toString()).apply()
                 findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
+                findViewById<View>(R.id.clock).post { fitInk() } // the clock now covers other pixels
                 renderSettings(R.string.clock_size)
             },
             R.string.clock_style to { d ->
                 prefs.edit().putString("clock_style", CLOCK_STYLES.keys.toList().step(prefs.getString("clock_style", "light")!!, d)).apply()
                 findViewById<TextView>(R.id.clock).typeface = clockFace()
+                findViewById<View>(R.id.clock).post { fitInk() } // the clock now covers other pixels
                 renderSettings(R.string.clock_style)
             },
             R.string.icon_style to { d ->
