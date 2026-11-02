@@ -48,6 +48,11 @@
     <string name="edit_apps_row">Uygulama satırını düzenle</string>
     <string name="theme">Tema</string>
     <string name="sort_apps">Uygulamaları sırala</string>
+    <string name="row_size">Boyut</string>
+    <string name="size_standard">Standart</string>
+    <string name="size_large">Büyük</string>
+    <string name="size_largest">En büyük</string>
+    <string name="help_row_size">Satırdaki uygulamaları büyütür. Ekrana daha az uygulama sığar. Her boyutu denemek için ‹ › tuşlarına basın.</string>
     <string name="manual">Manuel</string>
     <string name="most_used">En çok kullanılanlar</string>
     <string name="apps_in_row">Satırdaki uygulamalar</string>

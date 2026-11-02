@@ -72,6 +72,11 @@
     <string name="glass_frosted">Frosted</string>
     <string name="glass_clear">Clear</string>
     <string name="sort_apps">Order</string>
+    <string name="row_size">Size</string>
+    <string name="size_standard">Standard</string>
+    <string name="size_large">Large</string>
+    <string name="size_largest">Largest</string>
+    <string name="help_row_size">Makes the apps in the row bigger. Fewer apps fit across the screen. Press ‹ › to try each size.</string>
     <string name="manual">Manual</string>
     <string name="most_used">Most used</string>
     <string name="apps_in_row">Choose apps</string>

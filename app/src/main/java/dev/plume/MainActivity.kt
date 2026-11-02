@@ -22,6 +22,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
@@ -412,9 +413,11 @@ class MainActivity : Activity() {
             setColorFilter(fg)
             val ring = GradientDrawable().apply { shape = GradientDrawable.OVAL }
             // Lit, the icon sits on its ring, so it takes the theme colour; otherwise it's on the wallpaper (see fitInk).
-            background = ring
+            // Under the ring, the icon's shadow (see iconShadow); empty until fitInk.
+            background = LayerDrawable(arrayOf(ColorDrawable(Color.TRANSPARENT), ring))
             setOnFocusChangeListener { v, focused ->
                 if (focused) lastTop = v
+                (background as LayerDrawable).getDrawable(0).alpha = if (focused) 0 else 255 // on its disc it needs none
                 // With glass a lit icon sits on a glass disc: the frost, its light and the wallpaper's tint.
                 val disc = glassActive()
                 ring.setColor(if (!focused) 0 else if (disc) glassLook().tile(lit = true) else if (dark) DARK_CARD_LIT[0] else Color.WHITE)
@@ -951,6 +954,7 @@ class MainActivity : Activity() {
         iconInk = fg
         for (v in topIcons()) v.setColorFilter(if (v.isFocused) fg else iconInk)
         watchInk = fg
+        appsInk = fg
     }
 
     // ---------- text over the wallpaper ----------
@@ -961,6 +965,7 @@ class MainActivity : Activity() {
     private var wpThumb: Bitmap? = null
     private var watchInk = Color.BLACK
     private var iconInk = Color.BLACK
+    private var appsInk = Color.BLACK
 
     private fun topIcons() = TOP_KEYS.keys.toList()
         .map { findViewById<ImageView>(it) }
@@ -971,15 +976,50 @@ class MainActivity : Activity() {
         for (v in top) ink(v, topInk, fade = true)
         val icons = topIcons()
         iconInk = inkBehind(icons)
-        for (v in icons) if (!v.isFocused) v.setColorFilter(iconInk)
-        val apps = listOf(R.id.appsTitle, R.id.rowLabel).map { findViewById<TextView>(it) }
-        val appsInk = inkBehind(apps)
-        for (v in apps) ink(v, appsInk, fade = true)
-        val watch = listOf(watchTitle) + (0 until watchRow.childCount).flatMap { i ->
-            (watchRow.getChildAt(i) as ViewGroup).let { col -> (0 until col.childCount).mapNotNull { col.getChildAt(it) as? TextView } }
+        for (v in icons) {
+            if (!v.isFocused) v.setColorFilter(iconInk)
+            iconShadow(v)
         }
+        val names = findViewById<LinearLayout>(R.id.nameRow).let { row -> (0 until row.childCount).map { row.getChildAt(it) as TextView } }
+        val apps = listOf(findViewById<TextView>(R.id.appsTitle)) + names
+        appsInk = inkBehind(apps)
+        for (v in apps) ink(v, appsInk, fade = true)
+        // The On focus name moves under each tile, so it is measured where it sits (and again as it moves, see showRowLabel).
+        findViewById<TextView>(R.id.rowLabel).let { ink(it, inkBehind(listOf(it)), fade = true) }
+        val cols = (0 until watchRow.childCount).map { watchRow.getChildAt(it) as ViewGroup }
+        val watch = listOf(watchTitle) + cols.flatMap { col -> (0 until col.childCount).mapNotNull { col.getChildAt(it) as? TextView } }
         watchInk = inkBehind(watch)
         for (v in watch) ink(v, watchInk, fade = true)
+        // The progress bar and the source mark go with the card's text.
+        for (col in cols) for (i in 0 until col.childCount) when (val v = col.getChildAt(i)) {
+            is ProgressBar -> v.progressDrawable = progressBarDrawable(watchInk)
+            is TextView -> if (v.tag == INK_MARK) v.compoundDrawablesRelative[0]?.setTint(watchInk)
+        }
+    }
+
+    /**
+     * A soft shadow in the opposite colour under a top icon, as [ink] gives text, so it holds on busy photos too.
+     * Drawn once into a small bitmap in the icon's background, under its focus ring; none on a plain wallpaper.
+     */
+    private fun iconShadow(v: ImageView) {
+        val layers = v.background as? LayerDrawable ?: return
+        val icon = v.drawable?.constantState?.newDrawable(resources)?.mutate()
+        val box = v.layoutParams.width - v.paddingLeft - v.paddingRight
+        if (wpThumb == null || icon == null || box <= 0) return layers.setDrawable(0, ColorDrawable(Color.TRANSPARENT))
+        val blur = dp(3)
+        val mask = Bitmap.createBitmap(box + blur * 2, box + blur * 2, Bitmap.Config.ARGB_8888)
+        icon.setBounds(blur, blur, blur + box, blur + box)
+        icon.draw(Canvas(mask))
+        val shape = mask.extractAlpha()
+        mask.eraseColor(Color.TRANSPARENT)
+        Canvas(mask).drawBitmap(shape, 0f, dp(1).toFloat(), Paint().apply {
+            color = if (iconInk == Color.WHITE) 0x80000000.toInt() else 0x80FFFFFF.toInt()
+            maskFilter = BlurMaskFilter(blur.toFloat(), BlurMaskFilter.Blur.NORMAL)
+        })
+        shape.recycle()
+        layers.setDrawable(0, BitmapDrawable(resources, mask).apply { alpha = if (v.isFocused) 0 else 255 })
+        val inset = v.paddingLeft - blur
+        layers.setLayerInset(0, inset, inset, inset, inset)
     }
 
     /** White or near-black, by the average brightness of the wallpaper under [views]; the theme colour without a photo. */
@@ -2080,6 +2120,11 @@ class MainActivity : Activity() {
                 prefs.edit().putString("theme", listOf("light", "dark", "auto").step(theme, d)).putBoolean("reopen_settings", true).apply()
                 recreate() // colours are applied once per activity; reopen the panel after
             },
+            R.string.row_size to { d ->
+                prefs.edit().putString("row_size", ROW_SIZES.keys.toList().step(rowSize(), d)).apply()
+                renderApps()
+                renderSettings(R.string.row_size)
+            },
             R.string.row_position to { d ->
                 prefs.edit().putString("row_align", ROW_ALIGN.keys.toList().step(rowAlign(), d)).apply()
                 alignRow()
@@ -2144,6 +2189,9 @@ class MainActivity : Activity() {
             },
             R.string.icon_style to Triple(getString(R.string.icon_style), getString(ICON_STYLES.getValue(iconStyle()))) {
                 steps[R.string.icon_style]!!(1)
+            },
+            R.string.row_size to Triple(getString(R.string.row_size), getString(ROW_SIZES.getValue(rowSize()).first)) {
+                steps[R.string.row_size]!!(1)
             },
             R.string.restore_hidden to Triple(getString(R.string.restore_hidden), if (hidden == 0) getString(R.string.none_hidden) else resources.getQuantityString(R.plurals.show_again, hidden, hidden)) {
                 prefs.edit().remove("hidden_watch").apply()
@@ -2226,7 +2274,7 @@ class MainActivity : Activity() {
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${rows[R.string.weather_location]!!.second}",
                 listOf(R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.section_app_row, "${rows[R.string.apps_in_row]!!.second} · ${rows[R.string.row_position]!!.second}",
-                listOf(R.string.edit_apps_row, R.string.apps_in_row, R.string.sort_apps, R.string.icon_style, R.string.app_names, R.string.row_position)),
+                listOf(R.string.edit_apps_row, R.string.apps_in_row, R.string.sort_apps, R.string.icon_style, R.string.row_size, R.string.app_names, R.string.row_position)),
             // "Apps when row hides" only means something once the row can hide.
             Triple(R.string.bottom_row, rowName(), listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
                 R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.restore_hidden)),
@@ -2257,6 +2305,7 @@ class MainActivity : Activity() {
                     R.string.theme_auto to R.drawable.ic_auto).map { (s, i) -> getString(s) to i },
                 R.string.sort_apps to listOf(R.string.manual, R.string.most_used).map { getString(it) to null },
                 R.string.app_names to listOf(R.string.on_focus, R.string.always, R.string.never).map { getString(it) to null },
+                R.string.row_size to ROW_SIZES.values.map { getString(it.first) to null },
                 R.string.row_position to ROW_ALIGN.values.map { getString(it.first) to null },
                 R.string.show_row to ROW_SHOW.values.map { getString(it) to null },
                 R.string.apps_when_hidden to listOf(R.string.stays_put, R.string.moves_down).map { getString(it) to null },
@@ -2737,6 +2786,7 @@ class MainActivity : Activity() {
     private fun showNet(caps: NetworkCapabilities?) {
         val ethernet = caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
         wifi.setImageResource(if (ethernet) R.drawable.ic_ethernet else R.drawable.ic_wifi)
+        iconShadow(wifi) // the shadow takes the new picture's shape
         // Dim only the icon: the focus ring is the background and should stay full strength.
         wifi.imageAlpha = if (caps == null) 90 else 255
     }
@@ -2879,7 +2929,7 @@ class MainActivity : Activity() {
     private fun alignRow() {
         val content = appRow.parent as View
         (content.layoutParams as FrameLayout.LayoutParams).gravity =
-            if (appTileCount() > ROW_TILES) Gravity.START else ROW_ALIGN[rowAlign()]!!.second
+            if (appTileCount() > rowTiles()) Gravity.START else ROW_ALIGN[rowAlign()]!!.second
         content.requestLayout()
     }
 
@@ -2891,11 +2941,12 @@ class MainActivity : Activity() {
         val takeFocus = currentFocus == null || currentFocus?.parent === appRow || firstFill
         val gap = dp(GRID_GAP)
         val width = rowTileWidth()
-        val tileH = if (isBannerStyle(iconStyle())) width * 9 / 16 else dp(76) // 16:9 like a banner
+        val tileH = if (isBannerStyle(iconStyle())) width * 9 / 16 else (dp(76) * rowScale()).toInt() // 16:9 like a banner
         // The row sits on the bottom of its space. A banner row is shorter, so lift it by half the difference: its
-        // centre stays where the card row's is, between the clock and Continue Watching.
+        // centre stays where the card row's is, between the clock and Continue Watching. A taller row (Large,
+        // Largest) grows upward only, or it would cover Continue Watching's title.
         findViewById<View>(R.id.appScroll).apply {
-            (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(-24) + (dp(76) - tileH) / 2
+            (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(-24) + maxOf(0, dp(76) - tileH) / 2
             requestLayout()
         }
         appRow.removeAllViews()
@@ -2932,12 +2983,21 @@ class MainActivity : Activity() {
     /** A brand or app colour made deep enough to carry a white mark. */
     private fun deepen(c: Int) = Color.rgb((Color.red(c) * 0.6f).toInt(), (Color.green(c) * 0.6f).toInt(), (Color.blue(c) * 0.6f).toInt())
 
-    /** Width of a home row tile: eight across the screen. */
-    private fun rowTileWidth() = (resources.displayMetrics.widthPixels - dp(96) - dp(GRID_GAP) * (ROW_TILES - 1)) / ROW_TILES
+    /** "standard", "large" or "largest": how big the home row's tiles and banners are. */
+    private fun rowSize() = prefs.getString("row_size", "standard")!!.takeIf { it in ROW_SIZES } ?: "standard"
+
+    private fun rowTiles() = ROW_SIZES.getValue(rowSize()).second
+
+    /** Width of a home row tile: [across] of them fill the screen, eight at Standard size. */
+    private fun rowTileWidth(across: Int = rowTiles()) = (resources.displayMetrics.widthPixels - dp(96) - dp(GRID_GAP) * (across - 1)) / across
+
+    /** How much bigger the row's tiles are than at Standard size: their height and the space around the mark grow with it. */
+    private fun rowScale() = rowTileWidth().toFloat() / rowTileWidth(ROW_TILES)
 
     /**
-     * Apple TV style: the app's own banner fills the tile, rounded. Only when the banner is at least as wide as the
-     * tile, or it would be upscaled and soft (4K); null then, and the tile shows the app's mark as usual.
+     * Apple TV style: the app's own banner fills the tile, rounded. Only when the banner is at least as wide as a
+     * Standard-size tile, or it would be upscaled and soft (4K); null then, and the tile shows the app's mark as usual.
+     * Large and Largest stretch a banner of that width a little (most are 320 px, Largest is ~400 px on a 1080p TV).
      */
     private fun bannerTile(a: App): View? {
         if (a.pkg.startsWith(HDMI)) return null
@@ -2947,7 +3007,7 @@ class MainActivity : Activity() {
             null
         } ?: return null
         val w = rowTileWidth()
-        if (banner.intrinsicWidth in 1 until w) return null
+        if (banner.intrinsicWidth in 1 until rowTileWidth(ROW_TILES)) return null
         // Drawn once, centre-cropped, at the tile's exact size: a row of banners then costs ~80 KB each, not the
         // banner's own size, and the full-size banner isn't kept.
         val h = w * 9 / 16
@@ -2968,26 +3028,16 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.FIT_XY
             if (grey) { colorFilter = GREYSCALE; alpha = rest }
         }
-        // A colour banner has nothing else to tell the selected tile from the others: the rest are dimmed a little,
-        // and the selected one gets a ring in the text colour. Both fade over the same 160 ms as the lift.
+        // A colour banner rests dimmed a little, so the selected one, risen out of the row, also stands out in
+        // brightness. The dim fades over the same 160 ms as the lift.
         val dim = View(this).apply { setBackgroundColor(Color.BLACK); alpha = if (grey) 0f else BANNER_DIM }
-        val ring = View(this).apply {
-            background = GradientDrawable().apply {
-                cornerRadius = dp(8).toFloat()
-                setStroke(dp(3), fg)
-                setColor(Color.TRANSPARENT)
-            }
-            alpha = 0f
-        }
         val col = FrameLayout(this).apply {
             addView(pic, MATCH_PARENT, MATCH_PARENT)
             addView(dim, MATCH_PARENT, MATCH_PARENT)
-            addView(ring, MATCH_PARENT, MATCH_PARENT)
             tag = a.pkg
             setOnClickListener { launch(a) }
         }
         style(col, dp(8), card = false, lift = 1.12f) { focused ->
-            ring.animate().alpha(if (focused) 1f else 0f).setDuration(160).start()
             if (!grey) dim.animate().alpha(if (focused) 0f else BANNER_DIM).setDuration(160).start()
             if (!grey) return@style
             pic.colorFilter = if (focused) null else GREYSCALE
@@ -3012,7 +3062,7 @@ class MainActivity : Activity() {
             a.pkg.startsWith(HDMI) -> tile(name, a.icon, true, a.pkg,
                 tint = BRAND_COLOURS[hdmiIcon(a.label, true)]?.takeIf { colour }) { launch(a) }
             logo != null -> tile(name.takeIf { !logo.second }, getDrawable(logo.first)!!, true, a.pkg,
-                wordmarkInset = if (!logo.second) null else dp(if (labeled) 28 else 14),
+                wordmarkInset = if (!logo.second) null else if (labeled) dp(28) else (dp(14) * rowScale()).toInt(),
                 tint = if (onColour && BRAND_COLOURS[a.pkg] != null) Color.WHITE else BRAND_COLOURS[a.pkg]?.takeIf { colour }) { launch(a) }
                 .also { if (onColour) BRAND_COLOURS[a.pkg]?.let { c -> it.backgroundTintList = ColorStateList.valueOf(deepen(c)) } }
             else -> cachedGlyph(a)?.let { g ->
@@ -3041,8 +3091,10 @@ class MainActivity : Activity() {
             row.addView(fittingLabel(t.contentDescription.toString(), 13f).apply {
                 gravity = Gravity.CENTER
                 alpha = if (dark) 0.85f else 1f
+                ink(this, appsInk)
             }, LinearLayout.LayoutParams(t.layoutParams as LinearLayout.LayoutParams).apply { height = MATCH_PARENT })
         }
+        row.post { fitInk() } // measured again over the names' own place on the wallpaper
     }
 
     /** Slides the shared name label under the focused row tile; fades it out once focus leaves the row. */
@@ -3062,6 +3114,7 @@ class MainActivity : Activity() {
                 label.box = v.width // the name stays inside its tile: when it is wider it scrolls
                 label.translationX = v.left + v.width / 2f - label.width / 2f
                 label.setActive(true)
+                ink(label, inkBehind(listOf(label))) // measured where it now sits, not where it was when fitInk ran
             }
             if (v.width > 0 && label.width > 0) place() else v.post { if (v.isFocused) place() }
             label.animate().alpha(if (dark) 0.85f else 1f).setDuration(160).start()
@@ -3110,8 +3163,10 @@ class MainActivity : Activity() {
                 img.scaleType = ImageView.ScaleType.CENTER_CROP
                 img.setPadding(wordmarkInset, 0, wordmarkInset, 0)
             } else {
-                val v = if (isBannerStyle(iconStyle())) dp(8) else dp(20) // banner rows are shorter
-                img.setPadding(dp(16), v, dp(16), v)
+                val s = rowScale() // only home row tiles have no name: All apps keeps its one size
+                val v = ((if (isBannerStyle(iconStyle())) dp(8) else dp(20)) * s).toInt() // banner rows are shorter
+                val h = (dp(16) * s).toInt()
+                img.setPadding(h, v, h, v)
             }
             col.addView(img, LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         } else {
@@ -3425,6 +3480,7 @@ class MainActivity : Activity() {
         // Found before they leave the bar: findViewById cannot see a view that has been removed.
         val views = TOP_KEYS.keys.associateWith { findViewById<View>(it) }
         val start = views.values.minOf { bar.indexOfChild(it) }
+        val focused = currentFocus?.takeIf { it.parent === bar }
         views.values.forEach { bar.removeView(it) }
         val shown = shownTop(order)
         (order + (TOP_KEYS.keys - order.toSet())).forEachIndexed { i, id ->
@@ -3434,6 +3490,9 @@ class MainActivity : Activity() {
             v.visibility = if (id in shown) View.VISIBLE else View.GONE
             bar.addView(v, start + i, lp)
         }
+        // Taking the focused icon out passed focus on, down to the empty app row's scroller on a cold start, and
+        // then the first fill of the row did not take it. Give it back to the bar.
+        focused?.let { (if (it.visibility == View.VISIBLE) it else findViewById(shown.first())).requestFocus() }
     }
 
     private fun saveTopOrder(order: List<Int>) {
@@ -4433,7 +4492,7 @@ class MainActivity : Activity() {
     private fun sourceIcon(pkg: String?): Drawable? {
         if (pkg == null) return null
         val colour = cwColour()
-        val tint = BRAND_COLOURS[pkg]?.takeIf { colour } ?: fg
+        val tint = BRAND_COLOURS[pkg]?.takeIf { colour } ?: watchInk // a mark without its brand colour goes with the card's text
         LOGOS[pkg]?.takeIf { !it.second }?.let { return getDrawable(it.first)!!.mutate().apply { setTint(tint) } }
         return try {
             packageManager.getApplicationIcon(pkg).mutate().apply { if (!colour) colorFilter = GREYSCALE }
@@ -4573,7 +4632,7 @@ class MainActivity : Activity() {
         col.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
             progress = p.progress
-            progressDrawable = progressBarDrawable()
+            progressDrawable = progressBarDrawable(watchInk)
             visibility = if (p.progress > 0) View.VISIBLE else View.INVISIBLE
         }, LinearLayout.LayoutParams(w, dp(3)).apply { topMargin = dp(8) })
         col.addView(title)
@@ -4587,6 +4646,8 @@ class MainActivity : Activity() {
                     it.setBounds(0, 0, dp(12), dp(12))
                     setCompoundDrawablesRelative(it, null, null, null)
                     compoundDrawablePadding = dp(6)
+                    // A plain mark (not the app's own icon, not in brand colour) follows the text: fitInk re-tints it.
+                    if (LOGOS[p.pkg]?.second == false && (!cwColour() || BRAND_COLOURS[p.pkg] == null)) tag = INK_MARK
                 }
             })
         }
@@ -4594,11 +4655,12 @@ class MainActivity : Activity() {
         return col
     }
 
-    private fun progressBarDrawable(): Drawable {
+    /** [ink] fills it; the track is a faint version on the same side, light behind white and dark behind near-black. */
+    private fun progressBarDrawable(ink: Int = fg): Drawable {
         fun bar(color: Int) = GradientDrawable().apply { cornerRadius = dp(2).toFloat(); setColor(color) }
         return LayerDrawable(arrayOf(
-            bar(if (dark) 0x40FFFFFF else 0x26000000),
-            ClipDrawable(bar(fg), Gravity.START, ClipDrawable.HORIZONTAL),
+            bar(if (Color.luminance(ink) > 0.5f) 0x40FFFFFF else 0x26000000),
+            ClipDrawable(bar(ink), Gravity.START, ClipDrawable.HORIZONTAL),
         )).apply {
             setId(0, android.R.id.background)
             setId(1, android.R.id.progress)
@@ -4696,8 +4758,12 @@ class MainActivity : Activity() {
             if (card && dark) v.background = rimCard(radius, focused, frosted = frosted)
             else if (card) v.background = if (focused) lit else rest
             if (frosted) glass.kick(260) // the lift moves the tile: its blur follows
+            // The selected tile rises out of the row's line. Its growth stops short of the gap, so at the
+            // largest size it still doesn't cover its neighbours.
+            val grow = if (focused && v.width > 0) minOf(lift, 1 + dp(GRID_GAP) * 1.2f / v.width) else 1f
             v.animate()
-                .scaleX(if (focused) lift else 1f).scaleY(if (focused) lift else 1f)
+                .scaleX(grow).scaleY(grow)
+                .translationY(if (focused) -maxOf(v.height * 0.06f, dp(4).toFloat()) else 0f)
                 .translationZ(if (focused) dp(14).toFloat() else 0f)
                 .setDuration(160).setInterpolator(DECELERATE).start()
             onFocus?.invoke(focused)
@@ -4815,7 +4881,7 @@ class MainActivity : Activity() {
             R.string.section_lock to R.string.help_lock,
             R.string.weather_location to R.string.help_location,
             R.string.edit_apps_row to R.string.help_rearrange, R.string.apps_in_row to R.string.help_choose_apps,
-            R.string.sort_apps to R.string.help_order, R.string.icon_style to R.string.help_icon_style,
+            R.string.sort_apps to R.string.help_order, R.string.icon_style to R.string.help_icon_style, R.string.row_size to R.string.help_row_size,
             R.string.apps_when_hidden to R.string.help_apps_when_hidden, R.string.row_name to R.string.help_row_name,
             R.string.show_icons to R.string.help_show_icons,
             R.string.cw_apps to R.string.help_from_apps, R.string.cw_channels to R.string.help_channels,
@@ -4867,12 +4933,15 @@ class MainActivity : Activity() {
         const val WRITE_EPG ="com.android.providers.tv.permission.WRITE_EPG_DATA"
         const val TV_SETTINGS = "com.android.tv.settings"
         const val HDMI = "hdmi:" // App.pkg prefix for HDMI device tiles; the rest is the TV input id
-        const val ROW_TILES = 8
+        const val ROW_TILES = 8 // across at Standard size; the other sizes scale from it
+        /** "Size" setting -> its name, and how many tiles fit across. 8 and 4 keep the columns over the four cards. */
+        val ROW_SIZES = linkedMapOf("standard" to (R.string.size_standard to 8), "large" to (R.string.size_large to 6), "largest" to (R.string.size_largest to 4))
         /** Icon style setting -> its name. */
         val ICON_STYLES = linkedMapOf(ICON_STYLE_KEYS[0] to R.string.monochrome, ICON_STYLE_KEYS[1] to R.string.colour, ICON_STYLE_KEYS[2] to R.string.banner, ICON_STYLE_KEYS[3] to R.string.banner_mono)
         /** Glass setting -> its styles in cycling order; null is off. */
         val GLASS_STYLES: List<GlassStyle?> = listOf(null, GlassStyle.FROSTED, GlassStyle.CLEAR)
         const val GRID_GAP = 16 // dp; shared by the apps row and the cards so their columns line up
+        const val INK_MARK = "ink mark" // tag on a card's detail line whose source mark takes the text colour
         /** Shown names for the wallpaper keys saved in prefs (the keys stay English). */
         val WALLPAPER_NAMES = mapOf(
             "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,

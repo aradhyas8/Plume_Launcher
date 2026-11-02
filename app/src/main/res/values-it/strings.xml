@@ -53,6 +53,11 @@
     <string name="glass_frosted">Smerigliato</string>
     <string name="glass_clear">Trasparente</string>
     <string name="sort_apps">Ordine</string>
+    <string name="row_size">Dimensione</string>
+    <string name="size_standard">Standard</string>
+    <string name="size_large">Grande</string>
+    <string name="size_largest">Molto grande</string>
+    <string name="help_row_size">Ingrandisce le app della riga. Ne stanno meno in larghezza. Premi ‹ › per provare ogni dimensione.</string>
     <string name="manual">Manuale</string>
     <string name="most_used">Più usate</string>
     <string name="apps_in_row">Scegli le app</string>

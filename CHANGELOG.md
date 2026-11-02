@@ -16,6 +16,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Bigger apps.** Select **Plume settings → Apps row → Size**, then **Standard**, **Large** or **Largest**. Large shows 6 apps across, and Largest shows 4. Banners and icon tiles both grow.
 - **Wallpapers show as they are.** Plume no longer adds dark fades or black over a picture or a video. The text and the glass change to suit the picture. **Top fade** and **Bottom fade** are gone.
 - **New bundled wallpapers.** **Mist (day)** and **Peak (dusk)** replace the two Rockies pictures.
 - The **Glass** setting changes tiles, cards and the settings panel live without restarting Plume.
