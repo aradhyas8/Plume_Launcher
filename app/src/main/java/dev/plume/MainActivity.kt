@@ -1006,14 +1006,14 @@ class MainActivity : Activity() {
         val icon = v.drawable?.constantState?.newDrawable(resources)?.mutate()
         val box = v.layoutParams.width - v.paddingLeft - v.paddingRight
         if (wpThumb == null || icon == null || box <= 0) return layers.setDrawable(0, ColorDrawable(Color.TRANSPARENT))
-        val blur = dp(3)
+        val blur = dp(2)
         val mask = Bitmap.createBitmap(box + blur * 2, box + blur * 2, Bitmap.Config.ARGB_8888)
         icon.setBounds(blur, blur, blur + box, blur + box)
         icon.draw(Canvas(mask))
         val shape = mask.extractAlpha()
         mask.eraseColor(Color.TRANSPARENT)
         Canvas(mask).drawBitmap(shape, 0f, dp(1).toFloat(), Paint().apply {
-            color = if (iconInk == Color.WHITE) 0x80000000.toInt() else 0x80FFFFFF.toInt()
+            color = if (iconInk == Color.WHITE) 0x59000000 else 0x59FFFFFF
             maskFilter = BlurMaskFilter(blur.toFloat(), BlurMaskFilter.Blur.NORMAL)
         })
         shape.recycle()
@@ -1057,7 +1057,8 @@ class MainActivity : Activity() {
      */
     private fun ink(v: TextView, color: Int, fade: Boolean = false) {
         if (wpThumb == null) v.setShadowLayer(0f, 0f, 0f, 0)
-        else v.setShadowLayer(dp(7).toFloat(), 0f, dp(1).toFloat(), if (color == Color.WHITE) 0xCC000000.toInt() else 0xB3FFFFFF.toInt())
+        // Tight and light: a wide one is cut off at the view's edges and shows as a dark box behind the text.
+        else v.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), if (color == Color.WHITE) 0x73000000 else 0x66FFFFFF)
         if (!fade || v.currentTextColor == color) return v.setTextColor(color)
         ValueAnimator.ofArgb(v.currentTextColor, color).apply {
             duration = 800 // with the wallpaper's crossfade
