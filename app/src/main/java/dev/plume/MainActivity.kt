@@ -3024,9 +3024,10 @@ class MainActivity : Activity() {
         val width = rowTileWidth()
         val tileH = if (isBannerStyle(iconStyle())) width * 9 / 16 else (dp(76) * rowScale()).toInt() // 16:9 like a banner
         // The row sits on the bottom of its space. A banner row is shorter, so lift it by half the difference: its
-        // centre stays where the card row's is, between the clock and Continue Watching.
+        // centre stays where the card row's is, between the clock and Continue Watching. A taller row (Large,
+        // Largest) grows upward only, or it would cover Continue Watching's title.
         findViewById<View>(R.id.appScroll).apply {
-            (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(-24) + (dp(76) - tileH) / 2
+            (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(-24) + maxOf(0, dp(76) - tileH) / 2
             requestLayout()
         }
         appRow.removeAllViews()
