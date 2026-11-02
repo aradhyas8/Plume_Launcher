@@ -1541,9 +1541,9 @@ class MainActivity : Activity() {
         (focus ?: grid.getFocusables(View.FOCUS_DOWN).firstOrNull())?.requestFocus()
     }
 
-    /** The pictures that ship with Plume, and the plain colour of the theme. */
+    /** The pictures that ship with Plume, and the plain colour of the theme. A pack photo that also ships is listed once. */
     private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } +
-        PACK_WALLPAPERS.filter { File(packDir(), it.first).isFile }.sortedBy { it.third != forDark }.map { "pack:${it.first}" } + plainWallpaper(forDark)
+        PACK_WALLPAPERS.filter { it.second !in BUNDLED_WALLPAPERS && File(packDir(), it.first).isFile }.sortedBy { it.third != forDark }.map { "pack:${it.first}" } + plainWallpaper(forDark)
 
     private fun packDir() = File(filesDir, "wallpaper-pack")
     private fun packReady() = PACK_WALLPAPERS.all { File(packDir(), it.first).exists() }
