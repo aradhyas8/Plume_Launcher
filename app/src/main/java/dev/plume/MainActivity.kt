@@ -391,6 +391,12 @@ class MainActivity : Activity() {
         allApps = findViewById(R.id.allApps)
         allAppsGrid = findViewById(R.id.allAppsGrid)
         wifi = findViewById(R.id.wifi)
+        // A new install starts on Arctic Aurora, light, with Frosted glass; an update keeps what it has.
+        val info = packageManager.getPackageInfo(packageName, 0)
+        if (info.firstInstallTime == info.lastUpdateTime && !prefs.contains("wp_light") && !prefs.contains("wp_dark"))
+            prefs.edit().putString("wp_light", FIRST_WALLPAPER).putString("wp_dark", FIRST_WALLPAPER)
+                .putString("theme", "light").putString("glass_style", GlassStyle.FROSTED.key).apply()
+        fetchFirstWallpaper4k()
         if (!prefs.getBoolean("wp_shared", false)) {
             val wasDark = wantDark()
             val choice = prefs.getString(if (wasDark) "wp_dark" else "wp_light", null)
@@ -1489,8 +1495,28 @@ class MainActivity : Activity() {
         }
     }
 
+    /** The downloaded 4K pack photo for a bundled wallpaper, if there is one. */
+    private fun packFor(bundled: String) =
+        packDir().listFiles { f -> f.isFile && packFileName(f.name) && packPhotoName(f.name) == bundled }?.firstOrNull()
+
+    /** While Arctic Aurora is in use, get its 4K photo once; until then, and if that fails, the 1080p copy shows. */
+    private fun fetchFirstWallpaper4k() {
+        if (FIRST_WALLPAPER !in listOf(currentWallpaper(false), currentWallpaper(true))) return
+        if (File(packDir(), FIRST_WALLPAPER_4K.file).isFile) return
+        io.execute {
+            val ok = try {
+                FIRST_WALLPAPER_4K.download(packDir()) { openStream(PACK_URL + FIRST_WALLPAPER_4K.file + "?v=" + FIRST_WALLPAPER_4K.sha) }
+            } catch (e: Exception) {
+                android.util.Log.w("Plume", "first wallpaper 4K", e)
+                false
+            }
+            if (ok) ui.post { if (!isDestroyed && currentWallpaper() == FIRST_WALLPAPER) loadWallpaper() }
+        }
+    }
+
     private fun decodeWallpaper(choice: String): Bitmap? {
         BUNDLED_WALLPAPERS[choice.removePrefix("res:")]?.let { res ->
+            packFor(choice.removePrefix("res:"))?.let { f -> return fitWallpaper { f.inputStream() } }
             return BitmapFactory.decodeResource(resources, res)
         }
         return when {
@@ -5636,7 +5662,11 @@ class MainActivity : Activity() {
             "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,
             "Pure black" to R.string.wp_pure_black, "Soft white" to R.string.wp_soft_white,
         )
-        val BUNDLED_WALLPAPERS = emptyMap<String, Int>()
+        /** By pack photo name: a 1080p copy ships in the app, and the 4K pack photo of that name replaces it once downloaded. */
+        val BUNDLED_WALLPAPERS = mapOf("Arctic Aurora" to R.drawable.wallpaper_aurora)
+        const val FIRST_WALLPAPER = "res:Arctic Aurora"
+        // ponytail: pinned to today's blob; if the photo changes on main the fetch fails and the 1080p copy stays.
+        val FIRST_WALLPAPER_4K = PackPhoto("05_Arctic_Aurora.webp", 1_145_394, "fb288f54f21328355cf2d2c0cb23148069888628")
         const val PACK_URL = "https://raw.githubusercontent.com/aradhyas8/Plume_Launcher/main/wallpapers/"
         val PIN_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
