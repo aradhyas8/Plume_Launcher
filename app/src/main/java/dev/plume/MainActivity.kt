@@ -833,7 +833,7 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Once after an update: the first four CHANGELOG.md entries of this version, so put the best ones first.
+     * Once after an update: the first six CHANGELOG.md entries of this version, so put the best ones first.
      * The card shows each entry's bold headline and the sentence after it; See all changes shows the rest.
      * Closing it counts as reading the notes, which clears the dot on the Plume settings icon.
      */
@@ -842,7 +842,7 @@ class MainActivity : Activity() {
         updateBadge()
         val notes = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            getString(R.string.whats_new).split('\n').filter { !it.startsWith("#") }.take(4).forEach {
+            getString(R.string.whats_new).split('\n').filter { !it.startsWith("#") }.take(6).forEach {
                 val head = it.indexOf("**", 2)
                 val cut = if (head < 0) -1 else it.indexOf(". ", head + 2)
                 addView(label("", 15f).apply {
