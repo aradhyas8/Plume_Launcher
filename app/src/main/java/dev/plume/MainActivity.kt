@@ -875,10 +875,13 @@ class MainActivity : Activity() {
      */
     private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>, frosted: Boolean = false) {
         setupDialog?.let { setupDialog = null; it.dismiss() } // replaced, not closed: the dismiss listener leaves the flow alone
-        val frost = frosted && glassPixels != null
+        val frost = frosted && Backdrop.of(currentWallpaper()) != Backdrop.PLAIN
         val card: LinearLayout = if (frost || glassActive()) glassSurface(dp(20).toFloat()).also { box ->
-            if (frost && glassLook().active != GlassStyle.FROSTED) glassPixels?.let {
-                box.glass.setBlur(Bitmap.createBitmap(glassBlur(it, GlassStyle.FROSTED.radius, dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888))
+            if (frost) {
+                // Its own blur, not the setting's: applyGlass sets it, also when the wallpaper loads after the card opens.
+                glassSurfaces.removeAll { it.get() === box.glass }
+                frostedCard = java.lang.ref.WeakReference(box.glass)
+                box.glass.setBlur(frostedBlur())
             }
         } else LinearLayout(this).apply {
             background = if (dark) rimCard(dp(16), false, solid = true) else GradientDrawable().apply {
@@ -1213,6 +1216,12 @@ class MainActivity : Activity() {
     /** The shown picture (a video's first frame) as [glassScreen] pixels, not blurred; null for a plain background. */
     private var glassPixels: IntArray? = null
 
+    /** A card that is Frosted whatever the Glass setting is (see [homePopup]). */
+    private var frostedCard: java.lang.ref.WeakReference<GlassDrawable>? = null
+
+    private fun frostedBlur(): Bitmap? = if (glassLook().active == GlassStyle.FROSTED) surfaceBlur
+        else glassPixels?.let { Bitmap.createBitmap(glassBlur(it, GlassStyle.FROSTED.radius, dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
+
     /**
      * The blur for menus, dialogs and the panel: softer than tiles so text stays readable.
      */
@@ -1245,6 +1254,7 @@ class MainActivity : Activity() {
         surfaceBlur = if (look.active?.radius == frost) glass.blur
             else shown?.let { Bitmap.createBitmap(glassBlur(it, frost, look.dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
         glassSurfaces.forEach { it.get()?.setBlur(surfaceBlur) } // menus and cards that are open, and the panel
+        frostedCard?.get()?.setBlur(frostedBlur())
         if (was?.first != look) { // the card tints and which tiles get frost follow the look
             applyTheme()
             baked.clear()
