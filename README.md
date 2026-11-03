@@ -17,9 +17,25 @@
 </p>
 
 <p align="center">
-  <img src="docs/readme/frosted-home.jpg" alt="Plume home screen with Frosted glass on a forest wallpaper" width="49%">
-  <img src="docs/readme/hero-alpine.jpg" alt="Plume home screen on a mountain sunrise wallpaper" width="49%">
+  <img src="docs/home-forest-dark-frosted.png" alt="Plume home screen with Forest Mist wallpaper, dark theme and frosted glass tiles" width="100%">
 </p>
+
+<p align="center"><em>Forest Mist · Dark theme · Frosted glass</em></p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/home-alpine-light-frosted.png" alt="Plume home screen with Alpine Dawn wallpaper, light theme and frosted glass tiles" width="100%">
+      <br>
+      <em>Alpine Dawn · Light theme · Frosted glass</em>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/home-moonlit-dark-clear.png" alt="Plume home screen with Moonlit Ridge wallpaper, dark theme and clear glass tiles" width="100%">
+      <br>
+      <em>Moonlit Ridge · Dark theme · Clear glass</em>
+    </td>
+  </tr>
+</table>
 
 Plume replaces the cluttered stock home screen with the two things you actually use: your apps and what you were watching. No ads, no sponsored rows, no account and no tracking.
 
