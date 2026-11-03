@@ -17,8 +17,8 @@
 </p>
 
 <p align="center">
-  <img src="docs/readme/cherry-clear.jpg" alt="Plume home screen with Clear glass on a cherry blossom wallpaper" width="49%">
-  <img src="docs/readme/theme-dark.jpg" alt="Plume home screen on an aurora wallpaper" width="49%">
+  <img src="docs/readme/frosted-home.jpg" alt="Plume home screen with Frosted glass on a forest wallpaper" width="49%">
+  <img src="docs/readme/hero-alpine.jpg" alt="Plume home screen on a mountain sunrise wallpaper" width="49%">
 </p>
 
 Plume replaces the cluttered stock home screen with the two things you actually use: your apps and what you were watching. No ads, no sponsored rows, no account and no tracking.
@@ -28,9 +28,6 @@ Plume replaces the cluttered stock home screen with the two things you actually 
 - **Glass design.** Tiles, cards and settings in **Clear** or **Frosted** glass, or solid. The selected tile rises out of its row and its edge catches the light. Text and icons change colour to stay readable on any wallpaper.
 
   <p align="center">
-    <img src="docs/readme/frosted-home.jpg" alt="Frosted glass" width="49%">
-    <img src="docs/readme/clear-home.jpg" alt="Clear glass" width="49%"><br>
-    <em>Frosted · Clear</em><br><br>
     <img src="docs/readme/focus.webp" alt="The selected tile rises and its edge catches the light" width="80%">
   </p>
 - **Live wallpapers and Aerial Views, built in.** 250+ Apple, Amazon and NASA scenes as your wallpaper or screensaver, or your own MP4. Each scene downloads once, only when you pick it.
