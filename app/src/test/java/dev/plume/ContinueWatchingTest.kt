@@ -91,4 +91,15 @@ class ContinueWatchingTest {
         assertEquals(true, channelOn("On Deck", "plex/On Deck", setOf("plex/On Deck")))
         assertEquals(false, channelOn("Continue watching", "stremio/Continue watching", setOf("stremio/Continue watching")))
     }
+
+    @Test fun aSplitSourceIsNewestFirstWhateverOrderTheChannelListsItIn() {
+        // The channel's own listing order is not the time order: the row shows the newest first.
+        val channel = listOf(10L to "show/old", 30L to "show/new", 20L to "show/mid")
+        assertEquals(listOf("show/new", "show/mid", "show/old"), sourceCards(channel, 3, 10, { it.substringBefore('/') }, { false }) { it })
+    }
+
+    @Test fun aSplitSourceLeavesOutTurnedOffAppsAndRepeatsAndStopsAtTheLimit() {
+        val items = listOf(50L to "a/1", 40L to "off/1", 30L to "a/1", 20L to "b/1", 10L to "b/2")
+        assertEquals(listOf("a/1", "b/1"), sourceCards(items, 3, 2, { it.substringBefore('/') }, { it.startsWith("off/") }) { it })
+    }
 }

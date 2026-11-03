@@ -67,6 +67,7 @@ import android.text.SpannableString
 import android.text.TextUtils
 import android.text.format.DateFormat
 import android.text.style.BulletSpan
+import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.util.LruCache
 import android.view.Gravity
@@ -202,6 +203,13 @@ internal fun <T> newestPerApp(items: List<Pair<Long, T>>, perApp: Int, app: (T) 
 }
 
 /**
+ * The cards of one source of a split row (By title, Per channel), in the order of the mixed row: newest first by the sort key, not
+ * the order the channel lists them in. Turned-off apps and repeats are left out, and no more than [limit] stay.
+ */
+internal fun <T> sourceCards(items: List<Pair<Long, T>>, perApp: Int, limit: Int, app: (T) -> String?, off: (T) -> Boolean, same: (T) -> String): List<T> =
+    newestPerApp(items, perApp, app).filter { !off(it) }.distinctBy(same).take(limit)
+
+/**
  * Whether an app's home-screen channel feeds Continue Watching. Channels named "Continue Watching" (Stremio's) start
  * on, every other one (Plex On Deck, a Stremio catalog) starts off; [flipped] holds the ones the user switched.
  */
@@ -298,6 +306,10 @@ class MainActivity : Activity() {
     /** [group]: what shares the front places in Continue Watching, the app or, for an app channel, that channel. */
     private class Prog(val title: String, val sub: String, val progress: Int, val image: String?, val intent: String?, val pkg: String?,
                        val group: String? = pkg, val wide: Boolean = true) // wide: the art can be a wallpaper (see ShowsWall.wide)
+    /** One row of cards you can switch to: Watch Next, or one app channel that is on. */
+    private class CardSource(val key: String, val title: String)
+    /** What the shows row holds: the [sources] it is split in (none when mixed), the one on show and its cards. */
+    private class Cards(val sources: List<CardSource>, val current: CardSource?, val list: List<Prog>)
 
     private val prefs by lazy { getSharedPreferences("home", MODE_PRIVATE) }
     private val io = Executors.newSingleThreadExecutor()
@@ -318,6 +330,9 @@ class MainActivity : Activity() {
     private var sources = SOURCES ?: emptyList() // HDMI ports and the devices on them: the Sources list, not the apps
     private var appsDirty = APPS == null
     private var watchKey: String? = null
+    private var cardSources = emptyList<CardSource>() // By title and Per channel: the sources the shows row is split in
+    private var cardCurrent: CardSource? = null
+    private var switching = false // the next list is another source of the same row: its cards are swapped in place
     private var lastTop: View? = null // last focused view in each home row, so Up/Down return to it
     private var lastApp: View? = null
     private var lastCard: View? = null
@@ -409,11 +424,12 @@ class MainActivity : Activity() {
         }
         applyTopBar()
         applyTheme()
+        setUpTitle() // after the theme: the pill is styled with the theme's card colours
         glassShown = glassLook() to null // the tiles are built for this look; only the blur is still to come
         loadWallpaper()
         // "Show row: On Down": the row slides in while one of its cards has focus, however focus got there.
         window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, now ->
-            val out = rowShow() == "down" && now?.getTag(R.id.watchRow) is Prog
+            val out = ShowRows.slidesIn(rowShow(), onCard = now?.getTag(R.id.watchRow) is Prog, onTitle = now === watchTitle)
             if (out != rowOut) { rowOut = out; placeRow(animate = true) }
         }
         watchScroll.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
@@ -1271,7 +1287,7 @@ class MainActivity : Activity() {
             glass.clearTiles()
             renderApps()
             watchKey = null
-            showWatchNext(watchList)
+            showWatchNext(Cards(cardSources, cardCurrent, watchList))
         }
         showPanelGlass()
     }
@@ -2511,7 +2527,7 @@ class MainActivity : Activity() {
             R.string.show_icons to { _ ->
                 prefs.edit().putBoolean("cw_colour", !cwColour()).apply()
                 watchKey = null // rebuild the cards with the new source icons
-                showWatchNext(watchList)
+                showWatchNext(Cards(cardSources, cardCurrent, watchList))
                 renderSettings(R.string.show_icons)
             },
             R.string.glass to { d ->
@@ -2570,6 +2586,7 @@ class MainActivity : Activity() {
                 steps[R.string.show_icons]!!(1)
             },
             R.string.show_row to Triple(getString(R.string.show_row), getString(ROW_SHOW.getValue(rowShow()))) { steps[R.string.show_row]!!(1) },
+            R.string.cards_rows to Triple(getString(R.string.cards_rows), getString(CARDS_ROWS.getValue(cardsMode()))) { pickCardsRows() },
             R.string.apps_when_hidden to Triple(getString(R.string.apps_when_hidden), getString(if (rowDrops()) R.string.moves_down else R.string.stays_put)) {
                 steps[R.string.apps_when_hidden]!!(1)
             },
@@ -2643,7 +2660,7 @@ class MainActivity : Activity() {
                 listOf(R.string.edit_apps_row, R.string.apps_in_row, R.string.sort_apps, R.string.icon_style, R.string.row_size, R.string.app_names, R.string.row_position)),
             // "When hidden" only means something once the row can hide.
             Triple(R.string.bottom_row, "${rowName()} · ${rows[R.string.show_row]!!.second}", listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
-                R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.restore_hidden)),
+                R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.cards_rows, R.string.restore_hidden)),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${prefs.getString("geo_city", null) ?: rows[R.string.weather_location]!!.second}",
                 listOf(R.string.clock_style, R.string.clock_size, R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
@@ -3867,7 +3884,18 @@ class MainActivity : Activity() {
             if (e.action == KeyEvent.ACTION_DOWN) (currentFocus?.tag as? (Int) -> Unit)?.invoke(if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1)
             return true
         }
+        // By title, the title is a pill you select: Left and Right (or OK) show another source.
+        if (currentFocus === watchTitle && (confirm || e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) cycleSource(if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1)
+            return true
+        }
         if (editing && editKey(e, confirm)) return true
+        // Per channel: Down on a card shows the next row, Up the one before (Up on the first goes to the apps).
+        if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0 && cardsMode() == ShowRows.PER_CHANNEL && settingsScrim.visibility != View.VISIBLE &&
+            allApps.visibility != View.VISIBLE && currentFocus?.getTag(R.id.watchRow) is Prog &&
+            (e.keyCode == KeyEvent.KEYCODE_DPAD_DOWN || e.keyCode == KeyEvent.KEYCODE_DPAD_UP) &&
+            pageSource(if (e.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1)
+        ) return true
         if (e.action == KeyEvent.ACTION_DOWN && settingsScrim.visibility != View.VISIBLE && allApps.visibility != View.VISIBLE) {
             currentFocus?.let { homeNav(it, e.keyCode) }?.let { it.requestFocus(); return true }
         }
@@ -3886,6 +3914,7 @@ class MainActivity : Activity() {
         val cards = if (watchScroll.visibility != View.VISIBLE) null
             else alive(lastCard) ?: (watchRow.getChildAt(0) as? ViewGroup)?.getChildAt(0)
         val top = alive(lastTop) ?: findViewById(R.id.launcherSettings)
+        val title = watchTitle.takeIf { it.isFocusable && it.visibility == View.VISIBLE }
         return when {
             v.parent === wifi.parent -> when (key) { // top bar
                 KeyEvent.KEYCODE_DPAD_DOWN -> apps ?: cards ?: v // the apps row can be empty (all hidden)
@@ -3896,15 +3925,20 @@ class MainActivity : Activity() {
             }
             v.parent === appRow -> when (key) {
                 KeyEvent.KEYCODE_DPAD_UP -> top
-                KeyEvent.KEYCODE_DPAD_DOWN -> cards ?: v
+                KeyEvent.KEYCODE_DPAD_DOWN -> title ?: cards ?: v
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (appRow.indexOfChild(v) == 0) v else null
                 KeyEvent.KEYCODE_DPAD_RIGHT -> if (appRow.indexOfChild(v) == appRow.childCount - 1) v else null
+                else -> null
+            }
+            v === watchTitle -> when (key) {
+                KeyEvent.KEYCODE_DPAD_UP -> apps ?: top
+                KeyEvent.KEYCODE_DPAD_DOWN -> cards ?: v
                 else -> null
             }
             v.getTag(R.id.watchRow) is Prog -> {
                 val i = watchRow.indexOfChild(v.parent as View)
                 when (key) {
-                    KeyEvent.KEYCODE_DPAD_UP -> apps ?: top
+                    KeyEvent.KEYCODE_DPAD_UP -> title ?: apps ?: top
                     KeyEvent.KEYCODE_DPAD_DOWN -> v
                     KeyEvent.KEYCODE_DPAD_LEFT -> if (i == 0) v else null
                     KeyEvent.KEYCODE_DPAD_RIGHT -> if (i == watchRow.childCount - 1) v else null
@@ -5001,17 +5035,17 @@ class MainActivity : Activity() {
     private fun refreshWatchNext() {
         if (checkSelfPermission(TV_LISTINGS) != PackageManager.PERMISSION_GRANTED) {
             android.util.Log.w("Plume", "continue watching: no $TV_LISTINGS")
-            showWatchNext(emptyList())
+            showWatchNext(Cards(emptyList(), null, emptyList()))
             return
         }
         io.execute {
-            val list = try {
+            val cards = try {
                 queryWatchNext()
             } catch (e: Exception) {
                 android.util.Log.w("Plume", "continue watching failed ($e)")
-                emptyList()
+                Cards(emptyList(), null, emptyList())
             }
-            ui.post { if (!isDestroyed) showWatchNext(list) }
+            ui.post { if (!isDestroyed) showWatchNext(cards) }
         }
     }
 
@@ -5024,22 +5058,50 @@ class MainActivity : Activity() {
      *    last-watched time when the app sets one, else by the time the app was last opened from Plume, see [channelSortKey].
      * Newest first across apps, each app's [PER_APP] newest ahead of the rest, so one app with ten shows can't bury the others.
      */
-    private fun queryWatchNext(): List<Prog> {
+    private fun queryWatchNext(): Cards {
         val hidden = prefs.getStringSet("hidden_watch", emptySet())!!
         val watchNextOn = WATCH_NEXT !in prefs.getStringSet("ch_flip", emptySet())!!
         val watchNext = if (watchNextOn) readPrograms(TvContract.WatchNextPrograms.CONTENT_URI, hidden) else emptyList()
         val on = continueChannels()
         autoRowName = if (watchNextOn) null
             else on.map { it.third }.distinct().singleOrNull()?.takeUnless { it.equals("Continue Watching", ignoreCase = true) }
+        val off = prefs.getStringSet("cw_off", emptySet())!!
+        if (cardsMode() != ShowRows.MIXED) return splitCards(watchNext, on, hidden, off)
         val channels = on.flatMap { (id) ->
             readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "ch$id")
         }
         val all = watchNext + channels
         android.util.Log.i("Plume", "continue watching: ${watchNext.size} from Watch Next, ${channels.size} from ${on.size} channels")
         publishingPkgs = all.mapNotNull { it.second.pkg }.toSet()
-        val off = prefs.getStringSet("cw_off", emptySet())!!
-        return newestPerApp(all.filter { it.second.pkg !in off }.distinctBy { it.second.intent ?: it.second.title }, PER_APP) { it.group }
-            .take(20)
+        return Cards(emptyList(), null, newestPerApp(all.filter { it.second.pkg !in off }.distinctBy { it.second.intent ?: it.second.title }, PER_APP) { it.group }
+            .take(ROW_CARDS))
+    }
+
+    /**
+     * By title and Per channel: a list of cards for Watch Next and one for each channel that is on, each in its own order
+     * (the same rules as the mixed row: hidden shows and turned-off apps left out, no repeats, at most [ROW_CARDS]).
+     * A source with nothing in it is left out. [ShowRows.ordered] puts Watch Next first, then the Continue Watching channels.
+     */
+    private fun splitCards(watchNext: List<Pair<Long, Prog>>, on: List<Triple<Long, String, String>>, hidden: Set<String>, off: Set<String>): Cards {
+        val label = apps.associate { it.pkg to it.label }
+        val found = ArrayList<Pair<ShowRows.Source, List<Prog>>>()
+        val seen = HashSet<String>()
+        fun add(key: String, title: String, kind: ShowRows.Kind, items: List<Pair<Long, Prog>>) {
+            seen += items.mapNotNull { it.second.pkg }
+            val shown = sourceCards(items, PER_APP, ROW_CARDS, { it.group }, { it.pkg in off }) { it.intent ?: it.title }
+            if (shown.isNotEmpty()) found += ShowRows.Source(key, title, kind) to shown
+        }
+        add(WATCH_NEXT, getString(R.string.watch_next), ShowRows.Kind.WATCH_NEXT, watchNext)
+        for ((id, p, n) in on.distinctBy { (_, p, n) -> channelKey(p, n) }) {
+            val kind = if (n.equals("Continue Watching", ignoreCase = true)) ShowRows.Kind.CONTINUE else ShowRows.Kind.OTHER
+            add(channelKey(p, n), if (n == label[p] || label[p].isNullOrBlank()) n else "${label[p]} · $n", kind,
+                readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "ch$id"))
+        }
+        publishingPkgs = seen
+        val rows = ShowRows.ordered(found.map { it.first }).map { s -> found.first { it.first === s } }
+        val at = ShowRows.current(rows.map { it.first.key }, prefs.getString("cards_src", null))
+        val current = rows.firstOrNull { it.first.key == at }
+        return Cards(rows.map { CardSource(it.first.key, it.first.title) }, current?.let { CardSource(it.first.key, it.first.title) }, current?.second ?: emptyList())
     }
 
     /** Apps last seen publishing, so the settings list includes them even without the permission check. */
@@ -5106,12 +5168,12 @@ class MainActivity : Activity() {
         val field = textField(prefs.getString("row_name", null).orEmpty(), autoRowName ?: getString(R.string.continue_watching),
             InputType.TYPE_TEXT_FLAG_CAP_WORDS, EditorInfo.IME_ACTION_DONE) { name ->
             prefs.edit().putString("row_name", name).apply()
-            watchTitle.text = rowName()
+            showTitle()
             renderSettings(R.string.row_name)
         }
         val auto = page(getString(R.string.automatic), if (prefs.getString("row_name", null).isNullOrEmpty()) CHOSEN else "") {
             prefs.edit().remove("row_name").apply()
-            watchTitle.text = rowName()
+            showTitle()
             renderSettings(R.string.row_name)
         }
         // Opens on Automatic, so the keyboard only comes up when you go Up to the box to type.
@@ -5167,6 +5229,131 @@ class MainActivity : Activity() {
         return byWeight(out)
     }
 
+    /** "mixed" (every source in one row), "title" (one row, switched with its title) or "stack" (one row per source, Down and Up). */
+    private fun cardsMode() = ShowRows.mode(prefs.getString("cards_rows", null))
+
+    /**
+     * The Rows page: one line for each way to group the shows, to select (not a value to step through). The picked one has a
+     * tick, and the help line under the list says what it does and which keys to press.
+     */
+    private fun pickCardsRows(focusAt: Int = CARDS_ROWS.keys.indexOf(cardsMode())) {
+        val current = cardsMode()
+        val help = mapOf(ShowRows.MIXED to R.string.help_cards_mixed, ShowRows.BY_TITLE to R.string.help_cards_title, ShowRows.PER_CHANNEL to R.string.help_cards_each)
+        val rows = CARDS_ROWS.map { (mode, name) ->
+            page(getString(name), if (mode == current) CHOSEN else "") {
+                prefs.edit().putString("cards_rows", mode).apply()
+                watchKey = null
+                refreshWatchNext()
+                pickCardsRows()
+            }
+        }
+        // Split by source with one source only, the row looks like Mixed: say so, or the choice seems to do nothing.
+        val note = getString(R.string.cards_rows_note) + if (current != ShowRows.MIXED && cardSources.size == 1) " " + getString(R.string.cards_rows_one) else ""
+        showPage(getString(R.string.cards_rows), rows, focusAt, styles = CARDS_ROWS.keys.map { RowStyle(help = getString(help.getValue(it))) },
+            top = label(note, 15f).apply {
+                maxLines = 5
+                setPadding(dp(14), dp(4), dp(14), dp(10))
+            }) {
+            renderSettings(R.string.cards_rows)
+        }
+        cardsPage = true // the sources are known a moment after a choice: the note is drawn again then (see showWatchNext)
+        pageExit = { cardsPage = false }
+    }
+
+    private var cardsPage = false
+
+    /** By title with at least two sources: the title is a pill you can select. */
+    private fun canCycle() = cardsMode() == ShowRows.BY_TITLE && cardSources.size > 1
+
+    /** By title: Left or Right on the title shows the next or the previous source, round the list. */
+    private fun cycleSource(d: Int) {
+        switchTo(ShowRows.around(cardSources.map { it.key }, cardCurrent?.key, d) ?: return)
+    }
+
+    /** Per channel: Down on a card shows the next row (+1), Up the one before (-1). False when there is none that way. */
+    private fun pageSource(d: Int): Boolean {
+        switchTo(ShowRows.beside(cardSources.map { it.key }, cardCurrent?.key, d) ?: return false)
+        return true
+    }
+
+    private fun switchTo(key: String) {
+        prefs.edit().putString("cards_src", key).apply()
+        switching = true
+        refreshWatchNext()
+    }
+
+    /** What the row is called: its own name when mixed, else the source on show; Per channel adds an arrow to each other row. */
+    private fun rowTitle(): String {
+        val cur = cardCurrent
+        if (cardsMode() == ShowRows.MIXED || cur == null) return rowName()
+        val at = cardSources.indexOfFirst { it.key == cur.key }
+        return if (cardsMode() == ShowRows.PER_CHANNEL && cardSources.size > 1)
+            cur.title + "  " + (if (at > 0) "↑" else "") + (if (at < cardSources.size - 1) "↓" else "")
+        else cur.title
+    }
+
+    /**
+     * The row's title is a pill when it can be selected (By title): the lit glass of a selected tile, with an arrow on each side. The
+     * arrows are always in the text, clear when it has no focus, so the pill keeps its size and the title does not move. It is padded
+     * in and pulled back out with negative margins, so the text sits where the plain title sits.
+     */
+    private fun setUpTitle() {
+        style(watchTitle, dp(8), card = true, lift = 1.04f) { focused ->
+            if (focused) glass.add(watchTitle, dp(8).toFloat()) else {
+                glass.remove(watchTitle)
+                watchTitle.background = GradientDrawable().apply { cornerRadius = dp(8).toFloat() } // nothing to see at rest
+            }
+            watchTitle.animate().alpha(if (focused) 1f else titleAlpha).setDuration(160).start()
+            showTitle()
+        }
+        glass.remove(watchTitle) // style() lets the glass paint under every card; the pill only has it while selected
+        watchTitle.background = GradientDrawable().apply { cornerRadius = dp(8).toFloat() }
+        watchTitle.isFocusable = false
+        watchTitle.isSingleLine = true
+        watchTitle.setPadding(dp(10), dp(4), dp(10), dp(4))
+        (watchTitle.layoutParams as LinearLayout.LayoutParams).apply {
+            topMargin -= dp(4)
+            bottomMargin -= dp(4)
+        }
+    }
+
+    /** Shows the row's title. With [fade] the old text dips out and the new one in, as the cards do. */
+    private fun showTitle(fade: Boolean = false) {
+        val cycle = canCycle()
+        watchTitle.isFocusable = cycle
+        val arrows = if (cycle) watchTitle.paint.measureText("‹  ") else 0f
+        val lp = watchTitle.layoutParams as LinearLayout.LayoutParams
+        val start = -(dp(10) + arrows.toInt())
+        if (lp.marginStart != start) { lp.marginStart = start; watchTitle.layoutParams = lp }
+        // A name too long for the row is cut here, not by the view, so the closing arrow stays.
+        val room = ((resources.displayMetrics.widthPixels - dp(96)) * 2 / 3 - dp(20) - arrows * 2).coerceAtLeast(dp(60).toFloat())
+        val name = TextUtils.ellipsize(rowTitle(), watchTitle.paint, room, TextUtils.TruncateAt.END)
+        val text: CharSequence = if (!cycle) name else SpannableString("‹  $name  ›").also {
+            if (!watchTitle.isFocused) { // the arrows are only there while it is selected
+                it.setSpan(ForegroundColorSpan(Color.TRANSPARENT), 0, 1, 0)
+                it.setSpan(ForegroundColorSpan(Color.TRANSPARENT), it.length - 1, it.length, 0)
+            }
+        }
+        ui.removeCallbacks(swapTitle)
+        watchTitle.animate().cancel()
+        if (!fade || watchTitle.text.toString() == text.toString()) {
+            watchTitle.text = text
+            return
+        }
+        // Not withEndAction: another animation on the title (the row being placed, the focus) cancels it, and then the text never changed.
+        titleNext = text
+        watchTitle.animate().alpha(0f).setDuration(SWAP_OUT_MS).start()
+        ui.postDelayed(swapTitle, SWAP_OUT_MS)
+    }
+
+    private var titleNext: CharSequence = ""
+
+    private val swapTitle = Runnable {
+        watchTitle.animate().cancel()
+        watchTitle.text = titleNext
+        watchTitle.animate().alpha(if (watchTitle.isFocused) 1f else titleAlpha).setDuration(SWAP_IN_MS).start()
+    }
+
     private fun hideKey(pkg: String?, title: String) = "$pkg/$title"
 
     /** We can't delete another app's Watch Next row, so hiding is a local filter. */
@@ -5195,18 +5382,34 @@ class MainActivity : Activity() {
         return if (min >= 60) getString(R.string.time_left_hm, min / 60, min % 60) else getString(R.string.time_left_m, min)
     }
 
-    private fun showWatchNext(list: List<Prog>) {
-        val key = list.joinToString("|") { "${it.title}/${it.sub}/${it.progress}/${it.image}" }
+    private fun showWatchNext(cards: Cards) {
+        val list = cards.list
+        val key = ShowRows.stamp(cards.sources.map { it.key to it.title }, cards.current?.key, list.map { "${it.title}/${it.sub}/${it.progress}/${it.image}" })
         if (key == watchKey) { // unchanged: keep views (and focus) as they are, just fill in missing posters
             retryPosters()
             return
         }
+        // Another source of the same row: the title and the cards stay where they are and change their content.
+        val inPlace = switching && watchRow.childCount > 0 && list.isNotEmpty() && cardCurrent != null
+        switching = false
         watchKey = key
         watchList = list
+        cardSources = cards.sources
+        cardCurrent = cards.current
+        if (cardsPage) pickCardsRows((settingsList.indexOfChild(currentFocus) - 1).coerceIn(0, CARDS_ROWS.size - 1)) // child 0 is the note
+        if (inPlace) { // the title and the cards change together, once the new posters are there
+            whenPostersReady(list.take(POSTER_CARDS).mapNotNull { it.image }) {
+                if (!isDestroyed && watchKey == key) {
+                    showTitle(fade = true)
+                    swapCards()
+                }
+            }
+            return
+        }
+        showTitle()
         val focusedAt = watchRow.indexOfChild(currentFocus?.parent as? View)
         val focusedKey = (currentFocus?.getTag(R.id.watchRow) as? Prog)?.let { cardKey(it) } // the same show, whatever place it has now
         watchRow.removeAllViews()
-        watchTitle.text = rowName()
         placeRow(animate = false)
         // ~16 ms per card here and only four show at once: the first four now, the next four on the next frame.
         addCardsTo(3)
@@ -5259,7 +5462,7 @@ class MainActivity : Activity() {
         }
         move(appsTitle, appY, appsTitle.alpha)
         move(appScroll, appY, 1f)
-        move(watchTitle, rowY, if (hidden) 0f else titleAlpha)
+        move(watchTitle, rowY, if (hidden) 0f else if (watchTitle.isFocused) 1f else titleAlpha)
         move(watchScroll, rowY, if (hidden) 0f else 1f)
         // The rows are layers: they move and fade without a layout, so the frost has to be told to follow them.
         glass.kick(if (animate) 320 else 0)
@@ -5311,37 +5514,89 @@ class MainActivity : Activity() {
                 addCardsTo(watchRow.indexOfChild(col) + CARDS_AHEAD)
             }
         }
-        frame.contentDescription = p.title
         frame.addView(img, MATCH_PARENT, MATCH_PARENT)
-        frame.setOnClickListener { open(p) }
-        frame.setTag(R.id.watchRow, p) // holding OK hides it (see onHold)
+        frame.setOnClickListener { (frame.getTag(R.id.watchRow) as? Prog)?.let { open(it) } }
         // 2:1 keeps logos and badges that providers bake into 16:9 art.
         col.addView(frame, LinearLayout.LayoutParams(w, w / 2))
         // Thin bar under the poster, card width. Kept (invisible) when there's no progress so titles line up.
         col.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
-            progress = p.progress
             progressDrawable = progressBarDrawable(watchInk)
-            visibility = if (p.progress > 0) View.VISIBLE else View.INVISIBLE
         }, LinearLayout.LayoutParams(w, dp(3)).apply { topMargin = dp(8) })
         col.addView(title)
-        val icon = sourceIcon(p.pkg)
-        if (p.sub.isNotEmpty() || icon != null) {
-            col.addView(label(p.sub, 12f).apply {
-                ink(this, watchInk)
-                alpha = 0.8f
-                setPadding(0, dp(2), 0, 0)
-                icon?.let {
-                    it.setBounds(0, 0, dp(12), dp(12))
-                    setCompoundDrawablesRelative(it, null, null, null)
-                    compoundDrawablePadding = dp(6)
-                    // A plain mark (not the app's own icon, not in brand colour) follows the text: fitInk re-tints it.
-                    if (LOGOS[p.pkg]?.second == false && (!cwColour() || BRAND_COLOURS[p.pkg] == null)) tag = INK_MARK
-                }
-            })
-        }
-        loadPoster(img, p.image)
+        col.addView(label(p.sub, 12f).apply {
+            ink(this, watchInk)
+            alpha = 0.8f
+            setPadding(0, dp(2), 0, 0)
+            compoundDrawablePadding = dp(6)
+        })
+        bindCard(col, p, fade = false)
         return col
+    }
+
+    /**
+     * Puts [p] in a card: its poster, progress, title and details. With [fade] each part dips out and back in on its own, so
+     * the card stays where it is while its content changes (the whole card is not faded: a focused card is lifted past its edge).
+     */
+    private fun bindCard(col: ViewGroup, p: Prog, fade: Boolean) {
+        val frame = col.getChildAt(0) as ViewGroup
+        val img = frame.getChildAt(0) as ImageView
+        val bar = col.getChildAt(1) as ProgressBar
+        val title = col.getChildAt(2) as TextView
+        val sub = col.getChildAt(3) as TextView
+        frame.setTag(R.id.watchRow, p) // holding OK hides it (see onHold)
+        frame.contentDescription = p.title
+        val icon = sourceIcon(p.pkg)
+        val fill = {
+            bar.progress = p.progress
+            bar.visibility = if (p.progress > 0) View.VISIBLE else View.INVISIBLE
+            title.text = p.title
+            sub.text = p.sub
+            icon?.setBounds(0, 0, dp(12), dp(12))
+            sub.setCompoundDrawablesRelative(icon, null, null, null)
+            // A plain mark (not the app's own icon, not in brand colour) follows the text, as fitInk tints it.
+            sub.tag = if (LOGOS[p.pkg]?.second == false && (!cwColour() || BRAND_COLOURS[p.pkg] == null)) INK_MARK else null
+            if (sub.tag == INK_MARK) icon?.setTint(watchInk)
+            // Split by source, a card without details keeps their space, or the row would change height with the source.
+            sub.visibility = if (p.sub.isNotEmpty() || icon != null) View.VISIBLE else if (cardsMode() == ShowRows.MIXED) View.GONE else View.INVISIBLE
+            img.setImageDrawable(null)
+            loadPoster(img, p.image)
+        }
+        if (!fade) return fill()
+        // Out together, the content changes once they are all clear, then in together.
+        val parts = listOf(img to 1f, bar to 1f, title to 1f, sub to 0.8f)
+        for ((v, _) in parts) {
+            v.animate().cancel()
+            val out = v.animate().alpha(0f).setDuration(SWAP_OUT_MS)
+            if (v === img) out.withEndAction {
+                fill()
+                for ((p2, rest) in parts) p2.animate().alpha(rest).setDuration(SWAP_IN_MS).start()
+            }
+            out.start()
+        }
+    }
+
+    /**
+     * Another source of the same row: the cards that are there change their content in place (title, poster, progress), the
+     * ones the new source has more of fade in and the ones it has fewer of fade out. Nothing slides and the row keeps its place.
+     */
+    private fun swapCards() {
+        for (i in watchRow.childCount - 1 downTo 0) if (watchRow.getChildAt(i).tag == FADING) watchRow.removeViewAt(i)
+        val kept = minOf(watchRow.childCount, watchList.size)
+        for (i in 0 until kept) bindCard(watchRow.getChildAt(i) as ViewGroup, watchList[i], fade = true)
+        for (i in watchRow.childCount - 1 downTo kept) {
+            val col = watchRow.getChildAt(i)
+            if (col.hasFocus()) (watchRow.getChildAt(kept - 1) as ViewGroup).getChildAt(0).requestFocus()
+            col.tag = FADING
+            col.animate().alpha(0f).setDuration(SWAP_OUT_MS).withEndAction { watchRow.removeView(col) }.start()
+        }
+        val before = watchRow.childCount
+        addCardsTo(3)
+        for (i in before until watchRow.childCount) watchRow.getChildAt(i).apply { alpha = 0f; animate().alpha(1f).setDuration(SWAP_IN_MS).start() }
+        placeRow(animate = false)
+        watchRow.post { fitInk() }
+        val key = watchKey
+        ui.post { if (watchKey == key) addCardsTo(CARDS_AHEAD - 1) }
     }
 
     /** [ink] fills it; the track is a faint version on the same side, light behind white and dark behind near-black. */
@@ -5367,10 +5622,10 @@ class MainActivity : Activity() {
     }
 
     private fun loadPoster(v: ImageView, uri: String?) {
+        v.tag = uri // a load still on its way for the show this card had finds another uri here and drops its picture
         if (uri == null) return
         posters.get(uri)?.let { v.setImageBitmap(it); return }
-        v.tag = uri
-        if (!loading.add(uri)) return // already on its way
+        if (!loading.add(uri)) return // already on its way: posterArrived fills this card when it lands
         posterIo.execute {
             val bmp = try {
                 decode(uri)
@@ -5381,7 +5636,40 @@ class MainActivity : Activity() {
                 loading.remove(uri)
             } ?: return@execute
             posters.put(uri, bmp)
-            ui.post { if (!isDestroyed && v.tag == uri) v.setImageBitmap(bmp) }
+            ui.post { posterArrived(uri) }
+        }
+    }
+
+    /** A poster is in the cache: each card that wants it shows it, whichever load fetched it. */
+    private fun posterArrived(uri: String) {
+        if (isDestroyed) return
+        val bmp = posters.get(uri) ?: return
+        for (i in 0 until watchRow.childCount) {
+            val img = ((watchRow.getChildAt(i) as? ViewGroup)?.getChildAt(0) as? ViewGroup)?.getChildAt(0) as? ImageView ?: continue
+            if (img.tag == uri) img.setImageBitmap(bmp)
+        }
+    }
+
+    /**
+     * Runs [then] on the main thread once the posters of [images] are in the cache, so a card that changes its show fades to a
+     * picture that is already there, not to an empty card. A poster that is not there after [POSTER_WAIT_MS] loads on its own.
+     */
+    private fun whenPostersReady(images: List<String>, then: () -> Unit) {
+        val missing = images.distinct().filter { posters.get(it) == null }
+        if (missing.isEmpty()) return then()
+        val ran = java.util.concurrent.atomic.AtomicBoolean(false)
+        val go = Runnable { if (ran.compareAndSet(false, true)) then() }
+        ui.postDelayed(go, POSTER_WAIT_MS)
+        val left = java.util.concurrent.atomic.AtomicInteger(missing.size)
+        for (uri in missing) posterIo.execute {
+            if (loading.add(uri)) try {
+                decode(uri)?.let { posters.put(uri, it); ui.post { posterArrived(uri) } }
+            } catch (e: Exception) {
+                android.util.Log.w("TvHome", "poster failed: $uri ($e)")
+            } finally {
+                loading.remove(uri)
+            }
+            if (left.decrementAndGet() == 0) ui.post { ui.removeCallbacks(go); go.run() }
         }
     }
 
@@ -5598,7 +5886,7 @@ class MainActivity : Activity() {
             R.string.sort_apps to R.string.help_order, R.string.icon_style to R.string.help_icon_style, R.string.row_size to R.string.help_row_size,
             R.string.apps_when_hidden to R.string.help_apps_when_hidden, R.string.row_name to R.string.help_row_name,
             R.string.show_icons to R.string.help_show_icons,
-            R.string.cw_apps to R.string.help_from_apps, R.string.cw_channels to R.string.help_channels,
+            R.string.cw_apps to R.string.help_from_apps, R.string.cw_channels to R.string.help_channels, R.string.cards_rows to R.string.help_cards_rows,
             R.string.wp_sources to R.string.help_wp_sources, R.string.restore_hidden to R.string.help_hidden_shows, R.string.screensaver_timing to R.string.help_start_after,
             R.string.home_button to R.string.help_home_button, R.string.smooth_volume to R.string.help_smooth_volume,
             R.string.default_launcher to R.string.help_default_launcher,
@@ -5607,6 +5895,7 @@ class MainActivity : Activity() {
         val ROW_SHOW = linkedMapOf("always" to R.string.always, "down" to R.string.on_down, "never" to R.string.never) // "Show row"
         val CLOCK_SIZES = linkedMapOf(38 to R.string.clock_small, 48 to R.string.clock_medium, 60 to R.string.clock_large) // sp
         val CLOCK_STYLES = linkedMapOf("light" to R.string.clock_light, "bold" to R.string.clock_bold, "serif" to R.string.clock_serif)
+        val CARDS_ROWS = linkedMapOf(ShowRows.MIXED to R.string.cards_mixed, ShowRows.BY_TITLE to R.string.cards_title, ShowRows.PER_CHANNEL to R.string.cards_each) // "Rows"
         const val BADGE = 0xFFFF453A.toInt()
         // Dark mode tokens, for AMOLED: true black, and near-black cards that read as cards because their edge
         // catches light (brightest along the top), the way light-mode cards use a soft shadow.
@@ -5636,6 +5925,12 @@ class MainActivity : Activity() {
         const val UNLOCKED_MS = 5 * 60_000L
         const val MEDIA_REQUEST = 3
         const val PER_APP = 3 // Continue Watching items per app ahead of the rest
+        const val ROW_CARDS = 20 // the most cards a row holds
+        const val SWAP_OUT_MS = 90L // another source of the shows row: what is there fades out ...
+        const val SWAP_IN_MS = 150L // ... and the new content fades in
+        const val POSTER_CARDS = 6 // another source: the posters of this many cards are loaded before the cards change
+        const val POSTER_WAIT_MS = 700L // ... and the cards change after this long even if one is still on its way
+        const val FADING = "fading" // the tag of a card that is fading out
         const val CARDS_AHEAD = 8 // Continue Watching cards built past the focused one (see addCardsTo)
         val READ_PHOTOS = if (Build.VERSION.SDK_INT >= 33) "android.permission.READ_MEDIA_IMAGES" else "android.permission.READ_EXTERNAL_STORAGE"
         /** Minutes between folder photos. */

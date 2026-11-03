@@ -159,12 +159,19 @@ Tests run against a fake `adb`, no TV needed: `sh tools/plume-install-test/run.s
 | Change glass, theme or wallpaper | **Plume settings → Style** |
 | Change app size, icon style or names | **Plume settings → Apps row → Size**, **Icon style** or **App names** |
 | Choose apps for Continue Watching | **Plume settings → Shows row → From apps** |
+| Show each source of the shows row on its own | **Plume settings → Shows row → Rows** (see [Rows of the shows row](#rows-of-the-shows-row)) |
 | Change the clock | **Plume settings → Clock & weather → Clock style** or **Clock size** |
 | Move, hide or add a top-bar icon | Hold **OK** on the icon, then **Move**, **Hide** or **Add icon** |
 | Remap a remote key | **Plume settings → Home & remote → Remote keys → Add a key**, then press it |
 | Lock the layout | **Plume settings → PIN lock**. Forgot the PIN? **Android Settings → Apps → Plume → Clear data**. |
 | Update Plume | **Plume settings → Updates** |
 | Open the Google TV dashboard | Hold **Home** |
+
+### Rows of the shows row
+
+**Plume settings → Shows row → Rows** opens a page with three choices. Select one: it gets a tick, and a line under the list says what it does and which buttons to press. **Mixed** (the default) puts every source in one row. **By title** shows one source at a time: push **Down** from the apps to the row's title, then **Left** or **Right** to show another source. **Per channel** also shows one source at a time, as a row of its own: push **Down** on a card for the next source and **Up** for the one before. The arrows by the title show where you can go.
+
+The sources are Android TV's Watch Next and every channel that is on in **Plume settings → Shows row → Channels**. In **By title** and **Per channel**, Watch Next comes first, then the channels named "Continue Watching", then the others. A source with nothing in it is left out. The cards stay where they are when the source changes: only their poster, title and progress change. Plume loads the new posters first, so a card never shows an empty picture. With only one source that has shows, By title and Per channel look like Mixed, and the Rows page says so.
 
 <p align="center">
   <img src="docs/readme/size-largest.jpg" alt="Largest app size" width="60%"><br>
