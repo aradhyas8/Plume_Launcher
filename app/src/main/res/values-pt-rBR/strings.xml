@@ -362,7 +362,7 @@
     <string name="get_wallpaper_pack">Mais fotos (%1$s)</string>
     <string name="downloading_wallpapers">Baixando papéis de parede (%1$s)…</string>
     <string name="wallpapers_failed">Não foi possível baixar os papéis de parede. Verifique a conexão e tente de novo.</string>
-    <string name="help_wallpaper_pack">Seis fotos e dez papéis de parede originais para os estilos de vidro Transparente e Fosco. O download só começa quando você pressiona OK. Os créditos estão no README do Plume.</string>
+    <string name="help_wallpaper_pack">Abra Integrados para verificar novos papéis de parede e atualizar as fotos baixadas. Pressione OK em uma nova foto para baixá-la.</string>
     <string name="clock_style">Estilo do relógio</string>
     <string name="clock_light">Leve</string>
     <string name="clock_bold">Negrito</string>

@@ -370,7 +370,7 @@
     <string name="get_wallpaper_pack">More photos (%1$s)</string>
     <string name="downloading_wallpapers">Downloading wallpapers (%1$s)…</string>
     <string name="wallpapers_failed">Couldn\'t download the wallpapers. Check the connection and try again.</string>
-    <string name="help_wallpaper_pack">Six photos and ten original wallpapers for Clear and Frosted glass. They download only when you press OK. Credits are in Plume\'s README.</string>
+    <string name="help_wallpaper_pack">Open Built-in to check for new wallpapers and update downloaded photos. Press OK on a new photo to download it.</string>
     <string name="theme_wallpaper">Wallpaper</string>
     <string name="help_theme_wallpaper">Wallpaper picks light or dark from your picture, and the glass takes its colours.</string>
     <string name="clock_style">Clock style</string>

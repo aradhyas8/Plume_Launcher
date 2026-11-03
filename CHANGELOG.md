@@ -1,7 +1,7 @@
 # Changelog
 
 Plume shows the section for its own version in **Plume settings → Updates** after an update.
-After an update, a card on the home screen shows the first 4 entries. Put the 4 most interesting changes first.
+After an update, a card on the home screen shows the first 6 entries. Put the 6 most interesting changes first. Put small fixes last, as plain lines.
 The build stops if `versionName` has no section here.
 
 Write every entry in ASD-STE100 Simplified Technical English:
@@ -14,49 +14,46 @@ Write every entry in ASD-STE100 Simplified Technical English:
 
 Put changes that are not released under `## Unreleased`. Rename that heading to the version number when you release.
 
-## Unreleased
+## 1.7.1
 
-- **New wallpapers.** Select **Wallpaper → Built-in → More photos** to download ten wallpapers. Each image is 1920 × 1080.
-- Old wallpapers no longer ship in the app. Old selections use a plain colour until you select another wallpaper.
-- **Live wallpapers.** Select **Plume settings → Wallpaper → Live wallpapers**. Choose from NASA, Apple and Amazon scenes, or upload your own MP4. A scene downloads only after you select it.
-- **Wallpaper theme.** Select **Plume settings → Style → Theme → Wallpaper**. Plume picks light or dark from the wallpaper, and the settings take its colour.
-- **A new Plume settings.** The sections have new icons, new groups and clearer names. The wallpaper card is at the top.
-- **The selected tile rises.** The selected tile or card moves up out of its row, so you can find it easily.
+- **Photo of the day fix.** Plume no longer closes when you select **Photo of the day** before the photo downloads.
+
+## 1.7
+
+- **A new Plume settings.** Clear sections with new icons. Select **Plume settings → Style → Theme → Wallpaper**, and Plume takes its colours from your wallpaper.
+- **Clear glass.** See more of your wallpaper through tiles and menus. Select **Plume settings → Style → Glass → Clear**. The edges catch the light when you select a tile.
+- **Aerial Views.** Apple, NASA and Amazon scenes play as your wallpaper or your screensaver. Select **Plume settings → Wallpaper → Live wallpapers**. You can also upload your own MP4.
+- **Bigger apps.** Select **Plume settings → Apps row → Size**, then **Large** or **Largest**. Banners and icon tiles both grow.
 - **New clock.** Date and weather show on one line, with a weather icon. Select **Plume settings → Clock & weather → Clock style** or **Clock size**.
-- **Glass edges catch light.** The top edge of each glass tile is lit, and a light runs along it when you select it. Text stays easy to read on any wallpaper.
+- **New 4K wallpapers.** Select **Plume settings → Wallpaper → Built-in → More photos** to download ten 4K photos. New photos appear without an app update.
+- **Aerial Views screensaver.** Select **Plume settings → Screensaver → Screensaver → Aerial Views**. It uses the scenes that you downloaded for the wallpaper, so each scene downloads only once.
+- **Shows wallpaper.** The pictures of the shows in your apps become your wallpaper. Select **Plume settings → Wallpaper → Shows from** to choose the apps. Plume fetches nothing until you select it.
+- **Edit the top bar.** Hold **OK** on an icon at the top of the home screen. Select **Move**, **Hide** or **Add icon**. **Plume settings** stays on the bar.
+- **Power menu icon.** Hold **OK** on a top-bar icon and select **Add icon**, then **Power menu**. The icon opens the Android power menu.
+- **More apps.** Plume shows installed apps that do not have a TV launcher entry. Some apps need touch or a mouse.
 - **Italian.** Plume is now available in Italian.
-- The wallpaper stays the same when the theme changes from light to dark.
-- HDMI tiles show the NVIDIA SHIELD and Chromecast logos.
-- **Remote keys** can tell apart two buttons that send the same key. To separate them, remove the old key and learn the button again.
-- On some CVTE TVs, the Home button returns to Plume from HDMI or Live TV.
-- On debloated Google TVs, the **Finish setup** card does not come back after a restart. Folder wallpapers load after a restart.
+- **The selected tile rises.** The selected tile or card moves up out of its row, so you can find it from across the room.
+- **Wallpapers show as they are.** Plume no longer adds dark fades over a picture or a video. The text and the glass change to suit the picture.
+- **Home returns to your app.** Press Home in an app that you opened from a tile or a card. That tile or card is selected.
+- **Open from tile.** An app opens out of the tile that you press, and the row settles when you come back. Select **Plume settings → Style → Open from tile** to turn it off.
+- **Remote keys.** Plume can tell apart two buttons that send the same key. To separate them, remove the old key and learn the button again.
+- The top icons, the text and the progress bars change colour to match the wallpaper.
+- The Glass setting changes tiles, cards and the settings panel without a restart.
 - A tile is selected when Home first opens.
-- A video wallpaper shows its own first frame while it starts. Before, the default picture showed for a moment.
-- The clock, the weather and the top icons no longer have a dark box behind them on bright wallpapers.
-- The top icons, progress bars and row names change colour to match the wallpaper.
+- A video wallpaper shows its own first frame while it starts.
 - With **Large** or **Largest** apps, the apps row no longer covers the Continue watching title.
 - Glass rows no longer show a grey edge after the last tile.
-- **More apps.** Plume shows installed apps that do not have a TV launcher entry. Some apps need touch or a mouse.
-- **Aerial Views screensaver.** Select **Plume settings → Screensaver → Screensaver → Aerial Views**. It plays Apple's aerial videos. It uses the same downloaded scenes as the video wallpaper, so each scene downloads only once.
-- **Bigger apps.** Select **Plume settings → Apps row → Size**, then **Standard**, **Large** or **Largest**. Large shows 6 apps across, and Largest shows 4. Banners and icon tiles both grow.
-- **Wallpapers show as they are.** Plume no longer adds dark fades or black over a picture or a video. The text and the glass change to suit the picture. **Top fade** and **Bottom fade** are gone.
-- **New bundled wallpapers.** **Mist (day)** and **Peak (dusk)** replace the two Rockies pictures.
-- The **Glass** setting changes tiles, cards and the settings panel live without restarting Plume.
-- **Clear glass.** Select **Plume settings → Appearance → Glass**, then **Clear**. Clear glass lets more of the wallpaper show through the tiles, cards and menus. **Frosted** keeps the look from 1.6.
-- In light mode with **Glass** off, the Plume settings panel is light again. Before, it was black.
-
-- **Shows wallpaper.** Select **Plume settings → Appearance → Light wallpaper** or **Dark wallpaper**, then **Shows from your apps**. The picture of a show that your apps publish becomes the wallpaper. It comes from Watch Next, or from the channels that you choose in **Wallpaper from**. It changes as often as a folder of photos does. Only wide pictures count. **Featured: …** shows under the weather. Plume fetches nothing until you select it.
-- **Edit the top bar.** Hold **OK** on an icon at the top of the home screen. Select **Move**, **Hide** or **Add icon**. In **Move**, press Left or Right to slide the icon. Press **OK** to place it. Press Back to cancel. **Add icon** shows the icons that you hid. **Plume settings** stays on the bar, so you can always bring the icons back.
-- **Power menu icon.** Hold **OK** on a top-bar icon and select **Add icon**, then **Power menu**. Select the icon to open the Android power menu. If the TV does not open it, a message says so. It needs the Home button turned on. If it is off, the icon offers to turn it on.
-- Plume does not close when a theme change arrives while a picture or the apps list is loading, or when the screen saver ends.
 - **Rows of the shows row.** Select **Plume settings → Shows row → Rows**, then select **Mixed** (the default), **By title** or **Per channel**. The page says what each choice does and which buttons to press. By title and Per channel show one source at a time: Watch Next, or one channel that an app adds. The cards stay in place and change their picture, title and progress.
-- **Home returns to your app.** Press Home in an app that you started from a tile or a card. The home screen shows that tile or card in focus, not the first tile. If you started the app in another way, or the tile is gone, Home shows the first tile.
-- Continue Watching shows the show you watched last first for apps that use their own channel, such as Nuvio. Before, these apps showed the oldest show first.
-- **Banner icons are easier to read.** The other banners are slightly darker than the selected banner.
-- **App animations.** An app opens out of the tile you press, and the row settles when you come back. It works for the app tiles, for Continue watching and for **All apps**. To turn it off, select **Plume settings → Wallpaper & theme → App animations**.
-- On Fire TV, Plume comes back when you press **Home** on the Plume home screen or in the Plume settings. Before, Amazon's home stayed on the screen.
-- On Google TV, Plume covers the app that you watch only when the Google TV home screen opens. Before, a notice or a sign-in screen from the Google TV launcher also brought Plume to the front.
+- Continue watching shows the show you watched last first in apps such as Nuvio.
+- On Fire TV, Plume comes back when you press Home on the Plume home screen or in the Plume settings.
+- On Google TV, a notice or a sign-in screen no longer brings Plume to the front.
+- On some CVTE TVs, the Home button returns to Plume from HDMI or Live TV.
 - On Xiaomi TVs, **Plume settings → Updates → Install** opens the TV's installer. Before, Plume closed.
+- On debloated Google TVs, the **Finish setup** card does not come back after a restart. Folder wallpapers load after a restart.
+- Plume no longer closes when the theme changes while a picture loads, or when the screensaver ends.
+- Old wallpapers no longer ship in the app. An old selection shows a plain colour until you select another wallpaper.
+- Plume is now available in Brazilian Portuguese.
+- Continue watching no longer shows a season or an episode that is not a number.
 
 ## 1.6
 
