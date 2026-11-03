@@ -859,7 +859,7 @@ class MainActivity : Activity() {
             getString(R.string.see_all_changes) to {
                 setupDialog?.dismiss()
                 unlock { openLauncherSettings(R.string.updates); showUpdates() }
-            })
+            }, frosted = true)
     }
 
     private fun donePopup(): Unit {
@@ -869,10 +869,18 @@ class MainActivity : Activity() {
             getString(R.string.setup_done) to { setupDialog?.dismiss() })
     }
 
-    /** A card in the middle of the screen over the dimmed home screen, in the hold menus' colours. */
-    private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>) {
+    /**
+     * A card in the middle of the screen over the dimmed home screen, in the hold menus' colours.
+     * [frosted] makes it Frosted glass whatever the Glass setting is, when there is a picture to blur.
+     */
+    private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>, frosted: Boolean = false) {
         setupDialog?.let { setupDialog = null; it.dismiss() } // replaced, not closed: the dismiss listener leaves the flow alone
-        val card: LinearLayout = if (glassActive()) glassSurface(dp(20).toFloat()) else LinearLayout(this).apply {
+        val frost = frosted && glassPixels != null
+        val card: LinearLayout = if (frost || glassActive()) glassSurface(dp(20).toFloat()).also { box ->
+            if (frost && glassLook().active != GlassStyle.FROSTED) glassPixels?.let {
+                box.glass.setBlur(Bitmap.createBitmap(glassBlur(it, GlassStyle.FROSTED.radius, dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888))
+            }
+        } else LinearLayout(this).apply {
             background = if (dark) rimCard(dp(16), false, solid = true) else GradientDrawable().apply {
                 cornerRadius = dp(16).toFloat()
                 setColor(0xFFF7F8FA.toInt())
@@ -898,7 +906,7 @@ class MainActivity : Activity() {
         dialog.window?.run {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setLayout(dp(if (extra != null) 600 else 480), ViewGroup.LayoutParams.WRAP_CONTENT)
-            setDimAmount(glassLook().active?.dim ?: 0.6f) // glass shows what is behind, so it needs less dimming
+            setDimAmount((if (frost) GlassStyle.FROSTED else glassLook().active)?.dim ?: 0.6f) // glass shows what is behind, so it needs less dimming
         }
         dialog.setOnDismissListener {
             if (setupDialog !== dialog) return@setOnDismissListener
