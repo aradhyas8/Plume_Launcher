@@ -363,6 +363,14 @@
     <string name="help_wallpaper_pack">Open Built-in to check for new wallpapers and update downloaded photos. Press OK on a new photo to download it.</string>
     <string name="theme_wallpaper">Wallpaper</string>
     <string name="help_theme_wallpaper">Wallpaper picks light or dark from your picture, and the glass takes its colours.</string>
+    <string name="remote_battery">Remote battery</string>
+    <string name="remote_battery_value">Remote battery: %1$s</string>
+    <string name="remote_reading">Reading the remote…</string>
+    <string name="remote_not_found">No Bluetooth remote answered</string>
+    <string name="remote_low_alert">Low battery alert: %1$s</string>
+    <string name="remote_low_value">%1$d%%</string>
+    <string name="remote_low_off">off</string>
+    <string name="remote_low_warning">Remote battery low: %1$d%%</string>
     <string name="clock_style">Clock style</string>
     <string name="clock_light">Light</string>
     <string name="clock_bold">Bold</string>
