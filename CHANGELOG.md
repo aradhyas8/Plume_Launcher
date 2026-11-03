@@ -49,6 +49,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Old wallpapers no longer ship in the app. An old selection shows a plain colour until you select another wallpaper.
 - Plume is now available in Brazilian Portuguese.
 - Continue watching no longer shows a season or an episode that is not a number.
+- Wallpaper pictures in Plume settings show at once when you open a list again.
 
 ## 1.6
 

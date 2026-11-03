@@ -301,6 +301,10 @@ class MainActivity : Activity() {
 
     private val prefs by lazy { getSharedPreferences("home", MODE_PRIVATE) }
     private val io = Executors.newSingleThreadExecutor()
+    /** Small wallpaper pictures for the settings grids, by choice and size; 8 MB holds every built-in twice over. */
+    private val thumbCache = object : LruCache<String, Bitmap>(8 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap) = value.byteCount
+    }
     // Posters get their own threads: one slow image server must not hold up the rest (or the row data).
     private val posterIo = Executors.newFixedThreadPool(3)
     private val loading = java.util.Collections.synchronizedSet(HashSet<String>())
@@ -3249,7 +3253,15 @@ class MainActivity : Activity() {
             setImageResource(R.drawable.ms_wallpaper)
             setColorFilter(ink(.4f))
         }
-        if (!choice.startsWith("plain:")) io.execute {
+        // Fixed pictures keep their small copy, so a grid opened again shows them at once; Bing, shows and folders change.
+        val key = "$choice|$big".takeIf { listOf("res:", "pack:", "file:", "video:").any { choice.startsWith(it) } }
+        val cached = key?.let { thumbCache.get(it) }
+        if (cached != null) {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setPadding(0, 0, 0, 0)
+            clearColorFilter()
+            setImageBitmap(cached)
+        } else if (!choice.startsWith("plain:")) io.execute {
             val bmp = try {
                 // 1920 px wide comes out 120 for a row, 480 for the hero card
                 val small = BitmapFactory.Options().apply { inSampleSize = if (big) 4 else 16 }
@@ -3274,6 +3286,7 @@ class MainActivity : Activity() {
             } catch (e: Exception) {
                 null
             }
+            if (bmp != null && key != null) thumbCache.put(key, bmp)
             if (bmp != null) ui.post {
                 if (isDestroyed) return@post
                 scaleType = ImageView.ScaleType.CENTER_CROP
