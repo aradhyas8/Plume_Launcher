@@ -1581,6 +1581,8 @@ class MainActivity : Activity() {
 
     private var packCatalog = emptyList<PackPhoto>()
     private var packBusy = false
+    /** When Built-in last asked GitHub for new photos; once a day is enough, and each check hashes every photo. */
+    private var packCheckedAt = 0L
     private var refreshPackPage: (() -> Unit)? = null
 
     private fun packDir() = File(filesDir, "wallpaper-pack")
@@ -1623,7 +1625,7 @@ class MainActivity : Activity() {
         } + get), forDark, current, focusOn) { pickWallpaper(forDark, current) }
         refreshPackPage = { if (wallPreview == null) pickBuiltIn(forDark, focusOn, false) }
         pageExit = { active = false; refreshPackPage = null }
-        if (refresh && !packBusy) {
+        if (refresh && !packBusy && (packCheckedAt == 0L || SystemClock.elapsedRealtime() - packCheckedAt > 24 * 3600_000L)) {
             packBusy = true
             io.execute {
                 val changed = mutableSetOf<String>()
@@ -1656,10 +1658,14 @@ class MainActivity : Activity() {
                 ui.post {
                     packBusy = false
                     if (isDestroyed) return@post
+                    if (catalog != null && !updateFailed) packCheckedAt = SystemClock.elapsedRealtime()
+                    val newCatalog = catalog != null && catalog != packCatalog
                     if (catalog != null) packCatalog = catalog
+                    for (c in changed) { thumbCache.remove("$c|false"); thumbCache.remove("$c|true") }
                     if (currentWallpaper() in changed) loadWallpaper()
                     if (updateFailed || (catalog == null && packFiles().isEmpty())) toast(getString(R.string.wallpapers_failed), long = true)
-                    refreshPackPage?.invoke()
+                    // Rebuild the grid only when it would look different; a rebuild blanks every picture for a moment.
+                    if (newCatalog || changed.isNotEmpty()) refreshPackPage?.invoke()
                 }
             }
         }
