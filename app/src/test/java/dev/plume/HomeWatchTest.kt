@@ -168,4 +168,13 @@ class HomeWatchTest {
         assertEquals(HomeWatch.KEEP, w.opened("android", "Dialog", 2_200))
         assertEquals(HomeWatch.KEEP, w.opened(amazon, amazonHome, 2_300))
     }
+
+    @Test fun xiaomiHomeJumpsAtOnce() {
+        val w = watch(fire = false)
+        val xiaomi = "com.mitv.tvhome"
+        w.opened("dev.plume", "dev.plume.MainActivity", 1_000)
+        assertEquals(0L, w.opened(xiaomi, "com.mitv.tvhome.MainActivityUserMode", 2_000))
+        assertEquals(HomeWatch.KEEP, w.opened(xiaomi, "com.mitv.tvhome.MainActivityUserMode", 2_100)) // sent twice per press
+        assertNull(w.opened(xiaomi, "com.mitv.tvhome.SomeOtherActivity", 3_000))
+    }
 }
