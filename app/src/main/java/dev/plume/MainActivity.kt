@@ -1515,6 +1515,8 @@ class MainActivity : Activity() {
     }
 
     private fun decodeWallpaper(choice: String): Bitmap? {
+        // A plain colour has no picture. It is the fallback when a picture fails (Bing not downloaded yet): not a file.
+        if (choice.startsWith("plain:")) return null
         BUNDLED_WALLPAPERS[choice.removePrefix("res:")]?.let { res ->
             packFor(choice.removePrefix("res:"))?.let { f -> return fitWallpaper { f.inputStream() } }
             return BitmapFactory.decodeResource(resources, res)
