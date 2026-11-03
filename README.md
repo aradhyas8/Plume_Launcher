@@ -17,8 +17,8 @@
 </p>
 
 <p align="center">
-  <img src="docs/home-light.jpg" alt="Plume home screen, light theme" width="49%">
-  <img src="docs/home-dark.jpg" alt="Plume home screen, dark theme" width="49%">
+  <img src="docs/readme/cherry-clear.jpg" alt="Plume home screen with Clear glass on a cherry blossom wallpaper" width="49%">
+  <img src="docs/readme/theme-dark.jpg" alt="Plume home screen on an aurora wallpaper" width="49%">
 </p>
 
 Plume replaces the cluttered stock home screen with the two things you actually use: your apps and what you were watching. No ads, no sponsored rows, no account and no tracking.
@@ -26,6 +26,13 @@ Plume replaces the cluttered stock home screen with the two things you actually 
 ## Highlights
 
 - **Glass design.** Tiles, cards and settings in **Clear** or **Frosted** glass, or solid. The selected tile rises out of its row and its edge catches the light. Text and icons change colour to stay readable on any wallpaper.
+
+  <p align="center">
+    <img src="docs/readme/frosted-home.jpg" alt="Frosted glass" width="49%">
+    <img src="docs/readme/clear-home.jpg" alt="Clear glass" width="49%"><br>
+    <em>Frosted · Clear</em><br><br>
+    <img src="docs/readme/focus.webp" alt="The selected tile rises and its edge catches the light" width="80%">
+  </p>
 - **Live wallpapers and Aerial Views, built in.** 250+ Apple, Amazon and NASA scenes as your wallpaper or screensaver, or your own MP4. Each scene downloads once, only when you pick it.
 - **Wallpapers your way.** Built-in photos, an optional 4K pack, Bing's photo of the day, pictures of your shows, a photo folder or USB drive, or photos sent from your phone by QR code. The **Wallpaper** theme picks light or dark from the picture.
 - **Continue Watching** from Android TV's Watch Next list and from apps with their own channel, such as Stremio and Nuvio.
@@ -146,9 +153,19 @@ Tests run against a fake `adb`, no TV needed: `sh tools/plume-install-test/run.s
 | Update Plume | **Plume settings → Updates** |
 | Open the Google TV dashboard | Hold **Home** |
 
+<p align="center">
+  <img src="docs/readme/size-largest.jpg" alt="Largest app size" width="60%"><br>
+  <em>Largest app size</em>
+</p>
+
 Remote keys can open an app or input, send a media key, or open Back, Recent apps, Notifications, Quick settings, the Power menu or Android settings. Back, OK, the arrows, Home, Power and volume can't be changed, so you can't lock yourself out. The PIN lock keeps the layout safe; it is not parental control.
 
 ## Wallpapers and screensavers
+
+<p align="center">
+  <img src="docs/readme/library.jpg" alt="Built-in wallpaper picker" width="49%">
+  <img src="docs/readme/live-home.jpg" alt="Live wallpaper behind the home screen" width="49%">
+</p>
 
 - **Live wallpapers:** **Plume settings → Style → Wallpaper → Live wallpapers**. Browse [Apple Aerial](https://github.com/theothernt/AerialViews/blob/master/app/src/main/res/raw/tvos26.json) (139), [Amazon Fire TV](https://github.com/theothernt/AerialViews/blob/master/app/src/main/res/raw/fireos8.json) (112) and [NASA](https://svs.gsfc.nasa.gov/4019) (4) scenes, or **Surprise me**. **Add your video from phone…** takes an H.264 or HEVC MP4 up to 1080p and 350 MB. Videos play muted and stop when you leave Home.
 - **Your photos:** **Add from phone…** shows a QR code. Scan it on the same Wi-Fi and upload. Or pick **Choose a folder on this TV…** for a folder or USB drive that rotates on a timer. Or copy files over adb:
