@@ -13,12 +13,15 @@ android {
         applicationId = "dev.plume"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.6"
+        versionCode = 10
+        versionName = "1.7.1"
         // What's new: only this version's section of CHANGELOG.md ships, one entry per line, ** marks kept for bold.
-        // A ### heading ships as a line that starts with #.
-        val notes = rootProject.file("CHANGELOG.md").readText().replace("\r", "")
-            .substringAfter("\n## $versionName\n", "").substringBefore("\n## ")
+        // A ### heading ships as a line that starts with #. A fix release (1.7.1) ships its x.y section after its own,
+        // so people who update from 1.6 still see what 1.7 brought.
+        val changelog = rootProject.file("CHANGELOG.md").readText().replace("\r", "")
+        val section = { v: String -> changelog.substringAfter("\n## $v\n", "").substringBefore("\n## ") }
+        val minor = versionName!!.split('.').take(2).joinToString(".")
+        val notes = (section(versionName!!) + if (minor != versionName) "\n" + section(minor) else "")
             .lines().filter { it.startsWith("- ") || it.startsWith("### ") }
             .map { if (it.startsWith("### ")) "#" + it.removePrefix("### ") else it.removePrefix("- ") }
         require(notes.isNotEmpty()) { "CHANGELOG.md has no entries under \"## $versionName\"" }

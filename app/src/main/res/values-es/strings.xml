@@ -297,4 +297,14 @@
     </plurals>
     <string name="theme_wallpaper">Fondo</string>
     <string name="help_theme_wallpaper">Fondo elige claro u oscuro según tu imagen, y el cristal toma sus colores.</string>
+    <string name="clock_style">Estilo del reloj</string>
+    <string name="clock_light">Ligero</string>
+    <string name="clock_bold">Negrita</string>
+    <string name="clock_serif">Serif</string>
+    <string name="help_clock_style">El aspecto de los números del reloj.</string>
+    <string name="clock_size">Tamaño del reloj</string>
+    <string name="clock_small">Pequeño</string>
+    <string name="clock_medium">Mediano</string>
+    <string name="clock_large">Grande</string>
+    <string name="help_clock_size">El tamaño del reloj en Inicio.</string>
 </resources>

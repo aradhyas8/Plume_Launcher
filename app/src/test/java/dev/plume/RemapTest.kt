@@ -64,9 +64,23 @@ class RemapTest {
         assertEquals(listOf("k184"), Remap.all(p).keys.toList()) // gone from the saved string too
     }
 
-    @Test fun idFallsBackToTheScanCode() {
-        assertEquals("k183", Remap.id(KeyEvent.KEYCODE_PROG_RED, 398))
+    @Test fun idUsesBothCodesWhenAvailable() {
+        assertEquals("k183s398", Remap.id(KeyEvent.KEYCODE_PROG_RED, 398))
+        assertEquals("k183", Remap.id(KeyEvent.KEYCODE_PROG_RED, 0))
         assertEquals("s398", Remap.id(KeyEvent.KEYCODE_UNKNOWN, 398))
+    }
+
+    @Test fun lookupDistinguishesButtonsAndKeepsOldMappings() {
+        val p = FakePrefs()
+        Remap.put(p, "k249s472", "app:rakuten", "")
+        Remap.reset()
+        val map = Remap.all(p)
+        assertEquals("app:rakuten", Remap.lookup(map, 249, 472)?.short)
+        assertEquals(null, Remap.lookup(map, 249, 186))
+        Remap.put(p, "k249", "app:old", "")
+        assertEquals("app:rakuten", Remap.lookup(map, 249, 472)?.short)
+        assertEquals("app:old", Remap.lookup(map, 249, 186)?.short)
+        assertEquals("app:old", Remap.lookup(map, 249, 0)?.short)
     }
 
     @Test fun keptRefusesKeysThatMustNotChange() {

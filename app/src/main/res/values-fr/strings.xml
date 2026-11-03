@@ -279,4 +279,15 @@
     <string name="remote_low_value">%1$d%%</string>
     <string name="remote_low_off">désactivée</string>
     <string name="remote_low_warning">Pile de la télécommande faible : %1$d%%</string>
+    <string name="clock_style">Style de l’horloge</string>
+    <string name="clock_light">Fin</string>
+    <string name="clock_bold">Gras</string>
+    <string name="clock_serif">Serif</string>
+    <string name="help_clock_style">L’aspect des chiffres de l’horloge.</string>
+    <string name="clock_size">Taille de l’horloge</string>
+    <string name="clock_small">Petite</string>
+    <string name="clock_medium">Moyenne</string>
+    <string name="clock_large">Grande</string>
+    <string name="help_clock_size">La taille de l’horloge sur l’accueil.</string>
+    <string name="section_clock_weather">Horloge et météo</string>
 </resources>

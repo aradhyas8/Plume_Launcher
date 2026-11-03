@@ -65,14 +65,21 @@ object Remap {
         "network" to (Settings.ACTION_WIFI_SETTINGS to R.string.act_network),
     )
 
-    /** A key's identity: its Android code, or its scan code for keys Android has no code for. */
+    /** A key's identity uses its scan code too, when available. */
     fun id(e: KeyEvent) = id(e.keyCode, e.scanCode)
 
     /** Also keys with no code at all, which would all share one identity. */
     fun kept(e: KeyEvent) = kept(e.keyCode, e.scanCode)
 
     // The same rules on plain numbers and a plain SharedPreferences, so the unit tests need no Android framework.
-    internal fun id(keyCode: Int, scanCode: Int) = if (keyCode != KeyEvent.KEYCODE_UNKNOWN) "k$keyCode" else "s$scanCode"
+    internal fun id(keyCode: Int, scanCode: Int) = when {
+        keyCode == KeyEvent.KEYCODE_UNKNOWN -> "s$scanCode"
+        scanCode != 0 -> "k${keyCode}s$scanCode"
+        else -> "k$keyCode"
+    }
+
+    internal fun lookup(map: Map<String, Entry>, keyCode: Int, scanCode: Int) =
+        map[id(keyCode, scanCode)] ?: if (keyCode != KeyEvent.KEYCODE_UNKNOWN) map["k$keyCode"] else null
 
     internal fun kept(keyCode: Int, scanCode: Int) = keyCode in KEEP || (keyCode == KeyEvent.KEYCODE_UNKNOWN && scanCode == 0)
 
@@ -158,10 +165,11 @@ object Remap {
 
     /** What a key is called in the list: "Media play pause" for Android's own codes, "Key 4001" for the rest. */
     fun name(c: Context, id: String): String {
-        val n = id.substring(1).toInt()
+        val n = id.substring(1).substringBefore('s').toInt()
         val s = if (id[0] == 'k') KeyEvent.keyCodeToString(n) else ""
-        return if (s.startsWith("KEYCODE_")) s.substring(8).lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+        val label = if (s.startsWith("KEYCODE_")) s.substring(8).lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
         else c.getString(R.string.key_number, n)
+        return if (id[0] == 'k' && 's' in id) "$label (${id.substringAfter('s')})" else label
     }
 
     fun describe(c: Context, action: String): String {
