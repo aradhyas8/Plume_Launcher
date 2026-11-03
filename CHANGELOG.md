@@ -14,7 +14,7 @@ Write every entry in ASD-STE100 Simplified Technical English:
 
 Put changes that are not released under `## Unreleased`. Rename that heading to the version number when you release.
 
-## Unreleased
+## 1.7
 
 - **A new Plume settings.** Clear sections with new icons. Select **Plume settings → Style → Theme → Wallpaper**, and Plume takes its colours from your wallpaper.
 - **Clear glass.** See more of your wallpaper through tiles and menus. Select **Plume settings → Style → Glass → Clear**. The edges catch the light when you select a tile.
@@ -47,6 +47,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - On debloated Google TVs, the **Finish setup** card does not come back after a restart. Folder wallpapers load after a restart.
 - Plume no longer closes when the theme changes while a picture loads, or when the screensaver ends.
 - Old wallpapers no longer ship in the app. An old selection shows a plain colour until you select another wallpaper.
+- Plume is now available in Brazilian Portuguese.
+- Continue watching no longer shows a season or an episode that is not a number.
 
 ## 1.6
 
