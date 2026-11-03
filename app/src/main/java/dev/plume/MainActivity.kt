@@ -833,7 +833,7 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Once after an update: the first four CHANGELOG.md entries of this version, so put the best ones first.
+     * Once after an update: the first six CHANGELOG.md entries of this version, so put the best ones first.
      * The card shows each entry's bold headline and the sentence after it; See all changes shows the rest.
      * Closing it counts as reading the notes, which clears the dot on the Plume settings icon.
      */
@@ -842,7 +842,7 @@ class MainActivity : Activity() {
         updateBadge()
         val notes = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            getString(R.string.whats_new).split('\n').filter { !it.startsWith("#") }.take(4).forEach {
+            getString(R.string.whats_new).split('\n').filter { !it.startsWith("#") }.take(6).forEach {
                 val head = it.indexOf("**", 2)
                 val cut = if (head < 0) -1 else it.indexOf(". ", head + 2)
                 addView(label("", 15f).apply {
@@ -859,7 +859,7 @@ class MainActivity : Activity() {
             getString(R.string.see_all_changes) to {
                 setupDialog?.dismiss()
                 unlock { openLauncherSettings(R.string.updates); showUpdates() }
-            })
+            }, frosted = true)
     }
 
     private fun donePopup(): Unit {
@@ -869,10 +869,21 @@ class MainActivity : Activity() {
             getString(R.string.setup_done) to { setupDialog?.dismiss() })
     }
 
-    /** A card in the middle of the screen over the dimmed home screen, in the hold menus' colours. */
-    private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>) {
+    /**
+     * A card in the middle of the screen over the dimmed home screen, in the hold menus' colours.
+     * [frosted] makes it Frosted glass whatever the Glass setting is, when there is a picture to blur.
+     */
+    private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>, frosted: Boolean = false) {
         setupDialog?.let { setupDialog = null; it.dismiss() } // replaced, not closed: the dismiss listener leaves the flow alone
-        val card: LinearLayout = if (glassActive()) glassSurface(dp(20).toFloat()) else LinearLayout(this).apply {
+        val frost = frosted && Backdrop.of(currentWallpaper()) != Backdrop.PLAIN
+        val card: LinearLayout = if (frost || glassActive()) glassSurface(dp(20).toFloat()).also { box ->
+            if (frost) {
+                // Its own blur, not the setting's: applyGlass sets it, also when the wallpaper loads after the card opens.
+                glassSurfaces.removeAll { it.get() === box.glass }
+                frostedCard = java.lang.ref.WeakReference(box.glass)
+                box.glass.setBlur(frostedBlur())
+            }
+        } else LinearLayout(this).apply {
             background = if (dark) rimCard(dp(16), false, solid = true) else GradientDrawable().apply {
                 cornerRadius = dp(16).toFloat()
                 setColor(0xFFF7F8FA.toInt())
@@ -898,7 +909,7 @@ class MainActivity : Activity() {
         dialog.window?.run {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setLayout(dp(if (extra != null) 600 else 480), ViewGroup.LayoutParams.WRAP_CONTENT)
-            setDimAmount(glassLook().active?.dim ?: 0.6f) // glass shows what is behind, so it needs less dimming
+            setDimAmount((if (frost) GlassStyle.FROSTED else glassLook().active)?.dim ?: 0.6f) // glass shows what is behind, so it needs less dimming
         }
         dialog.setOnDismissListener {
             if (setupDialog !== dialog) return@setOnDismissListener
@@ -1205,6 +1216,12 @@ class MainActivity : Activity() {
     /** The shown picture (a video's first frame) as [glassScreen] pixels, not blurred; null for a plain background. */
     private var glassPixels: IntArray? = null
 
+    /** A card that is Frosted whatever the Glass setting is (see [homePopup]). */
+    private var frostedCard: java.lang.ref.WeakReference<GlassDrawable>? = null
+
+    private fun frostedBlur(): Bitmap? = if (glassLook().active == GlassStyle.FROSTED) surfaceBlur
+        else glassPixels?.let { Bitmap.createBitmap(glassBlur(it, GlassStyle.FROSTED.radius, dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
+
     /**
      * The blur for menus, dialogs and the panel: softer than tiles so text stays readable.
      */
@@ -1237,6 +1254,7 @@ class MainActivity : Activity() {
         surfaceBlur = if (look.active?.radius == frost) glass.blur
             else shown?.let { Bitmap.createBitmap(glassBlur(it, frost, look.dark), GLASS_W, GLASS_H, Bitmap.Config.ARGB_8888) }
         glassSurfaces.forEach { it.get()?.setBlur(surfaceBlur) } // menus and cards that are open, and the panel
+        frostedCard?.get()?.setBlur(frostedBlur())
         if (was?.first != look) { // the card tints and which tiles get frost follow the look
             applyTheme()
             baked.clear()
