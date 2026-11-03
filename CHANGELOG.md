@@ -50,6 +50,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Plume is now available in Brazilian Portuguese.
 - Continue watching no longer shows a season or an episode that is not a number.
 - A new install starts on the Arctic Aurora wallpaper, with the light theme and Frosted glass. An update keeps your wallpaper.
+- Wallpaper pictures in Plume settings show at once when you open a list again.
 
 ## 1.6
 
