@@ -281,6 +281,8 @@
     <string name="section_screensaver">Screensaver</string>
     <string name="sources">Sources</string>
     <string name="no_signal">No signal</string>
+    <string name="input_opening">Opening input…</string>
+    <string name="input_failed">Could not open this input. Press Back to return.</string>
     <string name="in_row">In the row</string>
     <string name="input_added">Added to the row.</string>
     <string name="input_removed">Removed from the row.</string>

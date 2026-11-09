@@ -203,6 +203,8 @@
     <string name="section_screensaver">Ekran Koruyucu</string>
     <string name="sources">Kaynaklar</string>
     <string name="no_signal">Sinyal yok</string>
+    <string name="input_opening">Giriş açılıyor…</string>
+    <string name="input_failed">Bu giriş açılamadı. Dönmek için Geri tuşuna basın.</string>
     <string name="in_row">Satırda</string>
     <string name="input_added">Satıra eklendi.</string>
     <string name="input_removed">Satırdan kaldırıldı.</string>

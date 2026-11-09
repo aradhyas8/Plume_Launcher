@@ -219,6 +219,8 @@
     <string name="bing_daily">صورة اليوم من Bing</string>
     <string name="sources">المصادر</string>
     <string name="no_signal">لا توجد إشارة</string>
+    <string name="input_opening">جارٍ فتح المدخل…</string>
+    <string name="input_failed">تعذر فتح هذا المدخل. اضغط على رجوع للعودة.</string>
     <string name="in_row">في الصف</string>
     <string name="input_added">أُضيف إلى الصف.</string>
     <string name="input_removed">أُزيل من الصف.</string>
