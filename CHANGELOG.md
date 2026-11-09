@@ -16,6 +16,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- Plume opens when the Shield's Android TV home screen appears with the Home button service enabled.
 - Plume leaves the system launcher in front while Google TV suspends Plume in a kids profile.
 - Plume starts at cold boot when it is the only Home app. Before, the TV stayed on the boot screen.
 

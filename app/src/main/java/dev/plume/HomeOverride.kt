@@ -95,8 +95,8 @@ class HomeOverride : AccessibilityService() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val watch by lazy { HomeWatch(fireTv(this)) { googleHomes } }
-    private var googleHomes = emptySet<String>()
+    private val watch by lazy { HomeWatch(fireTv(this)) { homes } }
+    private var homes = emptyMap<String, Set<String>>()
     private var listening = false
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) = loadHomes()
@@ -112,10 +112,10 @@ class HomeOverride : AccessibilityService() {
         after?.let { handler.postDelayed(jump, it) }
     }
 
-    /** The Google TV launcher's home screens, asked of the system when the service starts and when a package changes. */
+    /** The stock launchers' home screens, asked of the system when the service starts and when a package changes. */
     private fun loadHomes() {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        googleHomes = googleTvHomes(packageManager.queryIntentActivities(home, 0).map {
+        homes = stockHomes(packageManager.queryIntentActivities(home, 0).map {
             val a = it.activityInfo
             HomeEntry(a.packageName, a.name, a.targetActivity)
         })
