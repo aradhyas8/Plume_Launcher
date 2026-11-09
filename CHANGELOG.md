@@ -16,6 +16,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Screensaver preview.** Gallery, photos, and Aerial Views preview without the TV's system preview activity.
+
 - **Plume All apps.** Assign this action to a remote key to open Plume's app list.
 - Fire TVs with DroidLogic inputs play HDMI inside Plume instead of using Amazon's input switcher.
 - Plume opens when the Shield's Android TV home screen appears with the Home button service enabled.

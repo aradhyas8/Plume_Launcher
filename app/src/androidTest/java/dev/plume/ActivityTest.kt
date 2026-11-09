@@ -20,13 +20,20 @@ import android.widget.TextView
 class ActivityTest : Instrumentation() {
     private var current = 0
     private var failures = 0
+    private var previewOnly = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
+        previewOnly = arguments?.getString("class") == GalleryPreviewTest::class.java.name
         start()
     }
 
     override fun onStart() {
+        if (previewOnly) {
+            test("galleryPreviewControlsAndReturn") { GalleryPreviewTest(this).run() }
+            finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
+            return
+        }
         ParcelFileDescriptor.AutoCloseInputStream(uiAutomation.executeShellCommand(
             "pm grant ${targetContext.packageName} android.permission.READ_TV_LISTINGS")).use { it.readBytes() }
         test("missingInputShowsError") { checkInput(null, R.string.input_failed) }
@@ -107,6 +114,7 @@ class ActivityTest : Instrumentation() {
                 }
             }
         }
+        test("galleryPreviewControlsAndReturn") { GalleryPreviewTest(this).run() }
         finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
     }
 
@@ -114,7 +122,7 @@ class ActivityTest : Instrumentation() {
         val result = Bundle().apply {
             putString("class", this@ActivityTest.javaClass.name)
             putString("test", name)
-            putInt("numtests", 8)
+            putInt("numtests", if (previewOnly) 1 else 9)
             putInt("current", ++current)
         }
         sendStatus(1, result)

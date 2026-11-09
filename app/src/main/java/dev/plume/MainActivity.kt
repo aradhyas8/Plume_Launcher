@@ -4649,8 +4649,13 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    /** Starts whichever screensaver is set, through SystemUI's "dream now" entry point. */
+    /** Plume previews its own content; other screensavers use the system entry point. */
     private fun testScreensaver() {
+        if (galleryOn()) {
+            returnTo(R.string.test_screensaver)
+            startActivity(Intent(this, GalleryPreview::class.java))
+            return
+        }
         returnTo(R.string.test_screensaver, dream = true)
         try {
             startActivity(Intent(Intent.ACTION_MAIN).setClassName("com.android.systemui", "com.android.systemui.Somnambulator"))

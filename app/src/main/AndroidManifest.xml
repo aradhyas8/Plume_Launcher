@@ -100,6 +100,11 @@
             android:exported="false"
             android:grantUriPermissions="true" />
 
+        <activity
+            android:name=".GalleryPreview"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
         <!-- Gallery screensaver; switched on and off from launcher settings. -->
         <service
             android:name=".GalleryDream"
