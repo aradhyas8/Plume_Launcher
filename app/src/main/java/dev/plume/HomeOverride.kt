@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -60,6 +61,7 @@ class HomeOverride : AccessibilityService() {
     }
 
     override fun onKeyEvent(e: KeyEvent): Boolean {
+        if (packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SUSPENDED != 0) return false
         if (e.keyCode != KeyEvent.KEYCODE_HOME) return remap(e)
         // Decided on release, by how long it was held: this TV's remote doesn't reliably send key repeats.
         if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) {
@@ -120,7 +122,10 @@ class HomeOverride : AccessibilityService() {
     }
 
     // Marked as Home so the setup check can tell it from Plume being opened from the apps list.
-    private fun goHome() = startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    private fun goHome() {
+        if (packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SUSPENDED != 0) return
+        startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     override fun onInterrupt() {}
 
