@@ -70,6 +70,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".InputActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
         <!-- For launchers that list only LAUNCHER apps. -->
         <activity-alias
             android:name=".LauncherEntry"

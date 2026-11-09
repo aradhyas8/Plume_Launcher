@@ -256,6 +256,8 @@
     <string name="section_screensaver">Salvapantallas</string>
     <string name="sources">Entradas</string>
     <string name="no_signal">Sin señal</string>
+    <string name="input_opening">Abriendo entrada…</string>
+    <string name="input_failed">No se pudo abrir esta entrada. Pulsa Atrás para volver.</string>
     <string name="in_row">En la fila</string>
     <string name="input_added">Añadida a la fila.</string>
     <string name="input_removed">Quitada de la fila.</string>

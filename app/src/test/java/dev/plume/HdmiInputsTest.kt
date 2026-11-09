@@ -30,6 +30,14 @@ class HdmiInputsTest {
         assertEquals(null, Remap.hardwareNumber("com.example/.Service/HW2/HDMI2050")) // a CEC device's id, not its port's
     }
 
+    @Test fun droidlogicInputsUsePlumePlaybackWithoutGuessingPortNumbers() {
+        assertTrue(Remap.playsInput("com.droidlogic.tvinput/.services.Hdmi1InputService/HW5"))
+        assertTrue(Remap.playsInput("com.droidlogic.tvinput/.services.Hdmi2InputService/HW6"))
+        assertFalse(Remap.playsInput("com.mediatek.tvinput/.hdmi.HDMIInputService/HW2"))
+        assertFalse(Remap.playsInput("com.droidlogic.tvinput.other/.Service/HW5"))
+        assertFalse(Remap.playsInput(""))
+    }
+
     @Test fun row() {
         assertTrue(inRow("com.app", emptySet()))
         assertFalse(inRow("com.app", setOf("com.app")))

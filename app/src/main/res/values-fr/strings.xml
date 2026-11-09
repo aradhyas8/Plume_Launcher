@@ -224,6 +224,8 @@
     <string name="section_screensaver">Écran de veille</string>
     <string name="sources">Sources</string>
     <string name="no_signal">Pas de signal</string>
+    <string name="input_opening">Ouverture de l’entrée…</string>
+    <string name="input_failed">Impossible d’ouvrir cette entrée. Appuyez sur Retour pour revenir.</string>
     <string name="in_row">Dans la ligne</string>
     <string name="input_added">Ajoutée à la ligne.</string>
     <string name="input_removed">Retirée de la ligne.</string>

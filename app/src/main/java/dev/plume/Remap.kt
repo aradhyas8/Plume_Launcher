@@ -114,17 +114,25 @@ object Remap {
 
     private val KAMINO = ComponentName("com.amazon.tv.inputpreference.service", "com.amazon.tv.inputpreference.service.KaminoInputSwitchService")
 
-    /** The hardware number at the end of a TV input id ("…/HW2"): Fire OS's input switch takes it as the port, HW2 being HDMI 1. */
+    /** The hardware number at the end of a TV input id ("…/HW2"); some Fire TV switchers accept it as inputType. */
     internal fun hardwareNumber(id: String) = Regex("/HW(\\d+)$").find(id)?.groupValues?.get(1)?.toInt()
+
+    /** #146: this provider's inputs fail through Amazon's switcher, so Plume supplies the playback surface. */
+    internal fun playsInput(id: String) = id.startsWith("com.droidlogic.tvinput/")
 
     /**
      * Opens an HDMI input, for the tiles and for keys alike. Fire OS hands the standard passthrough request to Amazon's
-     * Live TV app, which opens the wrong screen (#91), so there the input goes through Amazon's own input switch, as its
-     * home screen does. Some Fire OS builds keep that switch to Amazon's apps: then a toast says how to switch by hand.
+     * Live TV app, which opens the wrong screen (#91). DroidLogic inputs use Plume's player (#146); other Fire TV inputs
+     * use Amazon's input switch. Some builds refuse that switch: then a toast says how to switch by hand.
      */
     fun openInput(c: Context, id: String) {
         if (!c.packageManager.hasSystemFeature("amazon.hardware.fire_tv")) {
             c.startActivity(Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(id)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        }
+        if (playsInput(id)) {
+            c.startActivity(Intent(c, InputActivity::class.java).putExtra("input", id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
             return
         }
         val port = hardwareNumber(id)

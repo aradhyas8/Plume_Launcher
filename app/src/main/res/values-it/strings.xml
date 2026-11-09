@@ -264,6 +264,8 @@
     <string name="section_screensaver">Salvaschermo</string>
     <string name="sources">Ingressi</string>
     <string name="no_signal">Nessun segnale</string>
+    <string name="input_opening">Apertura ingresso…</string>
+    <string name="input_failed">Impossibile aprire questo ingresso. Premi Indietro per tornare.</string>
     <string name="in_row">Nella riga</string>
     <string name="input_added">Aggiunto alla riga.</string>
     <string name="input_removed">Rimosso dalla riga.</string>
