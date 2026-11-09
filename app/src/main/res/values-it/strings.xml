@@ -323,4 +323,5 @@
     <string name="clock_medium">Medio</string>
     <string name="clock_large">Grande</string>
     <string name="help_clock_size">Quanto è grande l’orologio nella Home.</string>
+    <string name="act_all_apps">Tutte le app di Plume</string>
 </resources>

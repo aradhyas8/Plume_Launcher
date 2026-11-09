@@ -223,4 +223,5 @@
     <string name="clock_large">Büyük</string>
     <string name="help_clock_size">Ana ekrandaki saatin boyutu.</string>
     <string name="section_clock_weather">Saat ve hava durumu</string>
+    <string name="act_all_apps">Plume Tüm uygulamalar</string>
 </resources>

@@ -470,8 +470,8 @@ class MainActivity : Activity() {
             setOnClickListener { action() }
             setOnLongClickListener { if (!holdFired) fireHold(this); true } // hold OK: move, hide or add icons
         }
-        if (fakeSetup(intent)) {
-            // debug: setup for a pretend TV already started
+        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || fakeSetup(intent)) {
+            // An explicit drawer request takes priority over setup and update cards.
         } else if (prefs.getBoolean("reopen_settings", false)) {
             prefs.edit().remove("reopen_settings").apply()
             ui.post { openLauncherSettings(R.string.theme) }
@@ -511,6 +511,7 @@ class MainActivity : Activity() {
             return
         }
         resumed = true
+        val allAppsRequested = intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false)
         if (currentWallpaper().startsWith("video:")) videoWallpaper.resume()
         returnTo = null // back by another way than Home: the next Home starts again at the first tile
         openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
@@ -518,7 +519,7 @@ class MainActivity : Activity() {
         ensureHomeService()
         homeSetupResumed()
         // Back from a screen that settings opened: settings again, on the same row (and the Home switch as it is now).
-        val back = prefs.getInt("return_settings", 0)
+        val back = if (allAppsRequested) 0 else prefs.getInt("return_settings", 0)
         if (back != 0 && hidden) {
             prefs.edit().remove("return_settings").remove("return_dream").apply()
             if (settingsScrim.visibility == View.VISIBLE) renderSettings(back) else openLauncherSettings(back)
@@ -544,6 +545,14 @@ class MainActivity : Activity() {
         Bing.onChanged = bingChanged
         Bing.refresh(applicationContext, prefs)
         ui.post { updateBadge() } // after layout, so the icon has its size
+        if (allAppsRequested) {
+            intent.removeExtra(Remap.OPEN_ALL_APPS) // consume only after initialization and any theme recreation
+            prefs.edit().remove("return_settings").remove("return_dream").remove("reopen_settings").apply()
+            if (editing) endEdit()
+            if (movingTop != null) endTopMove(false)
+            if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
+            if (allApps.visibility != View.VISIBLE) openAllApps()
+        }
     }
 
     /** Auto theme flips at sunrise and sunset (or 7:00 and 19:00) even while the home screen just sits there. */
@@ -982,10 +991,12 @@ class MainActivity : Activity() {
     /** Home pressed while already home: close whatever is open and go back to the start of the apps row. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent) // keep requests received before unlock or a theme recreation
         if (!ready) return
         // Home pressed in Android's settings means home, not settings; the screensaver's end comes in as Home too.
         if (intent.hasCategory(Intent.CATEGORY_HOME) && !prefs.getBoolean("return_dream", false)) prefs.edit().remove("return_settings").apply()
         if (intent.action == UPDATE_STATUS) return installStatus(intent)
+        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false)) return // onResume handles new and existing activities
         if (fakeSetup(intent)) return
         if (homeTest != 0 && intent.hasCategory(Intent.CATEGORY_HOME)) { // the Home press reached us: setup works
             homeTest = 0
@@ -3432,6 +3443,7 @@ class MainActivity : Activity() {
                 SOURCES = inputs
                 if (movingTop == null) applyTopBar() // Sources shows only while the TV has an input
                 renderApps()
+                if (allApps.visibility == View.VISIBLE) openAllApps() // a fresh remote request can precede the app list
             }
         }
     }

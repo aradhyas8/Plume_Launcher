@@ -284,4 +284,5 @@
     <string name="clock_large">Grande</string>
     <string name="help_clock_size">La taille de l’horloge sur l’accueil.</string>
     <string name="section_clock_weather">Horloge et météo</string>
+    <string name="act_all_apps">Toutes les applications Plume</string>
 </resources>

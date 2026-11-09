@@ -15,7 +15,7 @@ import android.widget.Toast
 /**
  * Remote key remapping. Plume's Home key service already sees every key before any app does, so a key mapped
  * here is handled there: [Entry.short] runs on a press and [Entry.long] on a hold ("" when unset). An action is
- * "none" (swallow the key), "app:<package>", "hdmi:<input id>", "media:<name>", "sys:<name>" or "open:<place>" (Android's Settings).
+ * "none" (swallow the key), "app:<package>", "hdmi:<input id>", "media:<name>", "sys:<name>" or "open:<place>" (Plume or Android Settings).
  * Kept in one preference string ("home"/"keymap", a line per key) and in memory only once a key is pressed.
  */
 object Remap {
@@ -59,10 +59,14 @@ object Remap {
         "power" to (AccessibilityService.GLOBAL_ACTION_POWER_DIALOG to R.string.act_power),
     )
 
-    /** Places in Android's Settings that a key can open, though Settings is not in the apps list. */
+    /** A Home intent opens this view once, after the main screen is ready. */
+    const val OPEN_ALL_APPS = "open_all_apps"
+
+    /** Screens that a key can open without an app tile. */
     val OPEN = linkedMapOf(
         "settings" to (Settings.ACTION_SETTINGS to R.string.act_settings),
         "network" to (Settings.ACTION_WIFI_SETTINGS to R.string.act_network),
+        "allapps" to (Intent.ACTION_MAIN to R.string.act_all_apps),
     )
 
     /** A key's identity uses its scan code too, when available. */
@@ -164,7 +168,12 @@ object Remap {
                 "sys" -> SYS[arg]?.let { (code, _) ->
                     if (code == AccessibilityService.GLOBAL_ACTION_POWER_DIALOG) powerMenu(s) else s.performGlobalAction(code)
                 }
-                "open" -> OPEN[arg]?.let { (action, _) -> s.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                "open" -> OPEN[arg]?.let { (action, _) ->
+                    val intent = Intent(action)
+                    if (arg == "allapps") intent.setClass(s, MainActivity::class.java)
+                        .addCategory(Intent.CATEGORY_HOME).putExtra(OPEN_ALL_APPS, true)
+                    s.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
             }
         } catch (e: Exception) {
             // An app that's gone, or an input that's unplugged: the key just does nothing.

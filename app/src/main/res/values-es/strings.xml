@@ -309,4 +309,5 @@
     <string name="clock_medium">Mediano</string>
     <string name="clock_large">Grande</string>
     <string name="help_clock_size">El tamaño del reloj en Inicio.</string>
+    <string name="act_all_apps">Todas las aplicaciones de Plume</string>
 </resources>
