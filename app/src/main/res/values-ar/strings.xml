@@ -239,4 +239,5 @@
     <string name="clock_large">كبير</string>
     <string name="help_clock_size">حجم الساعة في الشاشة الرئيسية.</string>
     <string name="section_clock_weather">الساعة والطقس</string>
+    <string name="act_all_apps">كل تطبيقات Plume</string>
 </resources>

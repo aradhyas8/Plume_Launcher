@@ -1,6 +1,7 @@
 package dev.plume
 
 import android.content.SharedPreferences
+import android.content.Intent
 import android.view.KeyEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -37,6 +38,15 @@ class RemapTest {
     }
 
     @Before fun fresh() = Remap.reset() // Remap keeps its keys in memory between calls
+
+    @Test fun allAppsActionSurvivesSavingAndReloading() {
+        val p = FakePrefs()
+        assertFalse(Remap.kept(KeyEvent.KEYCODE_ALL_APPS, 580))
+        Remap.put(p, "k284s580", "open:allapps", "")
+        Remap.reset()
+        assertEquals("open:allapps", Remap.lookup(Remap.all(p), KeyEvent.KEYCODE_ALL_APPS, 580)!!.short)
+        assertEquals(Intent.ACTION_MAIN to R.string.act_all_apps, Remap.OPEN["allapps"])
+    }
 
     @Test fun putThenAllGivesBackTheSameEntries() {
         val p = FakePrefs()

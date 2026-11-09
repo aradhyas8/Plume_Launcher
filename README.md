@@ -173,6 +173,8 @@ Tests run against a fake `adb`, no TV needed: `sh tools/plume-install-test/run.s
 
 Remote keys can open an app or input, send a media key, or open Back, Recent apps, Notifications, Quick settings, the Power menu or Android settings. Back, OK, the arrows, Home, Power and volume can't be changed, so you can't lock yourself out. The PIN lock keeps the layout safe; it is not parental control.
 
+Select **Plume All apps** as the Press or Hold action under **Home &amp; remote → Remote keys**.
+
 ## Wallpapers and screensavers
 
 <p align="center">
