@@ -2647,7 +2647,7 @@ class MainActivity : Activity() {
                 else -> photoScreensaver()?.let { wallpaperName(it) } ?: getString(R.string.gallery)
             }) { pickScreensaver() },
             R.string.test_screensaver to Triple(getString(R.string.test_screensaver), "") { testScreensaver() },
-            R.string.screensaver_timing to Triple(getString(R.string.screensaver_timing), "") { openScreensaverSettings() },
+            R.string.screensaver_timing to Triple(getString(R.string.screensaver_timing), screensaverDelayName()) { pickScreensaverDelay() },
             R.string.setup_home to Triple(getString(R.string.setup_home), "") { closeLauncherSettings(); startHomeSetup() },
             R.string.home_button to Triple(getString(R.string.home_button), toggle(homeServiceOn())) { toggleHomeButton() },
             R.string.smooth_volume to Triple(getString(R.string.smooth_volume), toggle(prefs.getBoolean("smooth_volume", false))) {
@@ -2732,7 +2732,7 @@ class MainActivity : Activity() {
                     help = help(k), area = SECTION_AREAS[section.first], art = ROW_ART[k],
                     dim = getString(R.string.glass_clear).takeIf { k == R.string.glass && currentWallpaper().startsWith("video:") },
                     // Without the adb permission, Home opens Plume is switched on in Android's Accessibility screen.
-                    ext = k == R.string.screensaver_timing || k == R.string.home_button && !homeServiceOn() && checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED)
+                    ext = k == R.string.home_button && !homeServiceOn() && checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED)
             }
             return showPage(getString(section.first), keys.map { rows[it]!! }, keys.indexOf(at), steps = keys.map { steps[it] }, styles = styles,
                 crumb = getString(R.string.plume_settings)) {
@@ -4598,6 +4598,52 @@ class MainActivity : Activity() {
         paintingsDir(this).deleteRecursively() // another screensaver is in charge: give the space back
     }
 
+    private fun readDreamSetting(key: String): String? = if (key == Settings.System.SCREEN_OFF_TIMEOUT)
+        Settings.System.getString(contentResolver, key) else Settings.Secure.getString(contentResolver, key)
+
+    private fun screensaverDelayName(): String {
+        if (readDreamSetting("screensaver_enabled") == "0") return getString(R.string.never)
+        val key = if (fireTv() && readDreamSetting("contextual_screen_off_timeout") != null)
+            "contextual_screen_off_timeout" else Settings.System.SCREEN_OFF_TIMEOUT
+        val ms = readDreamSetting(key)?.toLongOrNull() ?: return ""
+        if (ms <= 0 || ms % 60_000 != 0L) return ""
+        val minutes = (ms / 60_000).toInt()
+        return resources.getQuantityString(R.plurals.screensaver_minutes, minutes, minutes)
+    }
+
+    private fun pickScreensaverDelay() {
+        if (checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED) {
+            val hint = label(getString(R.string.screensaver_delay_permission) + "\n\nadb shell pm grant $packageName $WRITE_SECURE", 14f)
+                .apply { maxLines = 8; ellipsize = null }
+            return showPage(getString(R.string.screensaver_timing),
+                listOf(page(getString(R.string.act_settings), "") { openScreensaverSettings() }), top = hint) {
+                renderSettings(R.string.screensaver_timing)
+            }
+        }
+        val choices = SCREENSAVER_DELAYS
+        val current = screensaverDelayName()
+        showPage(getString(R.string.screensaver_timing), choices.map { minutes ->
+            val name = if (minutes == 0) getString(R.string.never)
+                else resources.getQuantityString(R.plurals.screensaver_minutes, minutes, minutes)
+            page(name, if (name == current) CHOSEN else "") {
+                try {
+                    saveScreensaverDelay(minutes, fireTv(), ::readDreamSetting) { key, value ->
+                        if (key == Settings.System.SCREEN_OFF_TIMEOUT) Settings.System.putString(contentResolver, key, value)
+                        else Settings.Secure.putString(contentResolver, key, value)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("Plume", "Could not save screensaver timing", e)
+                    toast(getString(R.string.screensaver_delay_failed), long = true)
+                }
+                pickScreensaverDelay()
+            }
+        } + page(getString(R.string.act_settings), "") { openScreensaverSettings() },
+            maxOf(0, choices.indexOfFirst { minutes ->
+                current == if (minutes == 0) getString(R.string.never)
+                    else resources.getQuantityString(R.plurals.screensaver_minutes, minutes, minutes)
+            })) { renderSettings(R.string.screensaver_timing) }
+    }
+
     /** Android's screensaver settings (timing, sleep): plain Android TV and Google TV name them differently. */
     private fun openScreensaverSettings() {
         returnTo(R.string.screensaver_timing)
@@ -5651,7 +5697,7 @@ class MainActivity : Activity() {
             R.string.apps_when_hidden to R.string.help_apps_when_hidden, R.string.row_name to R.string.help_row_name,
             R.string.show_icons to R.string.help_show_icons,
             R.string.cw_apps to R.string.help_from_apps, R.string.cw_channels to R.string.help_channels,
-            R.string.wp_sources to R.string.help_wp_sources, R.string.restore_hidden to R.string.help_hidden_shows, R.string.screensaver_timing to R.string.help_start_after,
+            R.string.wp_sources to R.string.help_wp_sources, R.string.restore_hidden to R.string.help_hidden_shows, R.string.screensaver_timing to R.string.help_screensaver_delay,
             R.string.home_button to R.string.help_home_button, R.string.smooth_volume to R.string.help_smooth_volume,
             R.string.default_launcher to R.string.help_default_launcher,
             R.string.setup_home to R.string.help_run_setup, R.string.section_keys to R.string.help_remote_keys,

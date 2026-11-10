@@ -226,7 +226,6 @@
     <string name="help_from_apps">Escolha os apps que podem adicionar programas a esta fileira.</string>
     <string name="help_channels">Ative ou desative os canais que os apps adicionam, como Recomendados.</string>
     <string name="help_hidden_shows">Programas que você ocultou da fileira. Pressione OK para mostrar todos de novo.</string>
-    <string name="help_start_after">Abre as configurações do Android onde você define quanto tempo a TV espera.</string>
     <string name="help_home_button">O Início abre o Plume. Segure o Início para abrir o painel da própria TV.</string>
     <string name="help_default_launcher">No Android TV, o Plume pode ser o app de início. O Google TV mantém o próprio: use \"Início abre o Plume\" nele.</string>
     <string name="help_run_setup">Refaça a configuração do botão Início.</string>

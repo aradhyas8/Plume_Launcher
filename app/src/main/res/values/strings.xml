@@ -226,7 +226,13 @@
     <string name="help_from_apps">Choose the apps that can add shows to this row.</string>
     <string name="help_channels">Turn on or off the channels that apps add, like Recommended.</string>
     <string name="help_hidden_shows">Shows you hid from the row. Press OK to show all of them again.</string>
-    <string name="help_start_after">Opens the Android settings where you set how long the TV waits.</string>
+    <string name="help_screensaver_delay">Choose how long the TV waits before it starts the screensaver. This also changes the TV inactivity timeout.</string>
+    <string name="screensaver_delay_permission">To set the timeout here, grant Plume this permission once with ADB. You can also use Android settings.</string>
+    <string name="screensaver_delay_failed">The TV could not save this timeout. Open Android settings to change it.</string>
+    <plurals name="screensaver_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
     <string name="help_home_button">Home opens Plume. Hold Home to open the TV\'s own dashboard.</string>
     <string name="help_default_launcher">On Android TV, Plume can be the home app. Google TV keeps its own: use Home opens Plume there.</string>
     <string name="help_run_setup">Go through the Home button setup again.</string>

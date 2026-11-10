@@ -16,6 +16,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Screensaver timing.** Choose **Start after** in Plume to set the TV timeout or select **Never**.
+
 - **Screensaver preview.** Gallery, photos, and Aerial Views preview without the TV's system preview activity.
 
 - **Plume All apps.** Assign this action to a remote key to open Plume's app list.
