@@ -232,7 +232,7 @@
             </LinearLayout>
         </dev.plume.SnapScrollView>
 
-        <TextView
+        <dev.plume.CrossfadeLabel
             android:id="@+id/watchTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

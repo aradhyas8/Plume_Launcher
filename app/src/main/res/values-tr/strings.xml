@@ -223,5 +223,16 @@
     <string name="clock_large">Büyük</string>
     <string name="help_clock_size">Ana ekrandaki saatin boyutu.</string>
     <string name="section_clock_weather">Saat ve hava durumu</string>
+    <string name="cards_rows">Satırlar</string>
+    <string name="cards_mixed">Karışık</string>
+    <string name="cards_title">Başlığa göre</string>
+    <string name="cards_each">Kanala göre</string>
+    <string name="help_cards_rows">Dizilerin nasıl gruplandığı. Seçenekleri ve her birinin kullandığı tuşları görmek için seçin.</string>
+    <string name="help_cards_mixed">Tüm kaynaklar tek satırda, en yeniler önce. Değiştirilecek bir şey yok.</string>
+    <string name="help_cards_title">Bir seferde bir kaynak. Uygulamalardan başlığa gitmek için Aşağı\'ya, sonra başka bir kaynak için Sol veya Sağ\'a basın.</string>
+    <string name="help_cards_each">Her kaynak için bir satır, bir seferde biri gösterilir. Bir kartta Aşağı sonraki kaynağı, Yukarı öncekini gösterir. Başlıktan sonraki noktalar ekrandaki kaynağı gösterir.</string>
+    <string name="cards_rows_note">Kaynak, Watch Next veya bir uygulamanın eklediği kanaldır. Başlığa göre ve Kanala göre için diziler içeren iki veya daha fazla kaynak gerekir.</string>
+    <string name="cards_rows_one">Şu anda yalnızca bir kaynakta dizi var, bu yüzden satır aynı görünür.</string>
+    <string name="watch_next_tab">Watch Next</string>
     <string name="act_all_apps">Plume Tüm uygulamalar</string>
 </resources>

@@ -239,5 +239,16 @@
     <string name="clock_large">كبير</string>
     <string name="help_clock_size">حجم الساعة في الشاشة الرئيسية.</string>
     <string name="section_clock_weather">الساعة والطقس</string>
+    <string name="cards_rows">الصفوف</string>
+    <string name="cards_mixed">مختلطة</string>
+    <string name="cards_title">حسب العنوان</string>
+    <string name="cards_each">حسب القناة</string>
+    <string name="help_cards_rows">طريقة تجميع العروض. اختره لترى الخيارات والأزرار التي يستخدمها كل خيار.</string>
+    <string name="help_cards_mixed">كل المصادر في صف واحد، الأحدث أولاً. لا يوجد ما تبدّل إليه.</string>
+    <string name="help_cards_title">مصدر واحد في كل مرة. اضغط لأسفل من التطبيقات للوصول إلى العنوان، ثم يسار أو يمين لعرض مصدر آخر.</string>
+    <string name="help_cards_each">صف لكل مصدر، يظهر واحد في كل مرة. لأسفل على بطاقة يعرض المصدر التالي، ولأعلى يعرض السابق. النقاط بعد العنوان تبيّن المصدر المعروض.</string>
+    <string name="cards_rows_note">المصدر هو Watch Next أو قناة يضيفها تطبيق. حسب العنوان وحسب القناة يحتاجان إلى مصدرين أو أكثر فيهما عروض.</string>
+    <string name="cards_rows_one">الآن مصدر واحد فقط فيه عروض، لذلك يبقى الصف كما هو.</string>
+    <string name="watch_next_tab">Watch Next</string>
     <string name="act_all_apps">كل تطبيقات Plume</string>
 </resources>

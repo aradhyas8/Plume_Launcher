@@ -322,5 +322,16 @@
     <string name="clock_medium">Medio</string>
     <string name="clock_large">Grande</string>
     <string name="help_clock_size">Quanto è grande l’orologio nella Home.</string>
+    <string name="cards_rows">Righe</string>
+    <string name="cards_mixed">Miste</string>
+    <string name="cards_title">Per titolo</string>
+    <string name="cards_each">Per canale</string>
+    <string name="help_cards_rows">Come vengono raggruppate le serie. Selezionalo per vedere le scelte e i tasti che usa ognuna.</string>
+    <string name="help_cards_mixed">Tutte le fonti in una riga, le più recenti prima. Non c\'è niente da cambiare.</string>
+    <string name="help_cards_title">Una fonte alla volta. Premi Giù dalle app per andare al titolo, poi Sinistra o Destra per mostrare un\'altra fonte.</string>
+    <string name="help_cards_each">Una riga per ogni fonte, mostrate una alla volta. Giù su una scheda mostra la fonte successiva, Su quella precedente. I punti dopo il titolo mostrano quale fonte è sullo schermo.</string>
+    <string name="cards_rows_note">Una fonte è Watch Next, o un canale che un\'app aggiunge. Per titolo e Per canale richiedono due o più fonti con serie.</string>
+    <string name="cards_rows_one">Ora solo una fonte ha serie, quindi la riga resta uguale.</string>
+    <string name="watch_next_tab">Watch Next</string>
     <string name="act_all_apps">Tutte le app di Plume</string>
 </resources>
