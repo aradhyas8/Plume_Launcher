@@ -97,6 +97,7 @@
     <string name="cw_channels">Channels</string>
     <string name="row_name">Row name</string>
     <string name="watch_next">Android TV Watch Next</string>
+    <string name="watch_next_tab">Watch Next</string>
     <string name="bottom_row">Shows row</string>
     <string name="automatic">Automatic</string>
     <string name="all_on">All on</string>

@@ -64,10 +64,11 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.text.InputType
 import android.text.SpannableString
+import android.text.SpannableStringBuilder
+import android.text.style.ForegroundColorSpan
 import android.text.TextUtils
 import android.text.format.DateFormat
 import android.text.style.BulletSpan
-import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.util.LruCache
 import android.view.Gravity
@@ -309,7 +310,7 @@ class MainActivity : Activity() {
     /** One row of cards you can switch to: Watch Next, or one app channel that is on. */
     private class CardSource(val key: String, val title: String)
     /** What the shows row holds: the [sources] it is split in (none when mixed), the one on show and its cards. */
-    private class Cards(val sources: List<CardSource>, val current: CardSource?, val list: List<Prog>)
+    private class Cards(val sources: List<CardSource>, val current: CardSource?, val list: List<Prog>, val ahead: List<String> = emptyList())
 
     private val prefs by lazy { getSharedPreferences("home", MODE_PRIVATE) }
     private val io = Executors.newSingleThreadExecutor()
@@ -5091,7 +5092,7 @@ class MainActivity : Activity() {
             val shown = sourceCards(items, PER_APP, ROW_CARDS, { it.group }, { it.pkg in off }) { it.intent ?: it.title }
             if (shown.isNotEmpty()) found += ShowRows.Source(key, title, kind) to shown
         }
-        add(WATCH_NEXT, getString(R.string.watch_next), ShowRows.Kind.WATCH_NEXT, watchNext)
+        add(WATCH_NEXT, getString(R.string.watch_next_tab), ShowRows.Kind.WATCH_NEXT, watchNext)
         for ((id, p, n) in on.distinctBy { (_, p, n) -> channelKey(p, n) }) {
             val kind = if (n.equals("Continue Watching", ignoreCase = true)) ShowRows.Kind.CONTINUE else ShowRows.Kind.OTHER
             add(channelKey(p, n), if (n == label[p] || label[p].isNullOrBlank()) n else "${label[p]} · $n", kind,
@@ -5101,7 +5102,10 @@ class MainActivity : Activity() {
         val rows = ShowRows.ordered(found.map { it.first }).map { s -> found.first { it.first === s } }
         val at = ShowRows.current(rows.map { it.first.key }, prefs.getString("cards_src", null))
         val current = rows.firstOrNull { it.first.key == at }
-        return Cards(rows.map { CardSource(it.first.key, it.first.title) }, current?.let { CardSource(it.first.key, it.first.title) }, current?.second ?: emptyList())
+        // The first posters of the other sources load in the background, so a switch finds them ready.
+        val ahead = rows.filter { it !== current }.flatMap { r -> r.second.take(4).mapNotNull { it.image } }
+            .take(8) // ponytail: the 6 MB poster cache holds ~18; more ahead would push out the row on show
+        return Cards(rows.map { CardSource(it.first.key, it.first.title) }, current?.let { CardSource(it.first.key, it.first.title) }, current?.second ?: emptyList(), ahead)
     }
 
     /** Apps last seen publishing, so the settings list includes them even without the permission check. */
@@ -5265,13 +5269,15 @@ class MainActivity : Activity() {
     /** By title with at least two sources: the title is a pill you can select. */
     private fun canCycle() = cardsMode() == ShowRows.BY_TITLE && cardSources.size > 1
 
-    /** By title: Left or Right on the title shows the next or the previous source, round the list. */
+    /** By title: Left or Right on the title shows the next or the previous source. */
     private fun cycleSource(d: Int) {
-        switchTo(ShowRows.around(cardSources.map { it.key }, cardCurrent?.key, d) ?: return)
+        switchX = d; switchY = 0
+        switchTo(ShowRows.beside(cardSources.map { it.key }, cardCurrent?.key, d) ?: return) // stops at the ends, as the arrows show
     }
 
     /** Per channel: Down on a card shows the next row (+1), Up the one before (-1). False when there is none that way. */
     private fun pageSource(d: Int): Boolean {
+        switchX = 0; switchY = d
         switchTo(ShowRows.beside(cardSources.map { it.key }, cardCurrent?.key, d) ?: return false)
         return true
     }
@@ -5279,64 +5285,78 @@ class MainActivity : Activity() {
     private fun switchTo(key: String) {
         prefs.edit().putString("cards_src", key).apply()
         switching = true
+        // The title answers the key at once; the cards follow when the new list is read.
+        cardSources.firstOrNull { it.key == key }?.let { cardCurrent = it; showTitle(fade = true) }
         refreshWatchNext()
     }
+
+    /** Where the new content of a source change comes from: +1 right or below, -1 left or above (the key's direction). */
+    private var switchX = 0
+    private var switchY = 0
 
     /** What the row is called: its own name when mixed, else the source on show; Per channel adds an arrow to each other row. */
     private fun rowTitle(): String {
         val cur = cardCurrent
         if (cardsMode() == ShowRows.MIXED || cur == null) return rowName()
-        val at = cardSources.indexOfFirst { it.key == cur.key }
-        return if (cardsMode() == ShowRows.PER_CHANNEL && cardSources.size > 1)
-            cur.title + "  " + (if (at > 0) "↑" else "") + (if (at < cardSources.size - 1) "↓" else "")
-        else cur.title
+        return cur.title
     }
 
     /**
-     * The row's title is a pill when it can be selected (By title): the lit glass of a selected tile, with an arrow on each side. The
-     * arrows are always in the text, clear when it has no focus, so the pill keeps its size and the title does not move. It is padded
-     * in and pulled back out with negative margins, so the text sits where the plain title sits.
+     * Split by source, the row has one title: the source on show, then a counter (dots up to five sources, "2 / 7" past that).
+     * By title it can be selected: a glass chip that fits the name, with an arrow on each side that has another source. The
+     * arrows always keep their space, so the name sits on the grid edge, where the plain title sits.
      */
     private fun setUpTitle() {
-        style(watchTitle, dp(8), card = true, lift = 1.04f) { focused ->
-            if (focused) glass.add(watchTitle, dp(8).toFloat()) else {
-                glass.remove(watchTitle)
-                watchTitle.background = GradientDrawable().apply { cornerRadius = dp(8).toFloat() } // nothing to see at rest
-            }
+        watchTitle.isFocusable = false
+        watchTitle.isSingleLine = true
+        watchTitle.compoundDrawablePadding = dp(8)
+        watchTitle.setOnFocusChangeListener { _, focused ->
+            watchTitle.chip = focused
             watchTitle.animate().alpha(if (focused) 1f else titleAlpha).setDuration(160).start()
             showTitle()
         }
-        glass.remove(watchTitle) // style() lets the glass paint under every card; the pill only has it while selected
-        watchTitle.background = GradientDrawable().apply { cornerRadius = dp(8).toFloat() }
-        watchTitle.isFocusable = false
-        watchTitle.isSingleLine = true
-        watchTitle.setPadding(dp(10), dp(4), dp(10), dp(4))
+        (watchTitle.parent as ViewGroup).clipChildren = false // the chip can shrink past the label's new width
         (watchTitle.layoutParams as LinearLayout.LayoutParams).apply {
-            topMargin -= dp(4)
-            bottomMargin -= dp(4)
+            topMargin += dp(10) // more space above than below: the title goes with its cards, not with the apps
         }
     }
 
-    /** Change the source name without interrupting the row's visibility or focus animations. */
+    /** Change the title without interrupting the row's visibility or focus animations. */
     private fun showTitle(fade: Boolean = false) {
         val cycle = canCycle()
         watchTitle.isFocusable = cycle
-        val arrows = if (cycle) watchTitle.paint.measureText("‹  ") else 0f
+        val ink = watchTitle.currentTextColor
+        watchTitle.chipColor = if (Color.luminance(ink) > 0.5f) 0x38FFFFFF else 0x24000000
+        val at = cardSources.indexOfFirst { it.key == cardCurrent?.key }
+        // Arrows only while selected, and only on a side that has another source. The start arrow always keeps its space, so the
+        // name stays on the grid edge; the chip leaves that space out when the arrow is hidden. The end arrow just goes.
+        val back = at > 0
+        val next = at in 0 until cardSources.size - 1
+        fun arrow(id: Int, on: Boolean) = if (!cycle) null else getDrawable(id)!!.mutate().apply {
+            setBounds(0, 0, dp(CHEVRON), dp(CHEVRON)); setTint(ink); alpha = if (on && watchTitle.isFocused) 255 else 0
+        }
+        watchTitle.setCompoundDrawablesRelative(arrow(R.drawable.ms_chevron_left, back), null,
+            if (next) arrow(R.drawable.ms_chevron_right, true) else null, null)
+        watchTitle.chipInset = if (cycle && !back) dp(CHEVRON + 8) else 0
+        val side = if (cycle) dp(12) else 0
+        watchTitle.setPaddingRelative(side, dp(4), side, dp(4))
         val lp = watchTitle.layoutParams as LinearLayout.LayoutParams
-        val start = -(dp(10) + arrows.toInt())
+        val start = if (cycle) -(side + dp(CHEVRON + 8)) else 0
         if (lp.marginStart != start) { lp.marginStart = start; watchTitle.layoutParams = lp }
-        // A name too long for the row is cut here, not by the view, so the closing arrow stays.
-        val room = ((resources.displayMetrics.widthPixels - dp(96)) * 2 / 3 - dp(20) - arrows * 2).coerceAtLeast(dp(60).toFloat())
+        val room = ((resources.displayMetrics.widthPixels - dp(96)) * 2 / 3).toFloat()
         val name = TextUtils.ellipsize(rowTitle(), watchTitle.paint, room, TextUtils.TruncateAt.END)
-        watchTitle.minWidth = if (cycle) (cardSources.maxOf { watchTitle.paint.measureText(it.title) }
-            .coerceAtMost(room) + arrows * 2 + dp(20)).toInt() else 0
-        val text: CharSequence = if (!cycle) name else SpannableString("‹  $name  ›").also {
-            if (!watchTitle.isFocused) { // the arrows are only there while it is selected
-                it.setSpan(ForegroundColorSpan(Color.TRANSPARENT), 0, 1, 0)
-                it.setSpan(ForegroundColorSpan(Color.TRANSPARENT), it.length - 1, it.length, 0)
+        val text: CharSequence = if (cardsMode() == ShowRows.MIXED || cardSources.size < 2 || at < 0) name else {
+            val count = if (cardSources.size <= 5) cardSources.indices.joinToString(" ") { if (it == at) "●" else "○" }
+                else "${at + 1} / ${cardSources.size}"
+            SpannableStringBuilder(name).append("   ").also {
+                val from = it.length
+                it.append(count)
+                if (cardSources.size <= 5) it.setSpan(android.text.style.RelativeSizeSpan(0.75f), from, it.length, 0)
+                it.setSpan(ForegroundColorSpan((ink and 0xFFFFFF) or (0x99 shl 24)), from, it.length, 0)
             }
         }
-        watchTitle.change(text, if (fade) POSTER_FADE_MS else 0)
+        val shift = dp(16).toFloat()
+        watchTitle.change(text, if (fade) TITLE_SLIDE_MS else 0, offsetX = switchX * shift, offsetY = switchY * shift)
     }
 
     private fun hideKey(pkg: String?, title: String) = "$pkg/$title"
@@ -5381,14 +5401,13 @@ class MainActivity : Activity() {
         watchList = list
         cardSources = cards.sources
         cardCurrent = cards.current
+        for (uri in cards.ahead) if (posters.get(uri) == null && loading.add(uri)) posterIo.execute {
+            try { decode(uri)?.let { posters.put(uri, it) } } catch (e: Exception) { android.util.Log.w("TvHome", "poster failed: $uri ($e)") } finally { loading.remove(uri) }
+        }
         if (cardsPage) pickCardsRows((settingsList.indexOfChild(currentFocus) - 1).coerceIn(0, CARDS_ROWS.size - 1)) // child 0 is the note
-        if (inPlace) { // the title and the cards change together, once the new posters are there
-            whenPostersReady(list.take(POSTER_CARDS).mapNotNull { it.image }) {
-                if (!isDestroyed && watchKey == key) {
-                    showTitle(fade = true)
-                    swapCards()
-                }
-            }
+        if (inPlace) { // no wait for posters: each one fades in on its card when it is there
+            showTitle(fade = true)
+            swapCards()
             return
         }
         showTitle()
@@ -5483,12 +5502,12 @@ class MainActivity : Activity() {
             setBackgroundColor(if (dark) DARK_SURFACE else 0xFFDDE1E5.toInt())
         }
         // Long titles scroll while their poster is focused instead of staying cut off.
-        val title = CrossfadeLabel(this).apply {
+        val title = TextView(this).apply {
             text = p.title
             textSize = 14f
             setPadding(0, dp(6), 0, 0)
             isSingleLine = true
-            ellipsize = TextUtils.TruncateAt.MARQUEE
+            ellipsize = TextUtils.TruncateAt.END // MARQUEE while focused
             marqueeRepeatLimit = -1
             ink(this, watchInk)
         }
@@ -5496,12 +5515,14 @@ class MainActivity : Activity() {
         // The poster fills the card, so frost under it would never show and would only cost work on every frame.
         style(frame, dp(8), card = true, lift = 1.1f, frost = false) { focused ->
             title.isSelected = focused
+            title.ellipsize = if (focused) TextUtils.TruncateAt.MARQUEE else TextUtils.TruncateAt.END
             if (focused) {
                 lastCard = frame
                 addCardsTo(watchRow.indexOfChild(col) + CARDS_AHEAD)
             }
         }
         frame.addView(img, MATCH_PARENT, MATCH_PARENT)
+        if (!gapBefore) frame.pivotX = 0f // the first card grows to the right and keeps the grid edge
         frame.setOnClickListener { (frame.getTag(R.id.watchRow) as? Prog)?.let { open(it) } }
         // 2:1 keeps logos and badges that providers bake into 16:9 art.
         col.addView(frame, LinearLayout.LayoutParams(w, w / 2))
@@ -5511,7 +5532,7 @@ class MainActivity : Activity() {
             progressDrawable = progressBarDrawable(watchInk)
         }, LinearLayout.LayoutParams(w, dp(3)).apply { topMargin = dp(8) })
         col.addView(title)
-        col.addView(CrossfadeLabel(this).apply {
+        col.addView(TextView(this).apply {
             text = p.sub
             textSize = 12f
             maxLines = 1
@@ -5528,20 +5549,24 @@ class MainActivity : Activity() {
     /**
      * Keep the card and focus in place. Text and posters crossfade together.
      */
-    private fun bindCard(col: ViewGroup, p: Prog, fade: Boolean = false) {
+    private fun bindCard(col: ViewGroup, p: Prog, fade: Boolean = false, delay: Long = 0) {
         val frame = col.getChildAt(0) as ViewGroup
         val img = frame.getChildAt(0) as ImageView
         val bar = col.getChildAt(1) as ProgressBar
-        val title = col.getChildAt(2) as CrossfadeLabel
-        val sub = col.getChildAt(3) as CrossfadeLabel
+        val title = col.getChildAt(2) as TextView
+        val sub = col.getChildAt(3) as TextView
         frame.setTag(R.id.watchRow, p) // holding OK hides it (see onHold)
         frame.contentDescription = p.title
         val icon = sourceIcon(p.pkg)
-        run {
-            bar.setProgress(p.progress, fade && ValueAnimator.areAnimatorsEnabled())
-            bar.visibility = if (p.progress > 0) View.VISIBLE else View.INVISIBLE
-            title.change(p.title, if (fade) POSTER_FADE_MS else 0)
-            sub.change(p.sub, if (fade) POSTER_FADE_MS else 0)
+        bar.setProgress(p.progress, fade && ValueAnimator.areAnimatorsEnabled())
+        bar.visibility = if (p.progress > 0) View.VISIBLE else View.INVISIBLE
+        val slide = fade && ValueAnimator.areAnimatorsEnabled()
+        val dx = switchX * dp(SLIDE).toFloat()
+        val dy = switchY * dp(SLIDE).toFloat()
+        fun swap(v: View, rest: Float, after: Long, set: () -> Unit) = if (slide) slideSwap(v, rest, delay + after, dx, dy, set) else set()
+        swap(title, 1f, 0) { title.text = p.title }
+        swap(sub, 0.8f, 20) {
+            sub.text = p.sub
             icon?.setBounds(0, 0, dp(12), dp(12))
             sub.setCompoundDrawablesRelative(icon, null, null, null)
             // A plain mark (not the app's own icon, not in brand colour) follows the text, as fitInk tints it.
@@ -5549,8 +5574,30 @@ class MainActivity : Activity() {
             if (sub.tag == INK_MARK) icon?.setTint(watchInk)
             // Split by source, a card without details keeps their space, or the row would change height with the source.
             sub.visibility = if (p.sub.isNotEmpty() || icon != null) View.VISIBLE else if (cardsMode() == ShowRows.MIXED) View.GONE else View.INVISIBLE
-            loadPoster(img, p.image)
         }
+        if (!slide || img.getTag(R.id.poster_loaded) == p.image) loadPoster(img, p.image)
+        else swap(img, 1f, 0) {
+            // Out of sight now: put the new poster in at once (no crossfade from the old one), or the empty card to fade into.
+            val bmp = p.image?.let { posters.get(it) }
+            if (bmp != null) { img.tag = p.image; img.setTag(R.id.poster_loaded, p.image); img.setImageDrawable(BitmapDrawable(resources, bmp)) }
+            else { img.setImageDrawable(ColorDrawable(Color.TRANSPARENT)); img.setTag(R.id.poster_loaded, null); loadPoster(img, p.image) }
+        }
+    }
+
+    /**
+     * [v] moves out against the key's direction and fades, [set] changes its content while it is out of sight, then it comes in
+     * from the other side to [rest] alpha. These are view properties, so the GPU moves what is drawn and nothing is drawn again
+     * on each frame. The card frame clips the poster, so the card stays still and only its picture moves.
+     */
+    private fun slideSwap(v: View, rest: Float, delay: Long, dx: Float, dy: Float, set: () -> Unit) {
+        v.animate().cancel()
+        v.animate().translationX(-dx).translationY(-dy).alpha(0f).setStartDelay(delay).setDuration(SLIDE_OUT_MS)
+            .setInterpolator(android.view.animation.AccelerateInterpolator()).withEndAction {
+                set()
+                v.translationX = dx; v.translationY = dy
+                v.animate().translationX(0f).translationY(0f).alpha(rest).setStartDelay(0).setDuration(CARD_SLIDE_MS - SLIDE_OUT_MS)
+                    .setInterpolator(CrossfadeLabel.EASE).withEndAction(null).start()
+            }.start()
     }
 
     /**
@@ -5560,7 +5607,11 @@ class MainActivity : Activity() {
     private fun swapCards() {
         for (i in watchRow.childCount - 1 downTo 0) if (watchRow.getChildAt(i).tag == FADING) watchRow.removeViewAt(i)
         val kept = minOf(watchRow.childCount, watchList.size)
-        for (i in 0 until kept) bindCard(watchRow.getChildAt(i) as ViewGroup, watchList[i], fade = true)
+        // A new source starts at its first show, at the start of the row.
+        if (watchRow.hasFocus()) (watchRow.getChildAt(0) as ViewGroup).getChildAt(0).requestFocus()
+        (watchScroll as? android.widget.HorizontalScrollView)?.smoothScrollTo(0, 0)
+        // Only the cards on screen move, left to right; the ones past them change at once.
+        for (i in 0 until kept) bindCard(watchRow.getChildAt(i) as ViewGroup, watchList[i], fade = i < 4, delay = i * STAGGER_MS)
         for (i in watchRow.childCount - 1 downTo kept) {
             val col = watchRow.getChildAt(i)
             if (col.hasFocus()) (watchRow.getChildAt(kept - 1) as ViewGroup).getChildAt(0).requestFocus()
@@ -5569,7 +5620,7 @@ class MainActivity : Activity() {
         }
         val before = watchRow.childCount
         addCardsTo(3)
-        for (i in before until watchRow.childCount) watchRow.getChildAt(i).apply { alpha = 0f; animate().alpha(1f).setDuration(SWAP_IN_MS).start() }
+        for (i in before until watchRow.childCount) watchRow.getChildAt(i).apply { alpha = 0f; animate().alpha(1f).setStartDelay(i * STAGGER_MS).setDuration(CARD_SLIDE_MS).start() }
         placeRow(animate = false)
         watchRow.post { fitInk() }
         val key = watchKey
@@ -5647,29 +5698,6 @@ class MainActivity : Activity() {
         val duration = (POSTER_FADE_MS * Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)).toLong()
         fade.startTransition(duration.toInt())
         ui.postDelayed({ if (!isDestroyed && v.drawable === fade) v.setImageDrawable(next) }, duration)
-    }
-
-    /**
-     * Runs [then] on the main thread once the posters of [images] are in the cache, so a card that changes its show fades to a
-     * picture that is already there, not to an empty card. A poster that is not there after [POSTER_WAIT_MS] loads on its own.
-     */
-    private fun whenPostersReady(images: List<String>, then: () -> Unit) {
-        val missing = images.distinct().filter { posters.get(it) == null }
-        if (missing.isEmpty()) return then()
-        val ran = java.util.concurrent.atomic.AtomicBoolean(false)
-        val go = Runnable { if (ran.compareAndSet(false, true)) then() }
-        ui.postDelayed(go, POSTER_WAIT_MS)
-        val left = java.util.concurrent.atomic.AtomicInteger(missing.size)
-        for (uri in missing) posterIo.execute {
-            if (loading.add(uri)) try {
-                decode(uri)?.let { posters.put(uri, it); ui.post { posterArrived(uri) } }
-            } catch (e: Exception) {
-                android.util.Log.w("TvHome", "poster failed: $uri ($e)")
-            } finally {
-                loading.remove(uri)
-            }
-            if (left.decrementAndGet() == 0) ui.post { ui.removeCallbacks(go); go.run() }
-        }
     }
 
     /** Cards whose poster never arrived (offline, server timeout) try again; loaded ones are left alone. */
@@ -5925,11 +5953,14 @@ class MainActivity : Activity() {
         const val MEDIA_REQUEST = 3
         const val PER_APP = 3 // Continue Watching items per app ahead of the rest
         const val ROW_CARDS = 20 // the most cards a row holds
-        const val SWAP_OUT_MS = 90L // another source of the shows row: what is there fades out ...
-        const val SWAP_IN_MS = 150L // ... and the new content fades in
-        const val POSTER_FADE_MS = 180L
-        const val POSTER_CARDS = 6 // another source: the posters of this many cards are loaded before the cards change
-        const val POSTER_WAIT_MS = 700L // ... and the cards change after this long even if one is still on its way
+        const val SWAP_OUT_MS = 90L // another source with fewer shows: the extra cards fade out
+        const val POSTER_FADE_MS = 220L // a poster that lands late fades in on its card
+        const val TITLE_SLIDE_MS = 260L // a source change: the title slides first ...
+        const val CARD_SLIDE_MS = 320L // ... then each card's content, about the time to see it move
+        const val SLIDE_OUT_MS = 110L // the old poster leaves in this part of CARD_SLIDE_MS
+        const val STAGGER_MS = 30L // each card starts this long after the one before it
+        const val SLIDE = 24 // dp the content moves
+        const val CHEVRON = 16 // dp, the arrows beside the shows row's title
         const val FADING = "fading" // the tag of a card that is fading out
         const val CARDS_AHEAD = 8 // Continue Watching cards built past the focused one (see addCardsTo)
         val READ_PHOTOS = if (Build.VERSION.SDK_INT >= 33) "android.permission.READ_MEDIA_IMAGES" else "android.permission.READ_EXTERNAL_STORAGE"

@@ -16,7 +16,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
-- Shows row: source names, show titles, details and posters fade together when you change sources. Cards keep their positions.
+- Shows row: when you change sources, the source name, show titles, details and posters slide in the direction of the button you push. Cards keep their positions. The row has one title with dots that show which source is on screen.
 
 ## 1.7.1
 
