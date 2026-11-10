@@ -403,6 +403,12 @@ class MainActivity : Activity() {
         recreate()
     }
 
+    // Every launch from the home screen goes through here, so Fire TV's Home watch knows Amazon's home may show first.
+    override fun startActivity(intent: Intent?, options: Bundle?) {
+        HomeOverride.running?.launched()
+        super.startActivity(intent, options)
+    }
+
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         // The system starts Home before the user unlocks (Direct Boot). Register first, so a missed

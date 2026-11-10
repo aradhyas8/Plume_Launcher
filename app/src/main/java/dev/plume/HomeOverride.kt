@@ -103,6 +103,11 @@ class HomeOverride : AccessibilityService() {
     }
     private val jump = Runnable { watch.jumped(); goHome() }
 
+    /** Plume (the home screen or a remote key) starts an activity: see [HomeWatch.launched]. */
+    fun launched() = watch.launched(SystemClock.uptimeMillis())
+
+    override fun startActivity(intent: Intent?) { launched(); super.startActivity(intent) }
+
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = e.packageName?.toString() ?: return
@@ -124,7 +129,7 @@ class HomeOverride : AccessibilityService() {
     // Marked as Home so the setup check can tell it from Plume being opened from the apps list.
     private fun goHome() {
         if (packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SUSPENDED != 0) return
-        startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        super.startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     override fun onInterrupt() {}

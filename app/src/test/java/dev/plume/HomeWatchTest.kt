@@ -63,6 +63,37 @@ class HomeWatchTest {
         assertEquals(HomeWatch.SETTINGS_WAIT_MS, w.opened(amazon, amazonHome, 4_000))
     }
 
+    // Issue 227: a slow Fire TV shows Amazon's home for over a second before the Settings that Plume opened.
+    @Test fun aLaunchFromPlumeWaitsForItsWindow() {
+        val w = watch()
+        w.opened("dev.plume", "dev.plume.MainActivity", 1_000)
+        w.launched(1_100)
+        assertEquals(HomeWatch.LAUNCH_WAIT_MS - 100, w.opened(amazon, amazonHome, 1_200))
+        assertEquals(HomeWatch.KEEP, w.opened(amazon, "$amazon.ui.HomeActivity", 2_000))
+        assertNull(w.opened("com.amazon.tv.settings.v2", "Settings", 2_600)) // the waiting jump is dropped
+    }
+
+    @Test fun aLaunchThatOpensNothingStillGoesHome() {
+        val w = watch()
+        w.launched(1_000)
+        assertEquals(HomeWatch.LAUNCH_WAIT_MS - 500, w.opened(amazon, amazonHome, 1_500)) // the jump fires when the wait ends
+    }
+
+    @Test fun anOldLaunchDoesNotDelayHome() {
+        val w = watch()
+        w.launched(1_000)
+        assertNull(w.opened("com.netflix.ninja", "Player", 1_400))
+        assertEquals(0L, w.opened(amazon, amazonHome, 2_000))
+        w.launched(3_000)
+        assertEquals(0L, w.opened(amazon, amazonHome, 3_000 + HomeWatch.LAUNCH_WAIT_MS + 1))
+    }
+
+    @Test fun aLaunchIsIgnoredOffFireTv() {
+        val w = watch(fire = false)
+        w.launched(1_000)
+        assertEquals(0L, w.opened(gtv, gtvHome, 1_200))
+    }
+
     @Test fun theWaitIsOnlyForFireTv() {
         val w = watch(fire = false)
         w.opened("dev.plume", "dev.plume.MainActivity", 1_000)
