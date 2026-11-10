@@ -145,7 +145,7 @@ Tests run against a fake `adb`, no TV needed: `sh tools/plume-install-test/run.s
 <summary><b>Volume and the accessibility warning</b></summary>
 
 - **Holding Volume moves one step?** Many TVs act on the volume keys before an accessibility service sees them. Turn on **Plume settings → Home & remote → Smooth volume**. In exchange, Home shows Google TV for about a second first. Smooth volume stays off while any Remote keys are set.
-- Android shows the same generic warning for every accessibility service. Plume's service listens for the Home key, your Remote keys and the stock launcher appearing. It cannot read screen content.
+- Android shows the same generic warning for every accessibility service. Plume's service listens for Home, your Remote keys and app window changes. It cannot read screen content.
 </details>
 
 ## Using Plume
@@ -184,7 +184,14 @@ The sources are Android TV's Watch Next and every channel that is on in **Plume 
 
 Remote keys can open an app or input, send a media key, or open Back, Recent apps, Notifications, Quick settings, the Power menu or Android settings. Back, OK, the arrows, Home, Power and volume can't be changed, so you can't lock yourself out. The PIN lock keeps the layout safe; it is not parental control.
 
-Select **Plume All apps** as the Press or Hold action under **Home &amp; remote → Remote keys**.
+Select **Plume All apps** or **Plume recent apps** as the Press or Hold action under **Home &amp; remote → Remote keys**.
+
+**Recent apps** shows up to 12 recently opened apps in a horizontal row. Hold OK on the **All apps** icon and select **Recent apps**.
+Press Left or Right to center an app window. Press OK to open it. The windows use app banners or icons.
+When the Home button service receives Home presses, press Home twice to open the list. A single press still opens Home immediately.
+Press Back to close the list and stay in Plume. This list switches apps; it does not show running tasks or close apps.
+The list includes apps opened from Plume and apps observed while the Home button service runs.
+Fire TV does not send Home presses to the service. Smooth volume can also turn Home key filtering off.
 
 ## Wallpapers and screensavers
 
@@ -241,6 +248,9 @@ This includes Home permissions and screensaver timing. App order applies to apps
 The file can contain the manual weather location. Keep the exported file private.
 
 ## Privacy
+
+Recent apps stores app package names and their last-opened times on the TV, in Plume's settings. It sends this history nowhere.
+Without the Home button service, the history includes only apps opened from Plume. Clearing Plume's data removes the history.
 
 Plume has no analytics, no ads and no account. It only connects to the internet to:
 - load poster images for your Continue Watching items

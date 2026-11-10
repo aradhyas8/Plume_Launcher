@@ -62,12 +62,14 @@ object Remap {
 
     /** A Home intent opens this view once, after the main screen is ready. */
     const val OPEN_ALL_APPS = "open_all_apps"
+    const val OPEN_RECENT_APPS = "open_recent_apps"
 
     /** Screens that a key can open without an app tile. */
     val OPEN = linkedMapOf(
         "settings" to (Settings.ACTION_SETTINGS to R.string.act_settings),
         "network" to (Settings.ACTION_WIFI_SETTINGS to R.string.act_network),
         "allapps" to (Intent.ACTION_MAIN to R.string.act_all_apps),
+        "recents" to (Intent.ACTION_MAIN to R.string.act_plume_recents),
     )
 
     /** A key's identity uses its scan code too, when available. */
@@ -176,8 +178,8 @@ object Remap {
                 }
                 "open" -> OPEN[arg]?.let { (action, _) ->
                     val intent = Intent(action)
-                    if (arg == "allapps") intent.setClass(s, MainActivity::class.java)
-                        .addCategory(Intent.CATEGORY_HOME).putExtra(OPEN_ALL_APPS, true)
+                    if (arg == "allapps" || arg == "recents") intent.setClass(s, MainActivity::class.java)
+                        .addCategory(Intent.CATEGORY_HOME).putExtra(if (arg == "recents") OPEN_RECENT_APPS else OPEN_ALL_APPS, true)
                     s.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }
             }

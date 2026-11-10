@@ -493,7 +493,7 @@ class MainActivity : Activity() {
             setOnClickListener { action() }
             setOnLongClickListener { if (!holdFired) fireHold(this); true } // hold OK: move, hide or add icons
         }
-        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || fakeSetup(intent)) {
+        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false) || fakeSetup(intent)) {
             // An explicit drawer request takes priority over setup and update cards.
         } else if (prefs.getBoolean("reopen_settings", false)) {
             prefs.edit().remove("reopen_settings").apply()
@@ -534,13 +534,14 @@ class MainActivity : Activity() {
             return
         }
         resumed = true
-        val allAppsRequested = intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false)
+        val recentAppsRequested = intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false)
+        val allAppsRequested = intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || recentAppsRequested
         if (currentWallpaper().startsWith("video:")) videoWallpaper.resume()
         returnTo = null // back by another way than Home: the next Home starts again at the first tile
         openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
         openedFrom = null
         ensureHomeService()
-        homeSetupResumed()
+        if (!recentAppsRequested) homeSetupResumed()
         // Back from a screen that settings opened: settings again, on the same row (and the Home switch as it is now).
         val back = if (allAppsRequested) 0 else prefs.getInt("return_settings", 0)
         if (back != 0 && hidden) {
@@ -570,11 +571,12 @@ class MainActivity : Activity() {
         ui.post { updateBadge() } // after layout, so the icon has its size
         if (allAppsRequested) {
             intent.removeExtra(Remap.OPEN_ALL_APPS) // consume only after initialization and any theme recreation
+            intent.removeExtra(Remap.OPEN_RECENT_APPS)
             prefs.edit().remove("return_settings").remove("return_dream").remove("reopen_settings").apply()
             if (editing) endEdit()
             if (movingTop != null) endTopMove(false)
             if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
-            if (allApps.visibility != View.VISIBLE) openAllApps()
+            if (recentAppsRequested || allApps.visibility != View.VISIBLE || recentAppsOpen) openAllApps(recentAppsRequested)
         }
     }
 
@@ -1022,7 +1024,7 @@ class MainActivity : Activity() {
         // Home pressed in Android's settings means home, not settings; the screensaver's end comes in as Home too.
         if (intent.hasCategory(Intent.CATEGORY_HOME) && !prefs.getBoolean("return_dream", false)) prefs.edit().remove("return_settings").apply()
         if (intent.action == UPDATE_STATUS) return installStatus(intent)
-        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false)) return // onResume handles new and existing activities
+        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false)) return // onResume handles new and existing activities
         if (fakeSetup(intent)) return
         if (homeTest != 0 && intent.hasCategory(Intent.CATEGORY_HOME)) { // the Home press reached us: setup works
             homeTest = 0
@@ -1077,12 +1079,13 @@ class MainActivity : Activity() {
         ground =if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
         // With glass, the wallpaper and the frost behind the grid are the point of All apps: let them show.
-        allApps.setBackgroundColor(if (glassy != null) Color.TRANSPARENT else ground)
+        allApps.setBackgroundColor(if (recentAppsOpen) 0xA6000000.toInt() else if (glassy != null) Color.TRANSPARENT else ground)
         findViewById<TextView>(R.id.clock).typeface = clockFace()
         findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
         for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
             findViewById<TextView>(id).setTextColor(fg)
         }
+        if (recentAppsOpen) findViewById<TextView>(R.id.allAppsTitle).setTextColor(Color.WHITE)
         iconInk = fg
         for (v in topIcons()) v.setColorFilter(if (v.isFocused) fg else iconInk)
         watchInk = fg
@@ -3477,7 +3480,7 @@ class MainActivity : Activity() {
                 SOURCES = inputs
                 if (movingTop == null) applyTopBar() // Sources shows only while the TV has an input
                 renderApps()
-                if (allApps.visibility == View.VISIBLE) openAllApps() // a fresh remote request can precede the app list
+                if (allApps.visibility == View.VISIBLE) openAllApps(recentAppsOpen) // a fresh remote request can precede the app list
             }
         }
     }
@@ -3657,13 +3660,16 @@ class MainActivity : Activity() {
      * Standard-size tile, or it would be upscaled and soft (4K); null then, and the tile shows the app's mark as usual.
      * Large and Largest stretch a banner of that width a little (most are 320 px, Largest is ~400 px on a 1080p TV).
      */
-    private fun bannerTile(a: App): View? {
-        if (a.pkg.startsWith(HDMI)) return null
-        val banner = AppPictures.read(this, a.pkg, banner = true) ?: try {
+    private fun appBanner(a: App): Drawable? =
+        AppPictures.read(this, a.pkg, banner = true) ?: try {
             packageManager.getActivityBanner(a.launch)
         } catch (e: Exception) {
             null
-        } ?: return null
+        }
+
+    private fun bannerTile(a: App): View? {
+        if (a.pkg.startsWith(HDMI)) return null
+        val banner = appBanner(a) ?: return null
         val w = rowTileWidth()
         if (banner.intrinsicWidth in 1 until rowTileWidth(ROW_TILES)) return null
         // Drawn once, centre-cropped, at the tile's exact size: a row of banners then costs ~80 KB each, not the
@@ -4032,6 +4038,7 @@ class MainActivity : Activity() {
     private fun onHold(v: View) {
         val tag = v.tag as? String
         when {
+            recentAppsOpen -> return
             allApps.visibility == View.VISIBLE && tag != null -> unlock { // grid: pin to the front of the row (unhiding it)
                 prefs.edit().putStringSet("row_hidden", rowHiddenSet() - tag).apply()
                 saveOrder(listOf(tag) + sortedApps().map { it.pkg }.filter { it != tag })
@@ -4162,6 +4169,8 @@ class MainActivity : Activity() {
         ))
     }
 
+    private var activeMenu: PopupWindow? = null
+
     /** A small Plume-styled menu just above [anchor] (under it when [below]); Back closes it. [rows] builds its rows. */
     private fun popupMenu(anchor: View, below: Boolean = false, rows: (dismiss: () -> Unit) -> List<View>) {
         val list: LinearLayout = if (glassActive()) glassSurface(dp(14).toFloat()) else LinearLayout(this).apply {
@@ -4174,6 +4183,8 @@ class MainActivity : Activity() {
         list.orientation = LinearLayout.VERTICAL
         list.setPadding(dp(6), dp(6), dp(6), dp(6))
         val menu = PopupWindow(list, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, true)
+        activeMenu = menu
+        menu.setOnDismissListener { if (activeMenu === menu) activeMenu = null }
         rows { menu.dismiss() }.forEachIndexed { i, row ->
             list.addView(row, LinearLayout.LayoutParams(MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 if (i > 0) topMargin = dp(2)
@@ -4258,9 +4269,13 @@ class MainActivity : Activity() {
 
     /** Hold OK on a top-bar icon: Move, Hide (not Plume settings, so the bar is never empty) and Add icon. */
     private fun topMenu(v: View) {
-        if (locked()) return holdMenu(v, listOf(getString(R.string.unlock_to_edit) to { unlock { v.requestFocus(); topMenu(v) } }), below = true)
+        if (locked()) return holdMenu(v, listOfNotNull(
+            if (v.id == R.id.allAppsButton) getString(R.string.recent_apps) to { openAllApps(recent = true) } else null,
+            getString(R.string.unlock_to_edit) to { unlock { v.requestFocus(); topMenu(v) } },
+        ), below = true)
         val hidden = TOP_KEYS.keys - topOrder().toSet()
         holdMenu(v, listOfNotNull(
+            if (v.id == R.id.allAppsButton) getString(R.string.recent_apps) to { openAllApps(recent = true) } else null,
             getString(R.string.move) to { startTopMove(v) },
             if (v.id == R.id.launcherSettings) null else getString(R.string.hide) to { hideTop(v) },
             if (hidden.isEmpty()) null else getString(R.string.add_icon) to { addIconMenu(v) },
@@ -4541,28 +4556,135 @@ class MainActivity : Activity() {
 
     // ---------- all apps ----------
 
-    private fun openAllApps() {
+    private var recentAppsOpen = false
+    private val recentWindows by lazy { findViewById<RecentWindowStrip>(R.id.recentWindows) }
+    private val recentWindowRow by lazy { findViewById<LinearLayout>(R.id.recentWindowRow) }
+
+    private fun openAllApps(recent: Boolean = false) {
+        val selected = if (recent && recentAppsOpen) currentFocus?.tag else null
+        if (recent) {
+            activeMenu?.dismiss()
+            setupDialog?.dismiss()
+        }
+        recentAppsOpen = recent
         allAppsGrid.removeAllViews()
-        val gap = dp(10)
-        val width = (resources.displayMetrics.widthPixels - dp(96) - gap * 5) / 6
-        for (a in sortedApps()) {
-            val t = appTile(a) // holding OK here pins it to the row (see onHold)
-            allAppsGrid.addView(t, GridLayout.LayoutParams().apply {
-                this.width = width
-                height = dp(76)
-                setMargins(0, 0, gap, gap)
-            })
+        recentWindowRow.removeAllViews()
+        recentWindows.visibility = View.GONE
+        allAppsGrid.visibility = if (recent) View.GONE else View.VISIBLE
+        val margin = if (recent) 0 else dp(48)
+        allApps.setPadding(margin, if (recent) resources.displayMetrics.heightPixels / 9 else dp(28), margin, dp(28))
+        allApps.setBackgroundColor(if (recent) 0xA6000000.toInt() else if (glassActive()) Color.TRANSPARENT else ground)
+        findViewById<TextView>(R.id.allAppsTitle).apply {
+            setText(if (recent) R.string.recent_apps else R.string.all_apps)
+            setTextColor(if (recent) Color.WHITE else fg)
+            setPaddingRelative(if (recent) dp(48) else 0, 0, 0, 0)
+            textSize = if (recent) 26f else 20f
+        }
+        val list = sortedApps().let { all -> if (recent) recentApps(all.filter { !it.pkg.startsWith(HDMI) }) {
+            prefs.getLong("t_${it.pkg}", 0)
+        } else all }
+        val info = findViewById<TextView>(R.id.allAppsInfo).apply {
+            visibility = if (recent) View.VISIBLE else View.GONE
+            isFocusable = list.isEmpty()
+            isFocusableInTouchMode = list.isEmpty()
+            setTextColor(Color.WHITE)
+            setText(if (list.isEmpty()) R.string.recent_apps_empty else R.string.recent_apps_hint)
+        }
+        if (recent) {
+            recentWindows.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+            buildRecentWindows(list)
+        } else {
+            val gap = dp(10)
+            val width = (resources.displayMetrics.widthPixels - dp(96) - gap * 5) / 6
+            for (a in list) {
+                allAppsGrid.addView(appTile(a), GridLayout.LayoutParams().apply {
+                    this.width = width
+                    height = dp(76)
+                    setMargins(0, 0, gap, gap)
+                })
+            }
         }
         allApps.visibility = View.VISIBLE
         // Glass shows the wallpaper here, so the home screen under the grid has to go; without glass the opaque
         // background covers it anyway.
-        findViewById<View>(R.id.content).visibility = if (glassActive()) View.INVISIBLE else View.VISIBLE
+        findViewById<View>(R.id.content).visibility = if (recent || glassActive()) View.INVISIBLE else View.VISIBLE
         homeFocusable(false)
-        allAppsGrid.getChildAt(0)?.requestFocus()
+        val row = if (recent) recentWindowRow else allAppsGrid
+        val target = selected?.let { row.findViewWithTag<View>(it) } ?: row.getChildAt(0) ?: info
+        target.requestFocus()
+    }
+
+    private fun buildRecentWindows(list: List<App>) {
+        val screen = resources.displayMetrics
+        val width = minOf(screen.widthPixels * 44 / 100, screen.heightPixels * 4 / 5)
+        val height = width * 9 / 16
+        val gap = dp(22)
+        val edge = (screen.widthPixels - width) / 2
+        recentWindowRow.setPadding(edge, dp(12), edge, dp(8))
+        recentWindows.scrollTo(0, 0)
+        for ((index, app) in list.withIndex()) {
+            val radius = dp(12).toFloat()
+            val window = FrameLayout(this).apply {
+                val color = BRAND_COLOURS[app.pkg]?.let(::deepen) ?: 0xFF20323B.toInt()
+                background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(color, 0xFF10171C.toInt())).apply { cornerRadius = radius }
+                clipToOutline = true
+            }
+            val banner = appBanner(app)
+            val image = ImageView(this).apply {
+                setImageDrawable(banner ?: app.icon)
+                scaleType = if (banner == null) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            val imageSize = if (banner == null) height / 3 else MATCH_PARENT
+            window.addView(image, FrameLayout.LayoutParams(imageSize, imageSize, Gravity.CENTER))
+            val rim = GradientDrawable().apply {
+                cornerRadius = radius
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(1), 0x55FFFFFF)
+            }
+            window.foreground = rim
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                clipChildren = false
+                tag = app.pkg
+                contentDescription = app.label
+                isFocusableInTouchMode = true
+                setOnClickListener { launch(app) }
+                addView(window, LinearLayout.LayoutParams(MATCH_PARENT, height))
+                addView(label(app.label, 16f).apply {
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    setPadding(dp(6), dp(10), dp(6), 0)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                })
+                alpha = 0.72f
+            }
+            card.setOnFocusChangeListener { _, focused ->
+                val animate = animationsOn() && ValueAnimator.areAnimatorsEnabled()
+                rim.setStroke(dp(if (focused) 2 else 1), if (focused) Color.WHITE else 0x55FFFFFF)
+                card.animate().alpha(if (focused) 1f else 0.72f)
+                    .scaleX(if (focused) 1.045f else 1f).scaleY(if (focused) 1.045f else 1f)
+                    .setDuration(if (animate) 160 else 0).setInterpolator(DECELERATE).start()
+                if (focused) recentWindows.post {
+                    if (!card.isFocused) return@post
+                    val x = index * (width + gap)
+                    val target = if (recentWindows.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
+                        (list.lastIndex * (width + gap)) - x
+                    } else x
+                    if (animate) recentWindows.smoothScrollTo(target, 0) else recentWindows.scrollTo(target, 0)
+                }
+            }
+            recentWindowRow.addView(card, LinearLayout.LayoutParams(width, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                if (index > 0) marginStart = gap
+            })
+        }
     }
 
     private fun closeAllApps() {
         allApps.visibility = View.GONE
+        recentAppsOpen = false
+        recentWindowRow.removeAllViews()
         findViewById<View>(R.id.content).visibility = View.VISIBLE
         homeFocusable(true)
         renderApps()

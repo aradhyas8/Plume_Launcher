@@ -62,11 +62,15 @@ class HomeOverride : AccessibilityService() {
 
     override fun onKeyEvent(e: KeyEvent): Boolean {
         if (packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SUSPENDED != 0) return false
-        if (e.keyCode != KeyEvent.KEYCODE_HOME) return remap(e)
+        if (e.keyCode != KeyEvent.KEYCODE_HOME) { homePress.reset(); return remap(e) }
         // Decided on release, by how long it was held: this TV's remote doesn't reliably send key repeats.
         if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) {
-            if (e.eventTime - e.downTime < LONG_PRESS_MS) goHome() else performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+            if (e.eventTime - e.downTime < LONG_PRESS_MS) goHome(homePress.released(e.eventTime)) else {
+                homePress.reset()
+                performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+            }
         }
+        if (e.isCanceled) homePress.reset()
         return true
     }
 
@@ -95,6 +99,8 @@ class HomeOverride : AccessibilityService() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    private val homePress = HomePress()
+    private var lastForeground: String? = null
     private val watch by lazy { HomeWatch(fireTv(this)) { homes } }
     private var homes = emptyMap<String, Set<String>>()
     private var listening = false
@@ -111,6 +117,13 @@ class HomeOverride : AccessibilityService() {
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = e.packageName?.toString() ?: return
+        if (pkg != lastForeground) {
+            lastForeground = pkg
+            if (pkg != packageName && pkg !in homes && pkg != "android" && pkg != "com.android.systemui" &&
+                (packageManager.getLeanbackLaunchIntentForPackage(pkg) ?: packageManager.getLaunchIntentForPackage(pkg)) != null) {
+                getSharedPreferences("home", MODE_PRIVATE).edit().putLong("t_$pkg", System.currentTimeMillis()).apply()
+            }
+        }
         val after = watch.opened(pkg, e.className?.toString(), SystemClock.uptimeMillis())
         if (after == HomeWatch.KEEP) return // the waiting jump stays
         handler.removeCallbacks(jump) // any other window opening means Home wasn't where we were going
@@ -127,9 +140,10 @@ class HomeOverride : AccessibilityService() {
     }
 
     // Marked as Home so the setup check can tell it from Plume being opened from the apps list.
-    private fun goHome() {
+    private fun goHome(recents: Boolean = false) {
         if (packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SUSPENDED != 0) return
-        super.startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        super.startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            .putExtra(Remap.OPEN_RECENT_APPS, recents).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     override fun onInterrupt() {}
