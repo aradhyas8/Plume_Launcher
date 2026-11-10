@@ -595,6 +595,7 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         if (ready) {
+            if (upload != null) closeLauncherSettings()
             hidden = true
             unlockedUntil = 0L // leaving the home screen locks it again (onPause would also fire for permission dialogs)
             Remap.learn = null // never keep swallowing keys for a page that's no longer on screen
@@ -616,6 +617,8 @@ class MainActivity : Activity() {
             unregisterReceiver(packageReceiver)
             applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
             getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
+            pageExit?.invoke()
+            pageExit = null
             upload?.stop()
             try {
                 contentResolver.unregisterContentObserver(photoObserver)
@@ -3627,7 +3630,7 @@ class MainActivity : Activity() {
      */
     private fun bannerTile(a: App): View? {
         if (a.pkg.startsWith(HDMI)) return null
-        val banner = try {
+        val banner = AppPictures.read(this, a.pkg, banner = true) ?: try {
             packageManager.getActivityBanner(a.launch)
         } catch (e: Exception) {
             null
@@ -3676,7 +3679,9 @@ class MainActivity : Activity() {
     private fun appTile(a: App, labeled: Boolean = true): View {
         if (!labeled && isBannerStyle(iconStyle())) bannerTile(a)?.let { it.contentDescription = a.label; return it }
         val logo = LOGOS[a.pkg]
-        val custom = customIcon(a.pkg)
+        val custom = (if (!labeled && !a.pkg.startsWith(HDMI) && !isBannerStyle(iconStyle())) AppPictures.read(this, a.pkg, banner = false) else null)
+            ?.apply { if (!colourIcons()) colorFilter = GREYSCALE }
+            ?: customIcon(a.pkg)
         val name = a.label.takeIf { labeled }
         // Colour mode keeps the same marks, tinted with the brand colour (or the colour the app's icon is mostly).
         val colour = colourIcons()
@@ -4002,6 +4007,9 @@ class MainActivity : Activity() {
         ))
         holdMenu(v, listOfNotNull(
             getString(R.string.move) to { startEdit(grab = v, once = true) },
+            if (pkg.startsWith(HDMI)) null else getString(R.string.change_app_picture) to {
+                appPictures(pkg, v.contentDescription.toString())
+            },
             getString(R.string.remove_from_row) to {
                 val i = appRow.indexOfChild(v)
                 // An input just unpins: it is in the Sources list anyway, so there is nothing to hide.
@@ -4025,6 +4033,64 @@ class MainActivity : Activity() {
             val flags = packageManager.getApplicationInfo(pkg, 0).flags
             flags and ApplicationInfo.FLAG_SYSTEM == 0 || flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
         } catch (_: Exception) { false }
+    }
+
+    private fun appPictures(pkg: String, name: String) {
+        if (settingsScrim.visibility != View.VISIBLE) showPanel()
+        showPage(getString(R.string.change_app_picture), listOf(
+            page(getString(R.string.app_picture_icon), getString(R.string.app_picture_icon_hint)) { unlock { uploadAppPicture(pkg, name, false) } },
+            page(getString(R.string.banner), getString(R.string.app_picture_banner_hint)) { unlock { uploadAppPicture(pkg, name, true) } },
+            page(getString(R.string.reset_app_picture)) {
+                unlock {
+                    AppPictures.reset(this, pkg)
+                    renderApps()
+                    appPictures(pkg, name)
+                }
+            },
+        ), crumb = name) {
+            closeLauncherSettings()
+            (0 until appRow.childCount).map { appRow.getChildAt(it) }.firstOrNull { it.tag == pkg }?.requestFocus()
+        }
+    }
+
+    private fun uploadAppPicture(pkg: String, name: String, banner: Boolean) {
+        val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
+        if (settingsScrim.visibility != View.VISIBLE) showPanel()
+        val active = AtomicBoolean(true)
+        val status = label(getString(R.string.waiting_app_picture), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
+        val server = try {
+            UploadServer((1000..9999).random().toString(), File.createTempFile("app-picture-", ".tmp", cacheDir), imagesOnly = true) { file, _ ->
+                if (!active.get()) return@UploadServer null
+                val bitmap = AppPictures.fit(file, banner) ?: return@UploadServer null
+                val saved = try {
+                    AppPictures.save(AppPictures.file(this, pkg, banner), bitmap) { active.get() }
+                } finally { bitmap.recycle() }
+                if (!saved) return@UploadServer null
+                ui.post {
+                    if (!active.get() || isDestroyed) return@post
+                    renderApps()
+                    status.text = getString(R.string.app_picture_added)
+                }
+                name
+            }
+        } catch (_: IOException) { return toast(getString(R.string.upload_failed), long = true) }
+        upload = server
+        val url = "http://$ip:${server.port}/${server.code}"
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(ImageView(this@MainActivity).apply { setImageBitmap(qrBitmap(url, dp(200))) })
+            addView(label(url, 14f).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(4)) })
+            addView(label(getString(R.string.scan_hint), 12f).apply { gravity = Gravity.CENTER; maxLines = 3 })
+            addView(status.apply { setPadding(0, dp(12), 0, 0) })
+        }
+        showPage(getString(if (banner) R.string.banner else R.string.app_picture_icon),
+            listOf(page(getString(R.string.done)) { appPictures(pkg, name) }), top = box, crumb = name) { appPictures(pkg, name) }
+        pageExit = {
+            active.set(false)
+            server.stop()
+            if (upload === server) upload = null
+        }
     }
 
     private fun uninstall(pkg: String) {

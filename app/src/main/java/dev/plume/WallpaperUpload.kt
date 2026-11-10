@@ -16,12 +16,13 @@ import java.net.ServerSocket
 import java.net.Socket
 
 /**
- * A one-page web server for adding wallpapers from a phone. It only runs while the upload panel is open,
+ * A one-page web server for adding pictures or videos from a phone. It only runs while the upload panel is open,
  * and only answers on /<code> (the random code is in the QR code), so others on the Wi-Fi can't post.
  * The page sends the photo as the raw request body, so there's no multipart parsing.
- * [onUpload] runs on the server thread with the uploaded file and whether it is a video, and returns the new wallpaper's name, or null.
+ * [onUpload] runs on the server thread with the uploaded file and whether it is a video, and returns the saved item's name, or null.
  */
-internal class UploadServer(val code: String, private val temp: File, private val onUpload: (File, Boolean) -> String?) {
+internal class UploadServer(val code: String, private val temp: File, private val imagesOnly: Boolean = false,
+                            private val onUpload: (File, Boolean) -> String?) {
     private val socket = try {
         ServerSocket(8080)
     } catch (e: IOException) {
@@ -67,11 +68,12 @@ internal class UploadServer(val code: String, private val temp: File, private va
         val path = request.substringAfter(' ').substringBefore(' ')
         when {
             path != "/$code" -> reply(out, 404, "text/plain", "Not found. Scan the code on the TV again.")
-            method == "GET" -> reply(out, 200, "text/html; charset=utf-8", PAGE)
+            method == "GET" -> reply(out, 200, "text/html; charset=utf-8", page(imagesOnly))
             method == "POST" -> {
                 val length = headers["content-length"]?.toLongOrNull() ?: -1
                 val video = headers["content-type"].orEmpty().startsWith("video/") // the browser sends the file's own type
-                val max = if (video) VIDEO_LIMIT else MAX_BYTES
+                if (imagesOnly && video) return reply(out, 415, "text/plain", "Choose a picture, not a video.")
+                val max = if (imagesOnly) 5L * 1024 * 1024 else if (video) VIDEO_LIMIT else MAX_BYTES
                 if (length !in 1..max) return reply(out, 413, "text/plain", "That file is too big (${max / 1024 / 1024} MB at most).")
                 temp.outputStream().use { file ->
                     val buf = ByteArray(64 * 1024)
@@ -117,10 +119,10 @@ internal class UploadServer(val code: String, private val temp: File, private va
     private companion object {
         const val MAX_BYTES = 25L * 1024 * 1024
 
-        val PAGE = """
+        fun page(imagesOnly: Boolean) = """
             <!doctype html>
             <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>Plume wallpaper</title>
+            <title>${if (imagesOnly) "Plume app picture" else "Plume wallpaper"}</title>
             <style>
               body{font:17px system-ui,sans-serif;margin:0;padding:32px 20px;background:#f7f8fa;color:#111214}
               @media (prefers-color-scheme:dark){body{background:#09090b;color:#f5f5f7}}
@@ -130,14 +132,15 @@ internal class UploadServer(val code: String, private val temp: File, private va
               @media (prefers-color-scheme:dark){button{background:#f5f5f7;color:#111214}}
               button:disabled{opacity:.35} input{display:none} #s{min-height:1.5em}
             </style></head><body>
-            <h1>Add a wallpaper</h1>
-            <p>Pick a photo, or an H.264 or HEVC MP4 video up to 1080p and 350 MB. A photo shows on your TV a moment after you upload it; a video plays there first.</p>
-            <label><input id="f" type="file" accept="image/*,video/mp4"><span id="n">Choose photo or video</span></label>
+            <h1>${if (imagesOnly) "Change app picture" else "Add a wallpaper"}</h1>
+            <p>${if (imagesOnly) "Choose a PNG, JPEG or WebP picture up to 5 MB. Icons keep transparent areas. Banners crop to 16:9 around the centre."
+                else "Pick a photo, or an H.264 or HEVC MP4 video up to 1080p and 350 MB. A photo shows on your TV a moment after you upload it; a video plays there first."}</p>
+            <label><input id="f" type="file" accept="${if (imagesOnly) "image/png,image/jpeg,image/webp" else "image/*,video/mp4"}"><span id="n">${if (imagesOnly) "Choose picture" else "Choose photo or video"}</span></label>
             <button id="b" disabled>Upload to TV</button>
             <div id="s"></div>
             <script>
               const f=document.getElementById('f'),b=document.getElementById('b'),s=document.getElementById('s'),n=document.getElementById('n');
-              f.onchange=()=>{b.disabled=!f.files.length;n.textContent=f.files.length?f.files[0].name:'Choose photo or video';s.textContent=''};
+              f.onchange=()=>{b.disabled=!f.files.length;n.textContent=f.files.length?f.files[0].name:'${if (imagesOnly) "Choose picture" else "Choose photo or video"}';s.textContent=''};
               b.onclick=async()=>{
                 b.disabled=true;s.textContent='Uploading…';
                 try{const r=await fetch(location.pathname,{method:'POST',body:f.files[0]});
@@ -147,6 +150,7 @@ internal class UploadServer(val code: String, private val temp: File, private va
               };
             </script></body></html>
         """.trimIndent()
+
     }
 }
 
