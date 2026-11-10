@@ -194,6 +194,40 @@ Select **Plume All apps** as the Press or Hold action under **Home &amp; remote 
 
 Plume shows every wallpaper as it is, with no dark fades on top.
 
+## Transfer settings
+
+Open **Plume settings → Backup → Save backup**. Plume shows the file path after saving.
+Saving replaces the previous backup file.
+Copy the file off the TV before uninstalling Plume. Uninstall removes the app's backup folder.
+
+The usual path is `/sdcard/Android/media/dev.plume/backup/plume-settings.json`:
+
+```sh
+adb pull /sdcard/Android/media/dev.plume/backup/plume-settings.json
+```
+
+On the destination TV, install and open Plume, then copy the file:
+
+```sh
+adb shell mkdir -p /sdcard/Android/media/dev.plume/backup
+adb push plume-settings.json /sdcard/Android/media/dev.plume/backup/plume-settings.json
+```
+
+Select **Plume settings → Backup → Restore backup** and confirm. Plume reloads the home screen.
+The file transfers theme, glass, icons, layout, clock, weather, app order, hidden apps, and photo timing.
+Missing supported settings return to their defaults. Unknown settings are ignored.
+An unsupported file version or invalid supported value stops the import before settings change.
+
+The JSON envelope uses this format. String sets use JSON arrays.
+
+```json
+{"format":"plume-settings","version":1,"settings":{"theme":"dark","row_hidden":["com.example.app"]}}
+```
+
+The PIN, setup state, wallpapers, photo folders, HDMI inputs, remote mappings, usage history, and system settings stay local.
+This includes Home permissions and screensaver timing. App order applies to apps installed on the destination TV.
+The file can contain the manual weather location. Keep the exported file private.
+
 ## Privacy
 
 Plume has no analytics, no ads and no account. It only connects to the internet to:

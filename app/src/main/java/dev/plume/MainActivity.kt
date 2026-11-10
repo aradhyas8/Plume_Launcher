@@ -2756,6 +2756,8 @@ class MainActivity : Activity() {
             group(R.string.group_tv) +
             sectionRow(R.string.section_remote_home) +
             Triple(R.string.lock_layout, rows[R.string.lock_layout]!!, RowStyle(R.drawable.ms_lock, help = getString(R.string.lock_note))) +
+            Triple(R.string.backup, page(getString(R.string.backup), "›") { showBackup() },
+                RowStyle(R.drawable.ms_folder, help = getString(R.string.help_settings_transfer))) +
             Triple(R.string.updates, rows[R.string.updates]!!.let { (t, _, a) -> page(t, "›", a) },
                 RowStyle(R.drawable.ms_system_update, rows[R.string.updates]!!.second, help = getString(R.string.help_updates))) +
             listOfNotNull(if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) null
@@ -4748,6 +4750,67 @@ class MainActivity : Activity() {
                 }
                 updateBadge()
                 if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.updates)
+            }
+        }
+    }
+
+    private var transferringSettings = false
+
+    private fun showBackup() {
+        showPage(getString(R.string.backup), listOf(
+            page(getString(R.string.save_settings), "") {
+                unlock(back = { showBackup() }) {
+                    if (settingsScrim.visibility != View.VISIBLE) showPanel()
+                    transferSettings(false)
+                }
+            },
+            page(getString(R.string.load_settings), "") { confirmLoadSettings() },
+        ), top = label(getString(R.string.help_settings_transfer), 14f).apply { maxLines = 6; ellipsize = null }) {
+            renderSettings(R.string.backup)
+        }
+    }
+
+    private fun confirmLoadSettings() = unlock(back = { showBackup() }) {
+        if (settingsScrim.visibility != View.VISIBLE) showPanel()
+        val path = try { SettingsTransfer.file(this).path } catch (e: Exception) {
+            toast(getString(R.string.settings_transfer_failed), long = true)
+            return@unlock
+        }
+        showPage(getString(R.string.load_settings), listOf(
+            page(getString(R.string.load_settings), "") { transferSettings(true) },
+            page(getString(R.string.cancel), "") { showBackup() },
+        ), top = label(getString(R.string.settings_load_warning, path), 14f).apply { maxLines = 12; ellipsize = null }) {
+            showBackup()
+        }
+    }
+
+    private fun transferSettings(load: Boolean) {
+        if (transferringSettings) return
+        transferringSettings = true
+        val snapshot = prefs.all
+        io.execute {
+            val result = runCatching {
+                val file = SettingsTransfer.file(this)
+                if (load) SettingsTransfer.restore(prefs, SettingsTransfer.load(file))
+                else SettingsTransfer.save(file, snapshot)
+                file.path
+            }
+            ui.post {
+                transferringSettings = false
+                if (isDestroyed) return@post
+                result.onSuccess { path ->
+                    if (load) {
+                        prefs.edit().remove("reopen_settings").remove("return_settings").remove("return_dream").apply()
+                        recreate()
+                    } else showPage(getString(R.string.save_settings), listOf(
+                        page(getString(R.string.done), "") { showBackup() },
+                    ), top = label(getString(R.string.settings_saved, path), 14f).apply { maxLines = 12; ellipsize = null }) {
+                        showBackup()
+                    }
+                }.onFailure { e ->
+                    android.util.Log.w("Plume", "Settings transfer failed", e)
+                    toast(getString(R.string.settings_transfer_failed), long = true)
+                }
             }
         }
     }

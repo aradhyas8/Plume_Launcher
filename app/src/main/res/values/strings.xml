@@ -116,6 +116,13 @@
     <string name="updating">Updating…</string>
     <string name="checking">Checking…</string>
     <string name="lock_layout">PIN lock</string>
+    <string name="backup">Backup</string>
+    <string name="save_settings">Save backup</string>
+    <string name="load_settings">Restore backup</string>
+    <string name="help_settings_transfer">Transfer display, layout, clock, weather, and app order settings. Media, PIN, remote buttons, and system settings stay on this TV.</string>
+    <string name="settings_saved">Saved to:\n%1$s\n\nCopy this file off the TV before you uninstall Plume.</string>
+    <string name="settings_load_warning">Load from:\n%1$s\n\nThis replaces supported settings. Missing settings return to their defaults. The PIN, media, and system settings stay unchanged.</string>
+    <string name="settings_transfer_failed">Could not transfer settings. Check the file, its format, and available storage.</string>
     <string name="plume_settings">Plume settings</string>
     <string name="enter_pin">Enter PIN</string>
     <string name="wrong_pin">Wrong PIN</string>
