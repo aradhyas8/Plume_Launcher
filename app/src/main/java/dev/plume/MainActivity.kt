@@ -5744,6 +5744,8 @@ class MainActivity : Activity() {
             ellipsize = TextUtils.TruncateAt.END // MARQUEE while focused
             marqueeRepeatLimit = -1
             ink(this, watchInk)
+            // TextView widens its clip by the shadow, so a scrolling title would show past the card's sides.
+            addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ -> v.clipBounds = Rect(0, -dp(4), r - l, b - t + dp(4)) }
         }
         val frame = FrameLayout(this)
         // The poster fills the card, so frost under it would never show and would only cost work on every frame.
