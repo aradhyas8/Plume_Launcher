@@ -22,6 +22,14 @@ class HomeWatch(private val fire: Boolean, private val homes: () -> Map<String, 
     private var settingsMayFollow = false
     private var lastJump = -JUMP_GAP_MS
     private var waitingPkg: String? = null
+    private var launchedAt = -LAUNCH_WAIT_MS
+
+    /**
+     * Plume just started an activity. On Fire OS, Amazon's home can show before that activity does (Settings
+     * does this), and a slow TV can take more than a second to open it. Until a window opens, Amazon's home is
+     * not a Home press.
+     */
+    fun launched(now: Long) { launchedAt = now }
 
     /**
      * [KEEP]: leave any jump still waiting. Null: drop it. Otherwise: go home after this many ms.
@@ -32,13 +40,19 @@ class HomeWatch(private val fire: Boolean, private val homes: () -> Map<String, 
                 pkg == PLUME || pkg == "android" || pkg == "com.android.systemui")) return KEEP
         waitingPkg = null
         if (!isHome(pkg, cls)) {
+            if (pkg != PLUME) launchedAt = -LAUNCH_WAIT_MS // what Plume started is on screen
             // Fire OS shows its home on the way into (and out of) Amazon Settings, then Settings on top.
             settingsMayFollow = pkg == PLUME || pkg.startsWith(AMAZON_SETTINGS)
             return null
         }
         if (now - lastJump < JUMP_GAP_MS) return KEEP // one Home press sends several of these
         lastJump = now
-        if (!settingsMayFollow || !fire) return 0
+        if (!fire) return 0
+        val sinceLaunch = now - launchedAt
+        launchedAt = -LAUNCH_WAIT_MS
+        // Wait for the window Plume started; jump only if none opens (the launch failed or opened nothing).
+        if (sinceLaunch in 0 until LAUNCH_WAIT_MS) { waitingPkg = pkg; return LAUNCH_WAIT_MS - sinceLaunch }
+        if (!settingsMayFollow) return 0
         waitingPkg = pkg
         return SETTINGS_WAIT_MS
     }
@@ -62,6 +76,7 @@ class HomeWatch(private val fire: Boolean, private val homes: () -> Map<String, 
         private const val AMAZON_SETTINGS = "com.amazon.tv.settings"
         private const val JUMP_GAP_MS = 600L
         const val SETTINGS_WAIT_MS = 550L
+        const val LAUNCH_WAIT_MS = 3_000L
         const val KEEP = -1L
     }
 }
