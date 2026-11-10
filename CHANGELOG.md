@@ -16,6 +16,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Mute action.** Assign **Mute** to a remote button to switch sound off and on.
+
 - **Settings backup.** Select **Backup** to save display and layout settings, then restore them on another TV.
 
 - **Screensaver timing.** Choose **Start after** in Plume to set the TV timeout or select **Never**.
