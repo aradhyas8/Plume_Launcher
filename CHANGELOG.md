@@ -16,6 +16,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- Press Right on the last app tile to select the first app tile.
 - **Mute action.** Assign **Mute** to a remote button to switch sound off and on.
 
 - **Settings backup.** Select **Backup** to save display and layout settings, then restore them on another TV.

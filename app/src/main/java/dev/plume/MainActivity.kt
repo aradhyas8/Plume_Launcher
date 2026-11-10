@@ -3924,10 +3924,10 @@ class MainActivity : Activity() {
     }
 
     /**
-     * The home screen is three rows: top bar, apps, Continue Watching. Left/Right stay inside a row and
-     * stop at its ends; Up/Down move between rows and land where you last were in that row, not on
-     * whatever happens to sit nearest on screen. Returns the view to focus (itself = stay), or null to
-     * let Android handle the key.
+     * The home screen is three rows: top bar, apps, Continue Watching. Left/Right stay inside a row.
+     * Right from the last app returns to the first; other row ends stop focus. Up/Down move between
+     * rows and land where you last were, not on whatever happens to sit nearest on screen.
+     * Returns the view to focus (itself = stay), or null to let Android handle the key.
      */
     private fun homeNav(v: View, key: Int): View? {
         fun alive(x: View?) = x?.takeIf { it.isAttachedToWindow }
@@ -3947,7 +3947,7 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_DPAD_UP -> top
                 KeyEvent.KEYCODE_DPAD_DOWN -> cards ?: v
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (appRow.indexOfChild(v) == 0) v else null
-                KeyEvent.KEYCODE_DPAD_RIGHT -> if (appRow.indexOfChild(v) == appRow.childCount - 1) v else null
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (appRow.indexOfChild(v) == appRow.childCount - 1) appRow.getChildAt(0) else null
                 else -> null
             }
             v.getTag(R.id.watchRow) is Prog -> {
