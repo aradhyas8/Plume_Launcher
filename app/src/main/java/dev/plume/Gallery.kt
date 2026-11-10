@@ -1,5 +1,6 @@
 package dev.plume
 
+import android.app.Activity
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
@@ -9,10 +10,13 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.Bundle
 import android.service.dreams.DreamService
 import android.view.KeyEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.View
+import android.view.WindowManager
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.Executors
@@ -53,22 +57,19 @@ internal fun paintingsReady(c: Context) = PAINTING_FILES.all { File(paintingsDir
  * ◀ ▶ step through the pictures; any other key leaves to the launcher's home screen.
  */
 class GalleryDream : DreamService() {
-    private var show: GalleryShow? = null
-    private var aerial: AerialShow? = null
+    private lateinit var playback: GalleryPlayback
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         isInteractive = true // we handle keys ourselves (see dispatchKeyEvent)
         isFullscreen = true
-        val prefs = getSharedPreferences("home", MODE_PRIVATE)
-        val scenes = if (prefs.getString("ss_folder", null) == AERIAL_SCREENSAVER) aerialFiles(this) else emptyList()
-        if (scenes.isNotEmpty()) aerial = AerialShow(this, scenes).also { setContentView(it.view) }
-        else show = GalleryShow(this).also { setContentView(it.view) }
+        playback = GalleryPlayback(this)
+        setContentView(playback.view)
     }
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-            if (e.action == KeyEvent.ACTION_DOWN) (if (e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1).let { show?.step(it); aerial?.step(it) }
+            if (e.action == KeyEvent.ACTION_DOWN) playback.step(if (e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
             return true
         }
         if (e.action == KeyEvent.ACTION_UP) {
@@ -79,10 +80,59 @@ class GalleryDream : DreamService() {
     }
 
     override fun onDetachedFromWindow() {
-        show?.release()
-        aerial?.release()
+        playback.release()
         super.onDetachedFromWindow()
     }
+}
+
+/** Previews Plume's screensaver without a system "dream now" activity. */
+@Suppress("DEPRECATION")
+class GalleryPreview : Activity() {
+    private lateinit var playback: GalleryPlayback
+
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        playback = GalleryPlayback(this)
+        setContentView(playback.view)
+    }
+
+    override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            if (e.action == KeyEvent.ACTION_DOWN) playback.step(if (e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
+        } else if (e.action == KeyEvent.ACTION_UP) finish()
+        return true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        finish()
+    }
+
+    override fun onDestroy() {
+        playback.release()
+        super.onDestroy()
+    }
+}
+
+/** Both hosts use the same content, controls and cleanup. */
+private class GalleryPlayback(context: Context) {
+    private val show: GalleryShow?
+    private val aerial: AerialShow?
+    val view: SurfaceView
+
+    init {
+        val prefs = context.getSharedPreferences("home", Context.MODE_PRIVATE)
+        val scenes = if (prefs.getString("ss_folder", null) == AERIAL_SCREENSAVER) aerialFiles(context) else emptyList()
+        aerial = if (scenes.isNotEmpty()) AerialShow(context, scenes) else null
+        show = if (aerial == null) GalleryShow(context) else null
+        view = aerial?.view ?: show!!.view
+    }
+
+    fun step(by: Int) { show?.step(by); aerial?.step(by) }
+    fun release() { show?.release(); aerial?.release() }
 }
 
 /**

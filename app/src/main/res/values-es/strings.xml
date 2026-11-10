@@ -202,7 +202,6 @@
     <string name="help_from_apps">Elige las apps que pueden añadir contenidos a esta fila.</string>
     <string name="help_channels">Activa o desactiva los canales que añaden las apps, como Recomendados.</string>
     <string name="help_hidden_shows">Contenidos que ocultaste de la fila. Pulsa OK para volver a mostrarlos todos.</string>
-    <string name="help_start_after">Abre los ajustes de Android donde eliges cuánto espera la TV.</string>
     <string name="help_home_button">Inicio abre Plume. Mantén pulsado Inicio para abrir el panel propio de la TV.</string>
     <string name="help_default_launcher">En Android TV, Plume puede ser la pantalla de inicio. Google TV mantiene la suya, así que usa el botón Inicio.</string>
     <string name="help_run_setup">Vuelve a configurar el botón Inicio.</string>

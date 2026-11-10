@@ -209,7 +209,6 @@
     <string name="help_from_apps">Scegli le app che possono aggiungere contenuti a questa riga.</string>
     <string name="help_channels">Attiva o disattiva i canali aggiunti dalle app, come Consigliati.</string>
     <string name="help_hidden_shows">Contenuti che hai nascosto dalla riga. Premi OK per mostrarli di nuovo tutti.</string>
-    <string name="help_start_after">Apre le impostazioni Android in cui scegli quanto attende la TV.</string>
     <string name="help_home_button">Home apre Plume. Tieni premuto Home per la dashboard della TV.</string>
     <string name="help_default_launcher">Su Android TV, Plume può essere la schermata Home. Google TV tiene la sua, quindi usa il pulsante Home.</string>
     <string name="help_run_setup">Ripeti la configurazione del pulsante Home.</string>
