@@ -202,7 +202,6 @@
     <string name="help_from_apps">Elige las apps que pueden añadir contenidos a esta fila.</string>
     <string name="help_channels">Activa o desactiva los canales que añaden las apps, como Recomendados.</string>
     <string name="help_hidden_shows">Contenidos que ocultaste de la fila. Pulsa OK para volver a mostrarlos todos.</string>
-    <string name="help_start_after">Abre los ajustes de Android donde eliges cuánto espera la TV.</string>
     <string name="help_home_button">Inicio abre Plume. Mantén pulsado Inicio para abrir el panel propio de la TV.</string>
     <string name="help_default_launcher">En Android TV, Plume puede ser la pantalla de inicio. Google TV mantiene la suya, así que usa el botón Inicio.</string>
     <string name="help_run_setup">Vuelve a configurar el botón Inicio.</string>
@@ -256,6 +255,8 @@
     <string name="section_screensaver">Salvapantallas</string>
     <string name="sources">Entradas</string>
     <string name="no_signal">Sin señal</string>
+    <string name="input_opening">Abriendo entrada…</string>
+    <string name="input_failed">No se pudo abrir esta entrada. Pulsa Atrás para volver.</string>
     <string name="in_row">En la fila</string>
     <string name="input_added">Añadida a la fila.</string>
     <string name="input_removed">Quitada de la fila.</string>
@@ -318,4 +319,5 @@
     <string name="cards_rows_note">Una fuente es Watch Next o un canal que añade una aplicación. Por título y Por canal necesitan dos o más fuentes con series.</string>
     <string name="cards_rows_one">Ahora solo una fuente tiene series, así que la fila se ve igual.</string>
     <string name="watch_next_tab">Watch Next</string>
+    <string name="act_all_apps">Todas las aplicaciones de Plume</string>
 </resources>

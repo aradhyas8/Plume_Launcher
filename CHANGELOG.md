@@ -17,6 +17,21 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 ## Unreleased
 
 - Shows row: when you change sources, the source name, show titles, details and posters slide in the direction of the button you push. Cards keep their positions. The row has one title with dots that show which source is on screen.
+- **Custom app pictures.** Hold **OK** on an app, then select **Change picture**. Upload an icon or banner from your phone.
+- Press Right on the last app tile to select the first app tile.
+- **Mute action.** Assign **Mute** to a remote button to switch sound off and on.
+
+- **Settings backup.** Select **Backup** to save display and layout settings, then restore them on another TV.
+
+- **Screensaver timing.** Choose **Start after** in Plume to set the TV timeout or select **Never**.
+
+- **Screensaver preview.** Gallery, photos, and Aerial Views preview without the TV's system preview activity.
+
+- **Plume All apps.** Assign this action to a remote key to open Plume's app list.
+- Fire TVs with DroidLogic inputs play HDMI inside Plume instead of using Amazon's input switcher.
+- Plume opens when the Shield's Android TV home screen appears with the Home button service enabled.
+- Plume leaves the system launcher in front while Google TV suspends Plume in a kids profile.
+- Plume starts at cold boot when it is the only Home app. Before, the TV stayed on the boot screen.
 
 ## 1.7.1
 

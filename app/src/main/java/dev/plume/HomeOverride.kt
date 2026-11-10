@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -60,6 +61,7 @@ class HomeOverride : AccessibilityService() {
     }
 
     override fun onKeyEvent(e: KeyEvent): Boolean {
+        if (packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SUSPENDED != 0) return false
         if (e.keyCode != KeyEvent.KEYCODE_HOME) return remap(e)
         // Decided on release, by how long it was held: this TV's remote doesn't reliably send key repeats.
         if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) {
@@ -93,8 +95,8 @@ class HomeOverride : AccessibilityService() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val watch by lazy { HomeWatch(fireTv(this)) { googleHomes } }
-    private var googleHomes = emptySet<String>()
+    private val watch by lazy { HomeWatch(fireTv(this)) { homes } }
+    private var homes = emptyMap<String, Set<String>>()
     private var listening = false
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) = loadHomes()
@@ -110,17 +112,20 @@ class HomeOverride : AccessibilityService() {
         after?.let { handler.postDelayed(jump, it) }
     }
 
-    /** The Google TV launcher's home screens, asked of the system when the service starts and when a package changes. */
+    /** The stock launchers' home screens, asked of the system when the service starts and when a package changes. */
     private fun loadHomes() {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        googleHomes = googleTvHomes(packageManager.queryIntentActivities(home, 0).map {
+        homes = stockHomes(packageManager.queryIntentActivities(home, 0).map {
             val a = it.activityInfo
             HomeEntry(a.packageName, a.name, a.targetActivity)
         })
     }
 
     // Marked as Home so the setup check can tell it from Plume being opened from the apps list.
-    private fun goHome() = startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    private fun goHome() {
+        if (packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SUSPENDED != 0) return
+        startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     override fun onInterrupt() {}
 

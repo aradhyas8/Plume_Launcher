@@ -209,7 +209,6 @@
     <string name="help_from_apps">Scegli le app che possono aggiungere contenuti a questa riga.</string>
     <string name="help_channels">Attiva o disattiva i canali aggiunti dalle app, come Consigliati.</string>
     <string name="help_hidden_shows">Contenuti che hai nascosto dalla riga. Premi OK per mostrarli di nuovo tutti.</string>
-    <string name="help_start_after">Apre le impostazioni Android in cui scegli quanto attende la TV.</string>
     <string name="help_home_button">Home apre Plume. Tieni premuto Home per la dashboard della TV.</string>
     <string name="help_default_launcher">Su Android TV, Plume può essere la schermata Home. Google TV tiene la sua, quindi usa il pulsante Home.</string>
     <string name="help_run_setup">Ripeti la configurazione del pulsante Home.</string>
@@ -264,6 +263,8 @@
     <string name="section_screensaver">Salvaschermo</string>
     <string name="sources">Ingressi</string>
     <string name="no_signal">Nessun segnale</string>
+    <string name="input_opening">Apertura ingresso…</string>
+    <string name="input_failed">Impossibile aprire questo ingresso. Premi Indietro per tornare.</string>
     <string name="in_row">Nella riga</string>
     <string name="input_added">Aggiunto alla riga.</string>
     <string name="input_removed">Rimosso dalla riga.</string>
@@ -332,4 +333,5 @@
     <string name="cards_rows_note">Una fonte è Watch Next, o un canale che un\'app aggiunge. Per titolo e Per canale richiedono due o più fonti con serie.</string>
     <string name="cards_rows_one">Ora solo una fonte ha serie, quindi la riga resta uguale.</string>
     <string name="watch_next_tab">Watch Next</string>
+    <string name="act_all_apps">Tutte le app di Plume</string>
 </resources>

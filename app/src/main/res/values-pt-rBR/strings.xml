@@ -226,7 +226,6 @@
     <string name="help_from_apps">Escolha os apps que podem adicionar programas a esta fileira.</string>
     <string name="help_channels">Ative ou desative os canais que os apps adicionam, como Recomendados.</string>
     <string name="help_hidden_shows">Programas que você ocultou da fileira. Pressione OK para mostrar todos de novo.</string>
-    <string name="help_start_after">Abre as configurações do Android onde você define quanto tempo a TV espera.</string>
     <string name="help_home_button">O Início abre o Plume. Segure o Início para abrir o painel da própria TV.</string>
     <string name="help_default_launcher">No Android TV, o Plume pode ser o app de início. O Google TV mantém o próprio: use \"Início abre o Plume\" nele.</string>
     <string name="help_run_setup">Refaça a configuração do botão Início.</string>
@@ -281,6 +280,8 @@
     <string name="section_screensaver">Protetor de tela</string>
     <string name="sources">Fontes</string>
     <string name="no_signal">Sem sinal</string>
+    <string name="input_opening">Abrindo entrada…</string>
+    <string name="input_failed">Não foi possível abrir esta entrada. Pressione Voltar para retornar.</string>
     <string name="in_row">Na fileira</string>
     <string name="input_added">Adicionado à fileira.</string>
     <string name="input_removed">Removido da fileira.</string>
@@ -384,4 +385,5 @@
     <string name="cards_rows_note">Uma fonte é o Watch Next ou um canal que um app adiciona. Por título e Por canal precisam de duas ou mais fontes com programas.</string>
     <string name="cards_rows_one">Agora só uma fonte tem programas, então a fileira fica igual.</string>
     <string name="watch_next_tab">Watch Next</string>
+    <string name="act_all_apps">Todos os apps do Plume</string>
 </resources>

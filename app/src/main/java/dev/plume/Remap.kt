@@ -15,7 +15,7 @@ import android.widget.Toast
 /**
  * Remote key remapping. Plume's Home key service already sees every key before any app does, so a key mapped
  * here is handled there: [Entry.short] runs on a press and [Entry.long] on a hold ("" when unset). An action is
- * "none" (swallow the key), "app:<package>", "hdmi:<input id>", "media:<name>", "sys:<name>" or "open:<place>" (Android's Settings).
+ * "none" (swallow the key), "app:<package>", "hdmi:<input id>", "media:<name>", "sys:<name>" or "open:<place>" (Plume or Android Settings).
  * Kept in one preference string ("home"/"keymap", a line per key) and in memory only once a key is pressed.
  */
 object Remap {
@@ -49,6 +49,7 @@ object Remap {
         "stop" to (KeyEvent.KEYCODE_MEDIA_STOP to R.string.act_stop),
         "rewind" to (KeyEvent.KEYCODE_MEDIA_REWIND to R.string.act_rewind),
         "forward" to (KeyEvent.KEYCODE_MEDIA_FAST_FORWARD to R.string.act_forward),
+        "mute" to (KeyEvent.KEYCODE_VOLUME_MUTE to R.string.act_mute),
     )
 
     val SYS = linkedMapOf(
@@ -59,10 +60,14 @@ object Remap {
         "power" to (AccessibilityService.GLOBAL_ACTION_POWER_DIALOG to R.string.act_power),
     )
 
-    /** Places in Android's Settings that a key can open, though Settings is not in the apps list. */
+    /** A Home intent opens this view once, after the main screen is ready. */
+    const val OPEN_ALL_APPS = "open_all_apps"
+
+    /** Screens that a key can open without an app tile. */
     val OPEN = linkedMapOf(
         "settings" to (Settings.ACTION_SETTINGS to R.string.act_settings),
         "network" to (Settings.ACTION_WIFI_SETTINGS to R.string.act_network),
+        "allapps" to (Intent.ACTION_MAIN to R.string.act_all_apps),
     )
 
     /** A key's identity uses its scan code too, when available. */
@@ -114,17 +119,25 @@ object Remap {
 
     private val KAMINO = ComponentName("com.amazon.tv.inputpreference.service", "com.amazon.tv.inputpreference.service.KaminoInputSwitchService")
 
-    /** The hardware number at the end of a TV input id ("…/HW2"): Fire OS's input switch takes it as the port, HW2 being HDMI 1. */
+    /** The hardware number at the end of a TV input id ("…/HW2"); some Fire TV switchers accept it as inputType. */
     internal fun hardwareNumber(id: String) = Regex("/HW(\\d+)$").find(id)?.groupValues?.get(1)?.toInt()
+
+    /** #146: this provider's inputs fail through Amazon's switcher, so Plume supplies the playback surface. */
+    internal fun playsInput(id: String) = id.startsWith("com.droidlogic.tvinput/")
 
     /**
      * Opens an HDMI input, for the tiles and for keys alike. Fire OS hands the standard passthrough request to Amazon's
-     * Live TV app, which opens the wrong screen (#91), so there the input goes through Amazon's own input switch, as its
-     * home screen does. Some Fire OS builds keep that switch to Amazon's apps: then a toast says how to switch by hand.
+     * Live TV app, which opens the wrong screen (#91). DroidLogic inputs use Plume's player (#146); other Fire TV inputs
+     * use Amazon's input switch. Some builds refuse that switch: then a toast says how to switch by hand.
      */
     fun openInput(c: Context, id: String) {
         if (!c.packageManager.hasSystemFeature("amazon.hardware.fire_tv")) {
             c.startActivity(Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(id)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        }
+        if (playsInput(id)) {
+            c.startActivity(Intent(c, InputActivity::class.java).putExtra("input", id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
             return
         }
         val port = hardwareNumber(id)
@@ -150,15 +163,26 @@ object Remap {
                 "hdmi" -> openInput(s, arg)
                 "media" -> MEDIA[arg]?.let { (code, _) ->
                     val audio = s.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
-                    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+                    if (code == KeyEvent.KEYCODE_VOLUME_MUTE) {
+                        if (audio.isVolumeFixed) Toast.makeText(s, R.string.mute_unavailable, Toast.LENGTH_LONG).show()
+                        else audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, AudioManager.FLAG_SHOW_UI)
+                    } else {
+                        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+                        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+                    }
                 }
                 "sys" -> SYS[arg]?.let { (code, _) ->
                     if (code == AccessibilityService.GLOBAL_ACTION_POWER_DIALOG) powerMenu(s) else s.performGlobalAction(code)
                 }
-                "open" -> OPEN[arg]?.let { (action, _) -> s.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                "open" -> OPEN[arg]?.let { (action, _) ->
+                    val intent = Intent(action)
+                    if (arg == "allapps") intent.setClass(s, MainActivity::class.java)
+                        .addCategory(Intent.CATEGORY_HOME).putExtra(OPEN_ALL_APPS, true)
+                    s.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
             }
         } catch (e: Exception) {
+            if (action == "media:mute") Toast.makeText(s, R.string.mute_unavailable, Toast.LENGTH_LONG).show()
             // An app that's gone, or an input that's unplugged: the key just does nothing.
         }
     }

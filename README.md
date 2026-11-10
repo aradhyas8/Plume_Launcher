@@ -158,6 +158,7 @@ Tests run against a fake `adb`, no TV needed: `sh tools/plume-install-test/run.s
 | Hide a Continue Watching card | Hold **OK** on it, then **Remove from Continue Watching** |
 | Change glass, theme or wallpaper | **Plume settings → Style** |
 | Change app size, icon style or names | **Plume settings → Apps row → Size**, **Icon style** or **App names** |
+| Change an app picture | Hold **OK** on the app → **Change picture** → **Icon** or **Banner**. Upload from your phone. |
 | Choose apps for Continue Watching | **Plume settings → Shows row → From apps** |
 | Show each source of the shows row on its own | **Plume settings → Shows row → Rows** (see [Rows of the shows row](#rows-of-the-shows-row)) |
 | Change the clock | **Plume settings → Clock & weather → Clock style** or **Clock size** |
@@ -166,6 +167,9 @@ Tests run against a fake `adb`, no TV needed: `sh tools/plume-install-test/run.s
 | Lock the layout | **Plume settings → PIN lock**. Forgot the PIN? **Android Settings → Apps → Plume → Clear data**. |
 | Update Plume | **Plume settings → Updates** |
 | Open the Google TV dashboard | Hold **Home** |
+
+Custom pictures change only the home row. Icons use the Monochrome and Colour styles; banners use the banner styles.
+Upload a PNG, JPEG or WebP file up to 5 MB. Select **Reset picture** to restore the original icon and banner.
 
 ### Rows of the shows row
 
@@ -179,6 +183,8 @@ The sources are Android TV's Watch Next and every channel that is on in **Plume 
 </p>
 
 Remote keys can open an app or input, send a media key, or open Back, Recent apps, Notifications, Quick settings, the Power menu or Android settings. Back, OK, the arrows, Home, Power and volume can't be changed, so you can't lock yourself out. The PIN lock keeps the layout safe; it is not parental control.
+
+Select **Plume All apps** as the Press or Hold action under **Home &amp; remote → Remote keys**.
 
 ## Wallpapers and screensavers
 
@@ -199,6 +205,41 @@ Remote keys can open an app or input, send a media key, or open Back, Recent app
 
 Plume shows every wallpaper as it is, with no dark fades on top.
 
+## Transfer settings
+
+Open **Plume settings → Backup → Save backup**. Plume shows the file path after saving.
+Saving replaces the previous backup file.
+Copy the file off the TV before uninstalling Plume. Uninstall removes the app's backup folder.
+
+The usual path is `/sdcard/Android/media/dev.plume/backup/plume-settings.json`:
+
+```sh
+adb pull /sdcard/Android/media/dev.plume/backup/plume-settings.json
+```
+
+On the destination TV, install and open Plume, then copy the file:
+
+```sh
+adb shell mkdir -p /sdcard/Android/media/dev.plume/backup
+adb push plume-settings.json /sdcard/Android/media/dev.plume/backup/plume-settings.json
+```
+
+Select **Plume settings → Backup → Restore backup** and confirm. Plume reloads the home screen.
+The file transfers theme, glass, icon style, layout, clock, weather, app order, hidden apps, and photo timing.
+Custom app pictures stay on this TV. Settings backups do not include picture files.
+Missing supported settings return to their defaults. Unknown settings are ignored.
+An unsupported file version or invalid supported value stops the import before settings change.
+
+The JSON envelope uses this format. String sets use JSON arrays.
+
+```json
+{"format":"plume-settings","version":1,"settings":{"theme":"dark","row_hidden":["com.example.app"]}}
+```
+
+The PIN, setup state, wallpapers, photo folders, HDMI inputs, remote mappings, usage history, and system settings stay local.
+This includes Home permissions and screensaver timing. App order applies to apps installed on the destination TV.
+The file can contain the manual weather location. Keep the exported file private.
+
 ## Privacy
 
 Plume has no analytics, no ads and no account. It only connects to the internet to:
@@ -211,7 +252,9 @@ Plume has no analytics, no ads and no account. It only connects to the internet 
 - download an Apple Aerial video from [sylvan.apple.com](https://sylvan.apple.com) or an Amazon Fire TV video from [Amazon's Fire TV CDN](https://aebcs-cdn-prod-na.services.firetv.amazon.dev), **only when you select that scene**. The source sees the TV's IP address.
 - fetch the weather, **only if you turn it on**. It looks up your approximate location from your IP address via [ipwho.is](https://ipwho.is), then gets the forecast from [Open-Meteo](https://open-meteo.com). The Auto theme uses the same location for sunrise and sunset, with no extra request. Clearing Plume's data removes it.
 
-**Add from phone…** runs a small upload page on the TV itself, reachable only on your home network and only while that screen is open. Photos and videos go straight from your phone to the TV and nowhere else.
+**Add from phone…** and **Change picture** run an upload page on the TV.
+The page works only on your home network while its screen stays open.
+Photos and videos go straight from your phone to the TV and nowhere else.
 
 ## Troubleshooting
 

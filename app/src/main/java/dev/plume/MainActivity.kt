@@ -60,6 +60,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.os.UserManager
 import android.provider.MediaStore
 import android.provider.Settings
 import android.text.InputType
@@ -361,6 +362,11 @@ class MainActivity : Activity() {
     private lateinit var videoWallpaper: VideoWallpaper
 
     private var resumed = false
+    private var ready = false // false while the user is still locked: no prefs, files or cache yet
+    private var recreating = false
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) = rebuildWhenUnlocked()
+    }
     private val refreshIfDirty = Runnable { if (appsDirty && !editing) refreshApps() } // not while a tile is being moved: onResume catches up
 
     private val packageReceiver = object : BroadcastReceiver() {
@@ -390,8 +396,23 @@ class MainActivity : Activity() {
         }
     }
 
+    /** The user is unlocked now: rebuild the home screen, so it reads the now-available saved data. */
+    private fun rebuildWhenUnlocked() {
+        if (ready || recreating || isFinishing || isDestroyed) return
+        recreating = true
+        recreate()
+    }
+
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        // The system starts Home before the user unlocks (Direct Boot). Register first, so a missed
+        // broadcast cannot leave the home screen empty. Do not read prefs, files or the cache yet.
+        registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_UNLOCKED))
+        if (!getSystemService(UserManager::class.java).isUserUnlocked) {
+            setContentView(R.layout.activity_main)
+            return
+        }
+        ready = true
         setContentView(R.layout.activity_main)
         glass = GlassLayer(this)
         findViewById<ViewGroup>(R.id.root).addView(glass, 2, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)) // over both wallpaper layers
@@ -466,8 +487,8 @@ class MainActivity : Activity() {
             setOnClickListener { action() }
             setOnLongClickListener { if (!holdFired) fireHold(this); true } // hold OK: move, hide or add icons
         }
-        if (fakeSetup(intent)) {
-            // debug: setup for a pretend TV already started
+        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || fakeSetup(intent)) {
+            // An explicit drawer request takes priority over setup and update cards.
         } else if (prefs.getBoolean("reopen_settings", false)) {
             prefs.edit().remove("reopen_settings").apply()
             ui.post { openLauncherSettings(R.string.theme) }
@@ -502,7 +523,12 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (!ready) {
+            if (getSystemService(UserManager::class.java).isUserUnlocked) rebuildWhenUnlocked()
+            return
+        }
         resumed = true
+        val allAppsRequested = intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false)
         if (currentWallpaper().startsWith("video:")) videoWallpaper.resume()
         returnTo = null // back by another way than Home: the next Home starts again at the first tile
         openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
@@ -510,7 +536,7 @@ class MainActivity : Activity() {
         ensureHomeService()
         homeSetupResumed()
         // Back from a screen that settings opened: settings again, on the same row (and the Home switch as it is now).
-        val back = prefs.getInt("return_settings", 0)
+        val back = if (allAppsRequested) 0 else prefs.getInt("return_settings", 0)
         if (back != 0 && hidden) {
             prefs.edit().remove("return_settings").remove("return_dream").apply()
             if (settingsScrim.visibility == View.VISIBLE) renderSettings(back) else openLauncherSettings(back)
@@ -536,6 +562,14 @@ class MainActivity : Activity() {
         Bing.onChanged = bingChanged
         Bing.refresh(applicationContext, prefs)
         ui.post { updateBadge() } // after layout, so the icon has its size
+        if (allAppsRequested) {
+            intent.removeExtra(Remap.OPEN_ALL_APPS) // consume only after initialization and any theme recreation
+            prefs.edit().remove("return_settings").remove("return_dream").remove("reopen_settings").apply()
+            if (editing) endEdit()
+            if (movingTop != null) endTopMove(false)
+            if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
+            if (allApps.visibility != View.VISIBLE) openAllApps()
+        }
     }
 
     /** Auto theme flips at sunrise and sunset (or 7:00 and 19:00) even while the home screen just sits there. */
@@ -562,23 +596,28 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
-        resumed = false
-        videoWallpaper.pause()
-        findViewById<ImageView>(R.id.wallpaper).alpha = 1f
-        ui.removeCallbacks(refreshIfDirty)
-        ui.removeCallbacks(weatherTick)
-        ui.removeCallbacks(themeTick)
-        ui.removeCallbacks(wallpaperTick)
-        if (editing) endEdit()
-        if (movingTop != null) endTopMove(false) // Home or an app opened in the middle of a move: the bar goes back as it was
+        if (ready) {
+            resumed = false
+            videoWallpaper.pause()
+            findViewById<ImageView>(R.id.wallpaper).alpha = 1f
+            ui.removeCallbacks(refreshIfDirty)
+            ui.removeCallbacks(weatherTick)
+            ui.removeCallbacks(themeTick)
+            ui.removeCallbacks(wallpaperTick)
+            if (editing) endEdit()
+            if (movingTop != null) endTopMove(false) // Home or an app opened in the middle of a move: the bar goes back as it was
+        }
         super.onPause()
     }
 
     override fun onStop() {
-        hidden = true
-        unlockedUntil = 0L // leaving the home screen locks it again (onPause would also fire for permission dialogs)
-        Remap.learn = null // never keep swallowing keys for a page that's no longer on screen
-        if (homeTest != 0) leftDuringTest = true
+        if (ready) {
+            if (upload != null) closeLauncherSettings()
+            hidden = true
+            unlockedUntil = 0L // leaving the home screen locks it again (onPause would also fire for permission dialogs)
+            Remap.learn = null // never keep swallowing keys for a page that's no longer on screen
+            if (homeTest != 0) leftDuringTest = true
+        }
         super.onStop()
     }
 
@@ -588,20 +627,25 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        videoWallpaper.clear()
-        if (Bing.onChanged === bingChanged) Bing.onChanged = null
-        unregisterReceiver(packageReceiver)
-        applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
-        getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
-        upload?.stop()
-        try {
-            contentResolver.unregisterContentObserver(photoObserver)
-        } catch (e: Exception) {
+        unregisterReceiver(unlockReceiver)
+        if (ready) {
+            videoWallpaper.clear()
+            if (Bing.onChanged === bingChanged) Bing.onChanged = null
+            unregisterReceiver(packageReceiver)
+            applicationContext.getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(net)
+            getSystemService(TvInputManager::class.java)?.unregisterCallback(inputCallback)
+            pageExit?.invoke()
+            pageExit = null
+            upload?.stop()
+            try {
+                contentResolver.unregisterContentObserver(photoObserver)
+            } catch (e: Exception) {
+            }
+            ui.removeCallbacks(folderRetryTask)
+            ui.removeCallbacksAndMessages(null) // the clocks and the posts still queued must not use the pools below
+            io.shutdownNow()
+            posterIo.shutdownNow()
         }
-        ui.removeCallbacks(folderRetryTask)
-        ui.removeCallbacksAndMessages(null) // the clocks and the posts still queued must not use the pools below
-        io.shutdownNow()
-        posterIo.shutdownNow()
         super.onDestroy()
     }
 
@@ -967,9 +1011,12 @@ class MainActivity : Activity() {
     /** Home pressed while already home: close whatever is open and go back to the start of the apps row. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent) // keep requests received before unlock or a theme recreation
+        if (!ready) return
         // Home pressed in Android's settings means home, not settings; the screensaver's end comes in as Home too.
         if (intent.hasCategory(Intent.CATEGORY_HOME) && !prefs.getBoolean("return_dream", false)) prefs.edit().remove("return_settings").apply()
         if (intent.action == UPDATE_STATUS) return installStatus(intent)
+        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false)) return // onResume handles new and existing activities
         if (fakeSetup(intent)) return
         if (homeTest != 0 && intent.hasCategory(Intent.CATEGORY_HOME)) { // the Home press reached us: setup works
             homeTest = 0
@@ -990,6 +1037,7 @@ class MainActivity : Activity() {
 
     @Deprecated("Home screen: Back only closes overlays")
     override fun onBackPressed() {
+        if (!ready) return
         when {
             settingsScrim.visibility == View.VISIBLE -> pageBack?.invoke() ?: closeLauncherSettings()
             allApps.visibility == View.VISIBLE -> closeAllApps()
@@ -2625,7 +2673,7 @@ class MainActivity : Activity() {
                 else -> photoScreensaver()?.let { wallpaperName(it) } ?: getString(R.string.gallery)
             }) { pickScreensaver() },
             R.string.test_screensaver to Triple(getString(R.string.test_screensaver), "") { testScreensaver() },
-            R.string.screensaver_timing to Triple(getString(R.string.screensaver_timing), "") { openScreensaverSettings() },
+            R.string.screensaver_timing to Triple(getString(R.string.screensaver_timing), screensaverDelayName()) { pickScreensaverDelay() },
             R.string.setup_home to Triple(getString(R.string.setup_home), "") { closeLauncherSettings(); startHomeSetup() },
             R.string.home_button to Triple(getString(R.string.home_button), toggle(homeServiceOn())) { toggleHomeButton() },
             R.string.smooth_volume to Triple(getString(R.string.smooth_volume), toggle(prefs.getBoolean("smooth_volume", false))) {
@@ -2710,7 +2758,7 @@ class MainActivity : Activity() {
                     help = help(k), area = SECTION_AREAS[section.first], art = ROW_ART[k],
                     dim = getString(R.string.glass_clear).takeIf { k == R.string.glass && currentWallpaper().startsWith("video:") },
                     // Without the adb permission, Home opens Plume is switched on in Android's Accessibility screen.
-                    ext = k == R.string.screensaver_timing || k == R.string.home_button && !homeServiceOn() && checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED)
+                    ext = k == R.string.home_button && !homeServiceOn() && checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED)
             }
             return showPage(getString(section.first), keys.map { rows[it]!! }, keys.indexOf(at), steps = keys.map { steps[it] }, styles = styles,
                 crumb = getString(R.string.plume_settings)) {
@@ -2734,6 +2782,8 @@ class MainActivity : Activity() {
             group(R.string.group_tv) +
             sectionRow(R.string.section_remote_home) +
             Triple(R.string.lock_layout, rows[R.string.lock_layout]!!, RowStyle(R.drawable.ms_lock, help = getString(R.string.lock_note))) +
+            Triple(R.string.backup, page(getString(R.string.backup), "›") { showBackup() },
+                RowStyle(R.drawable.ms_folder, help = getString(R.string.help_settings_transfer))) +
             Triple(R.string.updates, rows[R.string.updates]!!.let { (t, _, a) -> page(t, "›", a) },
                 RowStyle(R.drawable.ms_system_update, rows[R.string.updates]!!.second, help = getString(R.string.help_updates))) +
             listOfNotNull(if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) null
@@ -3421,6 +3471,7 @@ class MainActivity : Activity() {
                 SOURCES = inputs
                 if (movingTop == null) applyTopBar() // Sources shows only while the TV has an input
                 renderApps()
+                if (allApps.visibility == View.VISIBLE) openAllApps() // a fresh remote request can precede the app list
             }
         }
     }
@@ -3602,7 +3653,7 @@ class MainActivity : Activity() {
      */
     private fun bannerTile(a: App): View? {
         if (a.pkg.startsWith(HDMI)) return null
-        val banner = try {
+        val banner = AppPictures.read(this, a.pkg, banner = true) ?: try {
             packageManager.getActivityBanner(a.launch)
         } catch (e: Exception) {
             null
@@ -3651,7 +3702,9 @@ class MainActivity : Activity() {
     private fun appTile(a: App, labeled: Boolean = true): View {
         if (!labeled && isBannerStyle(iconStyle())) bannerTile(a)?.let { it.contentDescription = a.label; return it }
         val logo = LOGOS[a.pkg]
-        val custom = customIcon(a.pkg)
+        val custom = (if (!labeled && !a.pkg.startsWith(HDMI) && !isBannerStyle(iconStyle())) AppPictures.read(this, a.pkg, banner = false) else null)
+            ?.apply { if (!colourIcons()) colorFilter = GREYSCALE }
+            ?: customIcon(a.pkg)
         val name = a.label.takeIf { labeled }
         // Colour mode keeps the same marks, tinted with the brand colour (or the colour the app's icon is mostly).
         val colour = colourIcons()
@@ -3863,6 +3916,7 @@ class MainActivity : Activity() {
      * listener in style() is a fallback for remotes that send no repeats. [holdFired] stops both firing.
      */
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        if (!ready) return super.dispatchKeyEvent(e)
         if (wallPreview != null) { // a picked wallpaper shown whole: any button brings the panel back
             if (e.action == KeyEvent.ACTION_UP) endWallPreview()
             return true
@@ -3909,10 +3963,10 @@ class MainActivity : Activity() {
     }
 
     /**
-     * The home screen is three rows: top bar, apps, Continue Watching. Left/Right stay inside a row and
-     * stop at its ends; Up/Down move between rows and land where you last were in that row, not on
-     * whatever happens to sit nearest on screen. Returns the view to focus (itself = stay), or null to
-     * let Android handle the key.
+     * The home screen is three rows: top bar, apps, Continue Watching. Left/Right stay inside a row.
+     * Right from the last app returns to the first; other row ends stop focus. Up/Down move between
+     * rows and land where you last were, not on whatever happens to sit nearest on screen.
+     * Returns the view to focus (itself = stay), or null to let Android handle the key.
      */
     private fun homeNav(v: View, key: Int): View? {
         fun alive(x: View?) = x?.takeIf { it.isAttachedToWindow }
@@ -3933,7 +3987,7 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_DPAD_UP -> top
                 KeyEvent.KEYCODE_DPAD_DOWN -> title ?: cards ?: v
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (appRow.indexOfChild(v) == 0) v else null
-                KeyEvent.KEYCODE_DPAD_RIGHT -> if (appRow.indexOfChild(v) == appRow.childCount - 1) v else null
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (appRow.indexOfChild(v) == appRow.childCount - 1) appRow.getChildAt(0) else null
                 else -> null
             }
             v === watchTitle -> when (key) {
@@ -3993,6 +4047,9 @@ class MainActivity : Activity() {
         ))
         holdMenu(v, listOfNotNull(
             getString(R.string.move) to { startEdit(grab = v, once = true) },
+            if (pkg.startsWith(HDMI)) null else getString(R.string.change_app_picture) to {
+                appPictures(pkg, v.contentDescription.toString())
+            },
             getString(R.string.remove_from_row) to {
                 val i = appRow.indexOfChild(v)
                 // An input just unpins: it is in the Sources list anyway, so there is nothing to hide.
@@ -4016,6 +4073,64 @@ class MainActivity : Activity() {
             val flags = packageManager.getApplicationInfo(pkg, 0).flags
             flags and ApplicationInfo.FLAG_SYSTEM == 0 || flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0
         } catch (_: Exception) { false }
+    }
+
+    private fun appPictures(pkg: String, name: String) {
+        if (settingsScrim.visibility != View.VISIBLE) showPanel()
+        showPage(getString(R.string.change_app_picture), listOf(
+            page(getString(R.string.app_picture_icon), getString(R.string.app_picture_icon_hint)) { unlock { uploadAppPicture(pkg, name, false) } },
+            page(getString(R.string.banner), getString(R.string.app_picture_banner_hint)) { unlock { uploadAppPicture(pkg, name, true) } },
+            page(getString(R.string.reset_app_picture)) {
+                unlock {
+                    AppPictures.reset(this, pkg)
+                    renderApps()
+                    appPictures(pkg, name)
+                }
+            },
+        ), crumb = name) {
+            closeLauncherSettings()
+            (0 until appRow.childCount).map { appRow.getChildAt(it) }.firstOrNull { it.tag == pkg }?.requestFocus()
+        }
+    }
+
+    private fun uploadAppPicture(pkg: String, name: String, banner: Boolean) {
+        val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
+        if (settingsScrim.visibility != View.VISIBLE) showPanel()
+        val active = AtomicBoolean(true)
+        val status = label(getString(R.string.waiting_app_picture), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
+        val server = try {
+            UploadServer((1000..9999).random().toString(), File.createTempFile("app-picture-", ".tmp", cacheDir), imagesOnly = true) { file, _ ->
+                if (!active.get()) return@UploadServer null
+                val bitmap = AppPictures.fit(file, banner) ?: return@UploadServer null
+                val saved = try {
+                    AppPictures.save(AppPictures.file(this, pkg, banner), bitmap) { active.get() }
+                } finally { bitmap.recycle() }
+                if (!saved) return@UploadServer null
+                ui.post {
+                    if (!active.get() || isDestroyed) return@post
+                    renderApps()
+                    status.text = getString(R.string.app_picture_added)
+                }
+                name
+            }
+        } catch (_: IOException) { return toast(getString(R.string.upload_failed), long = true) }
+        upload = server
+        val url = "http://$ip:${server.port}/${server.code}"
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(ImageView(this@MainActivity).apply { setImageBitmap(qrBitmap(url, dp(200))) })
+            addView(label(url, 14f).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(4)) })
+            addView(label(getString(R.string.scan_hint), 12f).apply { gravity = Gravity.CENTER; maxLines = 3 })
+            addView(status.apply { setPadding(0, dp(12), 0, 0) })
+        }
+        showPage(getString(if (banner) R.string.banner else R.string.app_picture_icon),
+            listOf(page(getString(R.string.done)) { appPictures(pkg, name) }), top = box, crumb = name) { appPictures(pkg, name) }
+        pageExit = {
+            active.set(false)
+            server.stop()
+            if (upload === server) upload = null
+        }
     }
 
     private fun uninstall(pkg: String) {
@@ -4591,6 +4706,52 @@ class MainActivity : Activity() {
         paintingsDir(this).deleteRecursively() // another screensaver is in charge: give the space back
     }
 
+    private fun readDreamSetting(key: String): String? = if (key == Settings.System.SCREEN_OFF_TIMEOUT)
+        Settings.System.getString(contentResolver, key) else Settings.Secure.getString(contentResolver, key)
+
+    private fun screensaverDelayName(): String {
+        if (readDreamSetting("screensaver_enabled") == "0") return getString(R.string.never)
+        val key = if (fireTv() && readDreamSetting("contextual_screen_off_timeout") != null)
+            "contextual_screen_off_timeout" else Settings.System.SCREEN_OFF_TIMEOUT
+        val ms = readDreamSetting(key)?.toLongOrNull() ?: return ""
+        if (ms <= 0 || ms % 60_000 != 0L) return ""
+        val minutes = (ms / 60_000).toInt()
+        return resources.getQuantityString(R.plurals.screensaver_minutes, minutes, minutes)
+    }
+
+    private fun pickScreensaverDelay() {
+        if (checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED) {
+            val hint = label(getString(R.string.screensaver_delay_permission) + "\n\nadb shell pm grant $packageName $WRITE_SECURE", 14f)
+                .apply { maxLines = 8; ellipsize = null }
+            return showPage(getString(R.string.screensaver_timing),
+                listOf(page(getString(R.string.act_settings), "") { openScreensaverSettings() }), top = hint) {
+                renderSettings(R.string.screensaver_timing)
+            }
+        }
+        val choices = SCREENSAVER_DELAYS
+        val current = screensaverDelayName()
+        showPage(getString(R.string.screensaver_timing), choices.map { minutes ->
+            val name = if (minutes == 0) getString(R.string.never)
+                else resources.getQuantityString(R.plurals.screensaver_minutes, minutes, minutes)
+            page(name, if (name == current) CHOSEN else "") {
+                try {
+                    saveScreensaverDelay(minutes, fireTv(), ::readDreamSetting) { key, value ->
+                        if (key == Settings.System.SCREEN_OFF_TIMEOUT) Settings.System.putString(contentResolver, key, value)
+                        else Settings.Secure.putString(contentResolver, key, value)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("Plume", "Could not save screensaver timing", e)
+                    toast(getString(R.string.screensaver_delay_failed), long = true)
+                }
+                pickScreensaverDelay()
+            }
+        } + page(getString(R.string.act_settings), "") { openScreensaverSettings() },
+            maxOf(0, choices.indexOfFirst { minutes ->
+                current == if (minutes == 0) getString(R.string.never)
+                    else resources.getQuantityString(R.plurals.screensaver_minutes, minutes, minutes)
+            })) { renderSettings(R.string.screensaver_timing) }
+    }
+
     /** Android's screensaver settings (timing, sleep): plain Android TV and Google TV name them differently. */
     private fun openScreensaverSettings() {
         returnTo(R.string.screensaver_timing)
@@ -4642,8 +4803,13 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    /** Starts whichever screensaver is set, through SystemUI's "dream now" entry point. */
+    /** Plume previews its own content; other screensavers use the system entry point. */
     private fun testScreensaver() {
+        if (galleryOn()) {
+            returnTo(R.string.test_screensaver)
+            startActivity(Intent(this, GalleryPreview::class.java))
+            return
+        }
         returnTo(R.string.test_screensaver, dream = true)
         try {
             startActivity(Intent(Intent.ACTION_MAIN).setClassName("com.android.systemui", "com.android.systemui.Somnambulator"))
@@ -4690,6 +4856,67 @@ class MainActivity : Activity() {
                 }
                 updateBadge()
                 if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.updates)
+            }
+        }
+    }
+
+    private var transferringSettings = false
+
+    private fun showBackup() {
+        showPage(getString(R.string.backup), listOf(
+            page(getString(R.string.save_settings), "") {
+                unlock(back = { showBackup() }) {
+                    if (settingsScrim.visibility != View.VISIBLE) showPanel()
+                    transferSettings(false)
+                }
+            },
+            page(getString(R.string.load_settings), "") { confirmLoadSettings() },
+        ), top = label(getString(R.string.help_settings_transfer), 14f).apply { maxLines = 6; ellipsize = null }) {
+            renderSettings(R.string.backup)
+        }
+    }
+
+    private fun confirmLoadSettings() = unlock(back = { showBackup() }) {
+        if (settingsScrim.visibility != View.VISIBLE) showPanel()
+        val path = try { SettingsTransfer.file(this).path } catch (e: Exception) {
+            toast(getString(R.string.settings_transfer_failed), long = true)
+            return@unlock
+        }
+        showPage(getString(R.string.load_settings), listOf(
+            page(getString(R.string.load_settings), "") { transferSettings(true) },
+            page(getString(R.string.cancel), "") { showBackup() },
+        ), top = label(getString(R.string.settings_load_warning, path), 14f).apply { maxLines = 12; ellipsize = null }) {
+            showBackup()
+        }
+    }
+
+    private fun transferSettings(load: Boolean) {
+        if (transferringSettings) return
+        transferringSettings = true
+        val snapshot = prefs.all
+        io.execute {
+            val result = runCatching {
+                val file = SettingsTransfer.file(this)
+                if (load) SettingsTransfer.restore(prefs, SettingsTransfer.load(file))
+                else SettingsTransfer.save(file, snapshot)
+                file.path
+            }
+            ui.post {
+                transferringSettings = false
+                if (isDestroyed) return@post
+                result.onSuccess { path ->
+                    if (load) {
+                        prefs.edit().remove("reopen_settings").remove("return_settings").remove("return_dream").apply()
+                        recreate()
+                    } else showPage(getString(R.string.save_settings), listOf(
+                        page(getString(R.string.done), "") { showBackup() },
+                    ), top = label(getString(R.string.settings_saved, path), 14f).apply { maxLines = 12; ellipsize = null }) {
+                        showBackup()
+                    }
+                }.onFailure { e ->
+                    android.util.Log.w("Plume", "Settings transfer failed", e)
+                    toast(getString(R.string.settings_transfer_failed), long = true)
+                }
             }
         }
     }
@@ -5921,7 +6148,7 @@ class MainActivity : Activity() {
             R.string.apps_when_hidden to R.string.help_apps_when_hidden, R.string.row_name to R.string.help_row_name,
             R.string.show_icons to R.string.help_show_icons,
             R.string.cw_apps to R.string.help_from_apps, R.string.cw_channels to R.string.help_channels, R.string.cards_rows to R.string.help_cards_rows,
-            R.string.wp_sources to R.string.help_wp_sources, R.string.restore_hidden to R.string.help_hidden_shows, R.string.screensaver_timing to R.string.help_start_after,
+            R.string.wp_sources to R.string.help_wp_sources, R.string.restore_hidden to R.string.help_hidden_shows, R.string.screensaver_timing to R.string.help_screensaver_delay,
             R.string.home_button to R.string.help_home_button, R.string.smooth_volume to R.string.help_smooth_volume,
             R.string.default_launcher to R.string.help_default_launcher,
             R.string.setup_home to R.string.help_run_setup, R.string.section_keys to R.string.help_remote_keys,

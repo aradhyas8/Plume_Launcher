@@ -203,6 +203,8 @@
     <string name="section_screensaver">Ekran Koruyucu</string>
     <string name="sources">Kaynaklar</string>
     <string name="no_signal">Sinyal yok</string>
+    <string name="input_opening">Giriş açılıyor…</string>
+    <string name="input_failed">Bu giriş açılamadı. Dönmek için Geri tuşuna basın.</string>
     <string name="in_row">Satırda</string>
     <string name="input_added">Satıra eklendi.</string>
     <string name="input_removed">Satırdan kaldırıldı.</string>
@@ -232,4 +234,5 @@
     <string name="cards_rows_note">Kaynak, Watch Next veya bir uygulamanın eklediği kanaldır. Başlığa göre ve Kanala göre için diziler içeren iki veya daha fazla kaynak gerekir.</string>
     <string name="cards_rows_one">Şu anda yalnızca bir kaynakta dizi var, bu yüzden satır aynı görünür.</string>
     <string name="watch_next_tab">Watch Next</string>
+    <string name="act_all_apps">Plume Tüm uygulamalar</string>
 </resources>
