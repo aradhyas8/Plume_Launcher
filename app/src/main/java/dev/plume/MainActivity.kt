@@ -1079,7 +1079,7 @@ class MainActivity : Activity() {
         ground =if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
         // With glass, the wallpaper and the frost behind the grid are the point of All apps: let them show.
-        allApps.setBackgroundColor(if (recentAppsOpen) 0xA6000000.toInt() else if (glassy != null) Color.TRANSPARENT else ground)
+        allApps.setBackgroundColor(if (recentAppsOpen) 0x66000000 else if (glassy != null) Color.TRANSPARENT else ground)
         findViewById<TextView>(R.id.clock).typeface = clockFace()
         findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
         for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
@@ -2690,6 +2690,21 @@ class MainActivity : Activity() {
                 HomeOverride.running?.applyKeyFilter()
                 renderSettings(R.string.smooth_volume)
             },
+            R.string.recent_previews to Triple(getString(R.string.recent_previews), toggle(prefs.getBoolean(HomeOverride.RECENT_PREVIEWS, false))) {
+                if (prefs.getBoolean(HomeOverride.RECENT_PREVIEWS, false)) {
+                    prefs.edit().remove(HomeOverride.RECENT_PREVIEWS).apply()
+                    HomeOverride.running?.clearRecentPreviews()
+                    renderSettings(R.string.recent_previews)
+                } else {
+                    homePopup(0, getString(R.string.recent_previews), getString(R.string.recent_previews_disclosure), null,
+                        getString(R.string.recent_previews_enable) to {
+                            prefs.edit().putBoolean(HomeOverride.RECENT_PREVIEWS, true).apply()
+                            setupDialog?.dismiss()
+                            renderSettings(R.string.recent_previews)
+                        },
+                        getString(R.string.cancel) to { setupDialog?.dismiss() })
+                }
+            },
             R.string.default_launcher to Triple(getString(R.string.default_launcher), if (isDefaultHome()) "Plume" else getString(R.string.press_to_set)) { makeDefaultHome() },
             R.string.updates to Triple(getString(R.string.updates), when {
                 updating -> getString(R.string.updating)
@@ -2730,6 +2745,7 @@ class MainActivity : Activity() {
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
                 listOfNotNull(R.string.home_button, R.string.default_launcher.takeIf { !googleTv() && !fireTv() }, R.string.smooth_volume.takeIf { !fireTv() },
+                    R.string.recent_previews.takeIf { Build.VERSION.SDK_INT >= 30 && !fireTv() },
                     R.string.section_keys, R.string.setup_home)),
         )
         val section = sections.firstOrNull { at in it.third }
@@ -4573,7 +4589,7 @@ class MainActivity : Activity() {
         allAppsGrid.visibility = if (recent) View.GONE else View.VISIBLE
         val margin = if (recent) 0 else dp(48)
         allApps.setPadding(margin, if (recent) resources.displayMetrics.heightPixels / 9 else dp(28), margin, dp(28))
-        allApps.setBackgroundColor(if (recent) 0xA6000000.toInt() else if (glassActive()) Color.TRANSPARENT else ground)
+        allApps.setBackgroundColor(if (recent) 0x66000000 else if (glassActive()) Color.TRANSPARENT else ground)
         findViewById<TextView>(R.id.allAppsTitle).apply {
             setText(if (recent) R.string.recent_apps else R.string.all_apps)
             setTextColor(if (recent) Color.WHITE else fg)
@@ -4616,9 +4632,9 @@ class MainActivity : Activity() {
 
     private fun buildRecentWindows(list: List<App>) {
         val screen = resources.displayMetrics
-        val width = minOf(screen.widthPixels * 44 / 100, screen.heightPixels * 4 / 5)
+        val width = minOf(screen.widthPixels * 45 / 100, screen.heightPixels * 4 / 5)
         val height = width * 9 / 16
-        val gap = dp(22)
+        val gap = dp(14)
         val edge = (screen.widthPixels - width) / 2
         recentWindowRow.setPadding(edge, dp(12), edge, dp(8))
         recentWindows.scrollTo(0, 0)
@@ -4630,13 +4646,15 @@ class MainActivity : Activity() {
                     intArrayOf(color, 0xFF10171C.toInt())).apply { cornerRadius = radius }
                 clipToOutline = true
             }
-            val banner = appBanner(app)
+            val preview = HomeOverride.running?.recentPreview(app.pkg)
+            val banner = if (preview == null) appBanner(app) else null
+            val hasArt = preview != null || banner != null
             val image = ImageView(this).apply {
-                setImageDrawable(banner ?: app.icon)
-                scaleType = if (banner == null) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
+                if (preview != null) setImageBitmap(preview) else setImageDrawable(banner ?: app.icon)
+                scaleType = if (hasArt) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
-            val imageSize = if (banner == null) height / 3 else MATCH_PARENT
+            val imageSize = if (hasArt) MATCH_PARENT else height / 3
             window.addView(image, FrameLayout.LayoutParams(imageSize, imageSize, Gravity.CENTER))
             val rim = GradientDrawable().apply {
                 cornerRadius = radius
@@ -4656,22 +4674,36 @@ class MainActivity : Activity() {
                     gravity = Gravity.CENTER
                     setTextColor(Color.WHITE)
                     setPadding(dp(6), dp(10), dp(6), 0)
+                    maxWidth = width - dp(16)
+                    compoundDrawablePadding = dp(8)
+                    app.icon.constantState?.newDrawable(resources)?.mutate()?.let { icon ->
+                        icon.setBounds(0, 0, dp(20), dp(20))
+                        setCompoundDrawablesRelative(icon, null, null, null)
+                    }
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
                 })
                 alpha = 0.72f
+                scaleX = 0.84f
+                scaleY = 0.84f
             }
             card.setOnFocusChangeListener { _, focused ->
                 val animate = animationsOn() && ValueAnimator.areAnimatorsEnabled()
                 rim.setStroke(dp(if (focused) 2 else 1), if (focused) Color.WHITE else 0x55FFFFFF)
-                card.animate().alpha(if (focused) 1f else 0.72f)
-                    .scaleX(if (focused) 1.045f else 1f).scaleY(if (focused) 1.045f else 1f)
-                    .setDuration(if (animate) 160 else 0).setInterpolator(DECELERATE).start()
                 if (focused) recentWindows.post {
                     if (!card.isFocused) return@post
-                    val x = index * (width + gap)
-                    val target = if (recentWindows.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
-                        (list.lastIndex * (width + gap)) - x
-                    } else x
+                    val rtl = recentWindows.layoutDirection == View.LAYOUT_DIRECTION_RTL
+                    for (i in 0 until recentWindowRow.childCount) {
+                        val neighbor = recentWindowRow.getChildAt(i)
+                        val selected = neighbor === card
+                        val scale = if (selected) 1f else 0.84f
+                        val shift = index.compareTo(i) * width * if (rtl) -0.08f else 0.08f
+                        neighbor.animate().alpha(if (selected) 1f else 0.72f)
+                            .scaleX(scale).scaleY(scale).translationX(shift)
+                            .setDuration(if (animate) 160 else 0).setInterpolator(DECELERATE).start()
+                    }
+                    val target = (if (rtl) list.lastIndex - index else index) * (width + gap)
                     if (animate) recentWindows.smoothScrollTo(target, 0) else recentWindows.scrollTo(target, 0)
                 }
             }

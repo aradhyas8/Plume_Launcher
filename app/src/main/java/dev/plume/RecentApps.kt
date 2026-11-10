@@ -14,7 +14,7 @@ class RecentWindowStrip(context: Context, attrs: AttributeSet?) : HorizontalScro
 internal fun <T> recentApps(items: List<T>, opened: (T) -> Long): List<T> =
     items.map { it to opened(it) }.filter { it.second > 0 }.sortedByDescending { it.second }.take(12).map { it.first }
 
-/** The first Home press stays immediate; a second release opens the switcher without delaying Home. */
+/** A second short release within the Home press interval opens the switcher. */
 internal class HomePress {
     private var previous: Long? = null
 

@@ -16,7 +16,7 @@ class RecentAppsTest {
         assertEquals(emptyList<String>(), recentApps(emptyList<String>()) { 1L })
     }
 
-    @Test fun recentAppsFitInTwoRowsAndKeepTiesStable() {
+    @Test fun recentAppsCapAtTwelveAndKeepTiesStable() {
         assertEquals((20 downTo 9).toList(), recentApps((1..20).toList()) { it.toLong() })
         assertEquals(listOf("a", "b"), recentApps(listOf("a", "b")) { 10L })
     }
@@ -29,7 +29,7 @@ class RecentAppsTest {
         assertEquals(listOf("a", "b"), recentApps(installed) { opened.getValue(it) })
     }
 
-    @Test fun firstHomeIsImmediateAndSecondHomeOpensRecents() {
+    @Test fun firstPressSelectsHomeAndSecondPressSelectsRecents() {
         val home = HomePress()
         assertFalse(home.released(1_000))
         assertTrue(home.released(1_350))

@@ -177,6 +177,10 @@ object Remap {
                     if (code == AccessibilityService.GLOBAL_ACTION_POWER_DIALOG) powerMenu(s) else s.performGlobalAction(code)
                 }
                 "open" -> OPEN[arg]?.let { (action, _) ->
+                    if (arg == "recents" && s is HomeOverride) {
+                        s.openRecentApps()
+                        return
+                    }
                     val intent = Intent(action)
                     if (arg == "allapps" || arg == "recents") intent.setClass(s, MainActivity::class.java)
                         .addCategory(Intent.CATEGORY_HOME).putExtra(if (arg == "recents") OPEN_RECENT_APPS else OPEN_ALL_APPS, true)

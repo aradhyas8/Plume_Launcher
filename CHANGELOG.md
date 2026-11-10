@@ -18,6 +18,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 - **Recent apps.** Press Home twice to open a row of app windows. Press Left or Right to switch apps. Press Back to return to Plume.
 - Hold OK on All apps, then select Recent apps. You can also assign Plume recent apps to a remote key.
+- Enable **App window previews** to show captured app screens on Android 11 and later.
 - Fire TV: Settings opened from Plume stays open on slow TVs. Before, Plume came back in front of it in under a second (#227).
 - Shows row: when you change sources, the source name, show titles, details and posters slide in the direction of the button you push. Cards keep their positions. The row has one title with dots that show which source is on screen.
 - **Custom app pictures.** Hold **OK** on an app, then select **Change picture**. Upload an icon or banner from your phone.
