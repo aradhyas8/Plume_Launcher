@@ -347,7 +347,7 @@ class MainActivity : Activity() {
 
     private lateinit var appRow: LinearLayout
     private lateinit var watchRow: LinearLayout
-    private lateinit var watchTitle: TextView
+    private lateinit var watchTitle: CrossfadeLabel
     private val appsTitle by lazy { findViewById<TextView>(R.id.appsTitle) }
     private lateinit var watchScroll: View
     private val appScroll by lazy { findViewById<View>(R.id.appScroll) }
@@ -5317,7 +5317,7 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Shows the row's title. With [fade] the old text dips out and the new one in, as the cards do. */
+    /** Change the source name without interrupting the row's visibility or focus animations. */
     private fun showTitle(fade: Boolean = false) {
         val cycle = canCycle()
         watchTitle.isFocusable = cycle
@@ -5328,30 +5328,15 @@ class MainActivity : Activity() {
         // A name too long for the row is cut here, not by the view, so the closing arrow stays.
         val room = ((resources.displayMetrics.widthPixels - dp(96)) * 2 / 3 - dp(20) - arrows * 2).coerceAtLeast(dp(60).toFloat())
         val name = TextUtils.ellipsize(rowTitle(), watchTitle.paint, room, TextUtils.TruncateAt.END)
+        watchTitle.minWidth = if (cycle) (cardSources.maxOf { watchTitle.paint.measureText(it.title) }
+            .coerceAtMost(room) + arrows * 2 + dp(20)).toInt() else 0
         val text: CharSequence = if (!cycle) name else SpannableString("‹  $name  ›").also {
             if (!watchTitle.isFocused) { // the arrows are only there while it is selected
                 it.setSpan(ForegroundColorSpan(Color.TRANSPARENT), 0, 1, 0)
                 it.setSpan(ForegroundColorSpan(Color.TRANSPARENT), it.length - 1, it.length, 0)
             }
         }
-        ui.removeCallbacks(swapTitle)
-        watchTitle.animate().cancel()
-        if (!fade || watchTitle.text.toString() == text.toString()) {
-            watchTitle.text = text
-            return
-        }
-        // Not withEndAction: another animation on the title (the row being placed, the focus) cancels it, and then the text never changed.
-        titleNext = text
-        watchTitle.animate().alpha(0f).setDuration(SWAP_OUT_MS).start()
-        ui.postDelayed(swapTitle, SWAP_OUT_MS)
-    }
-
-    private var titleNext: CharSequence = ""
-
-    private val swapTitle = Runnable {
-        watchTitle.animate().cancel()
-        watchTitle.text = titleNext
-        watchTitle.animate().alpha(if (watchTitle.isFocused) 1f else titleAlpha).setDuration(SWAP_IN_MS).start()
+        watchTitle.change(text, if (fade) POSTER_FADE_MS else 0)
     }
 
     private fun hideKey(pkg: String?, title: String) = "$pkg/$title"
@@ -5498,7 +5483,9 @@ class MainActivity : Activity() {
             setBackgroundColor(if (dark) DARK_SURFACE else 0xFFDDE1E5.toInt())
         }
         // Long titles scroll while their poster is focused instead of staying cut off.
-        val title = label(p.title, 14f).apply {
+        val title = CrossfadeLabel(this).apply {
+            text = p.title
+            textSize = 14f
             setPadding(0, dp(6), 0, 0)
             isSingleLine = true
             ellipsize = TextUtils.TruncateAt.MARQUEE
@@ -5524,34 +5511,37 @@ class MainActivity : Activity() {
             progressDrawable = progressBarDrawable(watchInk)
         }, LinearLayout.LayoutParams(w, dp(3)).apply { topMargin = dp(8) })
         col.addView(title)
-        col.addView(label(p.sub, 12f).apply {
+        col.addView(CrossfadeLabel(this).apply {
+            text = p.sub
+            textSize = 12f
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
             ink(this, watchInk)
             alpha = 0.8f
             setPadding(0, dp(2), 0, 0)
             compoundDrawablePadding = dp(6)
         })
-        bindCard(col, p, fade = false)
+        bindCard(col, p)
         return col
     }
 
     /**
-     * Puts [p] in a card: its poster, progress, title and details. With [fade] each part dips out and back in on its own, so
-     * the card stays where it is while its content changes (the whole card is not faded: a focused card is lifted past its edge).
+     * Keep the card and focus in place. Text and posters crossfade together.
      */
-    private fun bindCard(col: ViewGroup, p: Prog, fade: Boolean) {
+    private fun bindCard(col: ViewGroup, p: Prog, fade: Boolean = false) {
         val frame = col.getChildAt(0) as ViewGroup
         val img = frame.getChildAt(0) as ImageView
         val bar = col.getChildAt(1) as ProgressBar
-        val title = col.getChildAt(2) as TextView
-        val sub = col.getChildAt(3) as TextView
+        val title = col.getChildAt(2) as CrossfadeLabel
+        val sub = col.getChildAt(3) as CrossfadeLabel
         frame.setTag(R.id.watchRow, p) // holding OK hides it (see onHold)
         frame.contentDescription = p.title
         val icon = sourceIcon(p.pkg)
-        val fill = {
-            bar.progress = p.progress
+        run {
+            bar.setProgress(p.progress, fade && ValueAnimator.areAnimatorsEnabled())
             bar.visibility = if (p.progress > 0) View.VISIBLE else View.INVISIBLE
-            title.text = p.title
-            sub.text = p.sub
+            title.change(p.title, if (fade) POSTER_FADE_MS else 0)
+            sub.change(p.sub, if (fade) POSTER_FADE_MS else 0)
             icon?.setBounds(0, 0, dp(12), dp(12))
             sub.setCompoundDrawablesRelative(icon, null, null, null)
             // A plain mark (not the app's own icon, not in brand colour) follows the text, as fitInk tints it.
@@ -5559,20 +5549,7 @@ class MainActivity : Activity() {
             if (sub.tag == INK_MARK) icon?.setTint(watchInk)
             // Split by source, a card without details keeps their space, or the row would change height with the source.
             sub.visibility = if (p.sub.isNotEmpty() || icon != null) View.VISIBLE else if (cardsMode() == ShowRows.MIXED) View.GONE else View.INVISIBLE
-            img.setImageDrawable(null)
             loadPoster(img, p.image)
-        }
-        if (!fade) return fill()
-        // Out together, the content changes once they are all clear, then in together.
-        val parts = listOf(img to 1f, bar to 1f, title to 1f, sub to 0.8f)
-        for ((v, _) in parts) {
-            v.animate().cancel()
-            val out = v.animate().alpha(0f).setDuration(SWAP_OUT_MS)
-            if (v === img) out.withEndAction {
-                fill()
-                for ((p2, rest) in parts) p2.animate().alpha(rest).setDuration(SWAP_IN_MS).start()
-            }
-            out.start()
         }
     }
 
@@ -5623,8 +5600,13 @@ class MainActivity : Activity() {
 
     private fun loadPoster(v: ImageView, uri: String?) {
         v.tag = uri // a load still on its way for the show this card had finds another uri here and drops its picture
-        if (uri == null) return
-        posters.get(uri)?.let { v.setImageBitmap(it); return }
+        if (uri == null) {
+            v.setImageDrawable(null)
+            v.setTag(R.id.poster_loaded, null)
+            return
+        }
+        if (v.getTag(R.id.poster_loaded) == uri) return
+        posters.get(uri)?.let { showPoster(v, uri, it); return }
         if (!loading.add(uri)) return // already on its way: posterArrived fills this card when it lands
         posterIo.execute {
             val bmp = try {
@@ -5646,8 +5628,25 @@ class MainActivity : Activity() {
         val bmp = posters.get(uri) ?: return
         for (i in 0 until watchRow.childCount) {
             val img = ((watchRow.getChildAt(i) as? ViewGroup)?.getChildAt(0) as? ViewGroup)?.getChildAt(0) as? ImageView ?: continue
-            if (img.tag == uri) img.setImageBitmap(bmp)
+            if (img.tag == uri) showPoster(img, uri, bmp)
         }
+    }
+
+    private fun showPoster(v: ImageView, uri: String, bmp: Bitmap) {
+        if (v.getTag(R.id.poster_loaded) == uri) return
+        v.setTag(R.id.poster_loaded, uri)
+        val next = BitmapDrawable(resources, bmp)
+        val old = v.drawable.let { if (it is TransitionDrawable) it.getDrawable(1) else it }
+        if (old == null || !ValueAnimator.areAnimatorsEnabled()) {
+            v.setImageDrawable(next)
+            return
+        }
+        val fade = TransitionDrawable(arrayOf(old, next)).apply { isCrossFadeEnabled = true }
+        v.setImageDrawable(fade)
+        // TransitionDrawable does not apply the system duration scale; match the text's ValueAnimator.
+        val duration = (POSTER_FADE_MS * Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)).toLong()
+        fade.startTransition(duration.toInt())
+        ui.postDelayed({ if (!isDestroyed && v.drawable === fade) v.setImageDrawable(next) }, duration)
     }
 
     /**
@@ -5677,7 +5676,7 @@ class MainActivity : Activity() {
     private fun retryPosters() {
         for (i in 0 until watchRow.childCount) {
             val img = ((watchRow.getChildAt(i) as? ViewGroup)?.getChildAt(0) as? ViewGroup)?.getChildAt(0) as? ImageView ?: continue
-            if (img.drawable == null) loadPoster(img, img.tag as? String)
+            if (img.tag != img.getTag(R.id.poster_loaded)) loadPoster(img, img.tag as? String)
         }
     }
 
@@ -5928,6 +5927,7 @@ class MainActivity : Activity() {
         const val ROW_CARDS = 20 // the most cards a row holds
         const val SWAP_OUT_MS = 90L // another source of the shows row: what is there fades out ...
         const val SWAP_IN_MS = 150L // ... and the new content fades in
+        const val POSTER_FADE_MS = 180L
         const val POSTER_CARDS = 6 // another source: the posters of this many cards are loaded before the cards change
         const val POSTER_WAIT_MS = 700L // ... and the cards change after this long even if one is still on its way
         const val FADING = "fading" // the tag of a card that is fading out
