@@ -324,6 +324,8 @@
     <string name="act_stop">Stop</string>
     <string name="act_rewind">Rewind</string>
     <string name="act_forward">Fast-forward</string>
+    <string name="act_mute">Mute</string>
+    <string name="mute_unavailable">This TV cannot change the volume through Plume.</string>
     <string name="act_back">Back</string>
     <string name="act_recents">Recent apps</string>
     <string name="act_notifications">Notifications</string>

@@ -10,6 +10,16 @@ import org.junit.Before
 import org.junit.Test
 
 class RemapTest {
+    @Test fun muteIsAvailableForBothPressActionsAndKeepsThePhysicalMuteKeyProtected() {
+        val prefs = FakePrefs()
+        Remap.put(prefs, "k183", "media:mute", "media:mute")
+        Remap.reset()
+        assertEquals("media:mute", Remap.all(prefs)["k183"]!!.short)
+        assertEquals("media:mute", Remap.all(prefs)["k183"]!!.long)
+        assertEquals(KeyEvent.KEYCODE_VOLUME_MUTE, Remap.MEDIA.getValue("mute").first)
+        assertTrue(Remap.kept(KeyEvent.KEYCODE_VOLUME_MUTE, 0))
+    }
+
     /** Only what Remap uses: one string in, one string out. */
     private class FakePrefs : SharedPreferences {
         val strings = HashMap<String, String>()

@@ -49,6 +49,7 @@ object Remap {
         "stop" to (KeyEvent.KEYCODE_MEDIA_STOP to R.string.act_stop),
         "rewind" to (KeyEvent.KEYCODE_MEDIA_REWIND to R.string.act_rewind),
         "forward" to (KeyEvent.KEYCODE_MEDIA_FAST_FORWARD to R.string.act_forward),
+        "mute" to (KeyEvent.KEYCODE_VOLUME_MUTE to R.string.act_mute),
     )
 
     val SYS = linkedMapOf(
@@ -162,8 +163,13 @@ object Remap {
                 "hdmi" -> openInput(s, arg)
                 "media" -> MEDIA[arg]?.let { (code, _) ->
                     val audio = s.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
-                    audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+                    if (code == KeyEvent.KEYCODE_VOLUME_MUTE) {
+                        if (audio.isVolumeFixed) Toast.makeText(s, R.string.mute_unavailable, Toast.LENGTH_LONG).show()
+                        else audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, AudioManager.FLAG_SHOW_UI)
+                    } else {
+                        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+                        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+                    }
                 }
                 "sys" -> SYS[arg]?.let { (code, _) ->
                     if (code == AccessibilityService.GLOBAL_ACTION_POWER_DIALOG) powerMenu(s) else s.performGlobalAction(code)
@@ -176,6 +182,7 @@ object Remap {
                 }
             }
         } catch (e: Exception) {
+            if (action == "media:mute") Toast.makeText(s, R.string.mute_unavailable, Toast.LENGTH_LONG).show()
             // An app that's gone, or an input that's unplugged: the key just does nothing.
         }
     }

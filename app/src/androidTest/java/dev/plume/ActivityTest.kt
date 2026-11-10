@@ -22,15 +22,22 @@ class ActivityTest : Instrumentation() {
     private var failures = 0
     private var previewOnly = false
     private var transferOnly = false
+    private var muteOnly = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         previewOnly = arguments?.getString("class") == GalleryPreviewTest::class.java.name
         transferOnly = arguments?.getString("class") == SettingsTransferCheck::class.java.name
+        muteOnly = arguments?.getString("class") == MuteCheck::class.java.name
         start()
     }
 
     override fun onStart() {
+        if (muteOnly) {
+            test("remoteMuteTogglesAndPreservesVolume") { MuteCheck(this).run() }
+            finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
+            return
+        }
         if (transferOnly) {
             test("settingsTransferRoundTripAndRejectedFiles") { SettingsTransferCheck(this).run() }
             finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
@@ -123,6 +130,7 @@ class ActivityTest : Instrumentation() {
         }
         test("galleryPreviewControlsAndReturn") { GalleryPreviewTest(this).run() }
         test("settingsTransferRoundTripAndRejectedFiles") { SettingsTransferCheck(this).run() }
+        test("remoteMuteTogglesAndPreservesVolume") { MuteCheck(this).run() }
         finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
     }
 
@@ -130,7 +138,7 @@ class ActivityTest : Instrumentation() {
         val result = Bundle().apply {
             putString("class", this@ActivityTest.javaClass.name)
             putString("test", name)
-            putInt("numtests", if (previewOnly || transferOnly) 1 else 10)
+            putInt("numtests", if (previewOnly || transferOnly || muteOnly) 1 else 11)
             putInt("current", ++current)
         }
         sendStatus(1, result)
