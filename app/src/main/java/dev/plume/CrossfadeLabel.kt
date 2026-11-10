@@ -97,6 +97,7 @@ class CrossfadeLabel @JvmOverloads constructor(context: Context, attrs: Attribut
         drawText(canvas)
     }
 
+    @android.annotation.SuppressLint("WrongCall") // draws the TextView's own text into a moved, faded layer
     private fun drawText(canvas: Canvas) {
         val old = previous
         if (old == null) { super.onDraw(canvas); return }
