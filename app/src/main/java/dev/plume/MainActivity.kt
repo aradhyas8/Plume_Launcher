@@ -3680,6 +3680,7 @@ class MainActivity : Activity() {
         if (!labeled && isBannerStyle(iconStyle())) bannerTile(a)?.let { it.contentDescription = a.label; return it }
         val logo = LOGOS[a.pkg]
         val custom = (if (!labeled && !a.pkg.startsWith(HDMI) && !isBannerStyle(iconStyle())) AppPictures.read(this, a.pkg, banner = false) else null)
+            ?.apply { if (!colourIcons()) colorFilter = GREYSCALE }
             ?: customIcon(a.pkg)
         val name = a.label.takeIf { labeled }
         // Colour mode keeps the same marks, tinted with the brand colour (or the colour the app's icon is mostly).

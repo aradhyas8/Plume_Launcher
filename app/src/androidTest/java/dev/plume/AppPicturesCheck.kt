@@ -10,6 +10,7 @@ import android.media.ExifInterface
 import android.os.SystemClock
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.TextView
 import java.io.File
 import java.net.Socket
@@ -122,6 +123,7 @@ class AppPicturesCheck(private val runner: Instrumentation) {
             val list = app.findViewById<ViewGroup>(R.id.settingsList)
             val upload = MainActivity::class.java.getDeclaredField("upload").apply { isAccessible = true }
             val pictures = MainActivity::class.java.getDeclaredMethod("appPictures", String::class.java, String::class.java).apply { isAccessible = true }
+            val render = MainActivity::class.java.getDeclaredMethod("renderApps").apply { isAccessible = true }
             runOnMainSync { row.getChildAt(0).requestFocus(); pictures.invoke(app, pkg, name) }
             await { app.findViewById<TextView>(R.id.settingsTitle).text.toString() == targetContext.getString(R.string.change_app_picture) }
             for (banner in listOf(false, true)) {
@@ -141,11 +143,18 @@ class AppPicturesCheck(private val runner: Instrumentation) {
                 check(AppPictures.file(targetContext, pkg, banner).exists())
                 check(row.childCount == count && row.getChildAt(0).tag == pkg) { "Upload changed the app row" }
                 check(row.getChildAt(0).contentDescription.toString() == name)
+                if (!banner) {
+                    for (style in listOf("mono", "colour")) {
+                        prefs.edit().putString("icon_style", style).commit()
+                        runOnMainSync { render.invoke(app) }
+                        val image = (row.getChildAt(0) as ViewGroup).getChildAt(0) as ImageView
+                        check((image.drawable.colorFilter != null) == (style == "mono")) { "Uploaded icon ignored $style style" }
+                    }
+                }
                 runOnMainSync { list.getChildAt(list.childCount - 1).performClick() }
                 check(upload.get(app) == null) { "Done left the server running" }
             }
             prefs.edit().putString("icon_style", "banner").commit()
-            val render = MainActivity::class.java.getDeclaredMethod("renderApps").apply { isAccessible = true }
             runOnMainSync { render.invoke(app) }
             check(row.getChildAt(0) is FrameLayout) { "Custom banner did not use the banner tile" }
             runOnMainSync { list.getChildAt(2).performClick() }
