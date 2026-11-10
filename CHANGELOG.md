@@ -16,6 +16,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Custom app pictures.** Hold **OK** on an app, then select **Change picture**. Upload an icon or banner from your phone.
 - Press Right on the last app tile to select the first app tile.
 - **Mute action.** Assign **Mute** to a remote button to switch sound off and on.
 

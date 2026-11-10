@@ -1,4 +1,11 @@
 <resources>
+    <string name="change_app_picture">Change picture</string>
+    <string name="app_picture_icon">Icon</string>
+    <string name="app_picture_icon_hint">Used with Monochrome and Colour styles</string>
+    <string name="app_picture_banner_hint">Used with banner styles</string>
+    <string name="reset_app_picture">Reset picture</string>
+    <string name="waiting_app_picture">Waiting for a picture…</string>
+    <string name="app_picture_added">Picture saved. Send another, or press Done.</string>
     <string name="override_desc">Opens Plume whenever the Google TV home screen appears, so the Home button lands here.</string>
     <string name="delete_photo">Delete \"%1$s\"?</string>
     <string name="photo_added">Added \"%1$s\". Send another, or press Done.</string>

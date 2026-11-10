@@ -23,16 +23,23 @@ class ActivityTest : Instrumentation() {
     private var previewOnly = false
     private var transferOnly = false
     private var muteOnly = false
+    private var picturesOnly = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         previewOnly = arguments?.getString("class") == GalleryPreviewTest::class.java.name
         transferOnly = arguments?.getString("class") == SettingsTransferCheck::class.java.name
         muteOnly = arguments?.getString("class") == MuteCheck::class.java.name
+        picturesOnly = arguments?.getString("class") == AppPicturesCheck::class.java.name
         start()
     }
 
     override fun onStart() {
+        if (picturesOnly) {
+            test("appPictureUploadSizingTransparencyAndReset") { AppPicturesCheck(this).run() }
+            finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
+            return
+        }
         if (muteOnly) {
             test("remoteMuteTogglesAndPreservesVolume") { MuteCheck(this).run() }
             finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
