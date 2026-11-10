@@ -2031,10 +2031,15 @@ class MainActivity : Activity() {
 
     private fun showKey(p: Prog) = "${p.pkg}/${p.title}/${p.image}"
 
+    /** An app's name: from the app list when it is loaded, else from the package manager (null when the app is not there). */
+    private fun appName(label: Map<String, String>, p: String): String? = label[p] ?: try {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString()
+    } catch (e: PackageManager.NameNotFoundException) { null }
+
     /** Watch Next, then every channel an app publishes: (key, channel id or null for Watch Next, name shown). */
     private fun wpSourceList(): List<Triple<String, Long?, String>> {
         val label = apps.associate { it.pkg to it.label }
-        fun app(p: String) = label[p] ?: try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString() } catch (e: PackageManager.NameNotFoundException) { p }
+        fun app(p: String) = appName(label, p) ?: p
         return listOf(Triple(WATCH_NEXT, null as Long?, getString(R.string.watch_next))) +
             appChannels().distinctBy { (_, p, n) -> channelKey(p, n) }
                 .map { (id, p, n) -> Triple(channelKey(p, n), id as Long?, if (n == app(p) || app(p).isBlank()) n else "${app(p)} · $n") }.sortedBy { it.third.lowercase() }
@@ -5095,7 +5100,9 @@ class MainActivity : Activity() {
         add(WATCH_NEXT, getString(R.string.watch_next_tab), ShowRows.Kind.WATCH_NEXT, watchNext)
         for ((id, p, n) in on.distinctBy { (_, p, n) -> channelKey(p, n) }) {
             val kind = if (n.equals("Continue Watching", ignoreCase = true)) ShowRows.Kind.CONTINUE else ShowRows.Kind.OTHER
-            add(channelKey(p, n), if (n == label[p] || label[p].isNullOrBlank()) n else "${label[p]} · $n", kind,
+            // The app list can still be empty on the first read after a start: ask the package manager, or the name loses its app.
+            val app = appName(label, p)
+            add(channelKey(p, n), if (n == app || app.isNullOrBlank()) n else "$app · $n", kind,
                 readPrograms(TvContract.buildPreviewProgramsUriForChannel(id), hidden, "ch$id"))
         }
         publishingPkgs = seen
@@ -5189,7 +5196,7 @@ class MainActivity : Activity() {
     private fun pickChannels() {
         val channels = appChannels().distinctBy { (_, p, n) -> channelKey(p, n) }
         val label = apps.associate { it.pkg to it.label }
-        fun app(p: String) = label[p] ?: try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(p, 0)).toString() } catch (e: PackageManager.NameNotFoundException) { p }
+        fun app(p: String) = appName(label, p) ?: p
         val items = listOf(getString(R.string.watch_next) to WATCH_NEXT) +
             channels.map { (_, p, n) -> (if (n == app(p)) n else "${app(p)} · $n") to channelKey(p, n) }.sortedBy { it.first.lowercase() }
         val startsOff = channels.filter { (_, p, n) -> !channelOn(n, channelKey(p, n), emptySet()) }.map { (_, p, n) -> channelKey(p, n) }.toSet()

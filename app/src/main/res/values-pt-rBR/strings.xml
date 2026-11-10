@@ -373,4 +373,15 @@
     <string name="clock_medium">Médio</string>
     <string name="clock_large">Grande</string>
     <string name="help_clock_size">O tamanho do relógio na tela inicial.</string>
+    <string name="cards_rows">Fileiras</string>
+    <string name="cards_mixed">Misturadas</string>
+    <string name="cards_title">Por título</string>
+    <string name="cards_each">Por canal</string>
+    <string name="help_cards_rows">Como os programas são agrupados. Selecione para ver as opções e os botões que cada uma usa.</string>
+    <string name="help_cards_mixed">Todas as fontes em uma fileira, as mais recentes primeiro. Não há nada para trocar.</string>
+    <string name="help_cards_title">Uma fonte por vez. Pressione Baixo nos apps para ir ao título e depois Esquerda ou Direita para mostrar outra fonte.</string>
+    <string name="help_cards_each">Uma fileira para cada fonte, mostradas uma por vez. Baixo em um card mostra a próxima fonte; Cima, a anterior. Os pontos após o título mostram qual fonte está na tela.</string>
+    <string name="cards_rows_note">Uma fonte é o Watch Next ou um canal que um app adiciona. Por título e Por canal precisam de duas ou mais fontes com programas.</string>
+    <string name="cards_rows_one">Agora só uma fonte tem programas, então a fileira fica igual.</string>
+    <string name="watch_next_tab">Watch Next</string>
 </resources>

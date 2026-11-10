@@ -307,4 +307,15 @@
     <string name="clock_medium">Mediano</string>
     <string name="clock_large">Grande</string>
     <string name="help_clock_size">El tamaño del reloj en Inicio.</string>
+    <string name="cards_rows">Filas</string>
+    <string name="cards_mixed">Mezcladas</string>
+    <string name="cards_title">Por título</string>
+    <string name="cards_each">Por canal</string>
+    <string name="help_cards_rows">Cómo se agrupan las series. Selecciónelo para ver las opciones y los botones que usa cada una.</string>
+    <string name="help_cards_mixed">Todas las fuentes en una fila, las más recientes primero. No hay nada que cambiar.</string>
+    <string name="help_cards_title">Una fuente a la vez. Pulse Abajo desde las aplicaciones para ir al título y luego Izquierda o Derecha para mostrar otra fuente.</string>
+    <string name="help_cards_each">Una fila para cada fuente, mostradas una a la vez. Abajo en una tarjeta muestra la fuente siguiente; Arriba, la anterior. Los puntos tras el título muestran qué fuente está en pantalla.</string>
+    <string name="cards_rows_note">Una fuente es Watch Next o un canal que añade una aplicación. Por título y Por canal necesitan dos o más fuentes con series.</string>
+    <string name="cards_rows_one">Ahora solo una fuente tiene series, así que la fila se ve igual.</string>
+    <string name="watch_next_tab">Watch Next</string>
 </resources>
