@@ -21,14 +21,21 @@ class ActivityTest : Instrumentation() {
     private var current = 0
     private var failures = 0
     private var previewOnly = false
+    private var transferOnly = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         previewOnly = arguments?.getString("class") == GalleryPreviewTest::class.java.name
+        transferOnly = arguments?.getString("class") == SettingsTransferCheck::class.java.name
         start()
     }
 
     override fun onStart() {
+        if (transferOnly) {
+            test("settingsTransferRoundTripAndRejectedFiles") { SettingsTransferCheck(this).run() }
+            finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
+            return
+        }
         if (previewOnly) {
             test("galleryPreviewControlsAndReturn") { GalleryPreviewTest(this).run() }
             finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
@@ -115,6 +122,7 @@ class ActivityTest : Instrumentation() {
             }
         }
         test("galleryPreviewControlsAndReturn") { GalleryPreviewTest(this).run() }
+        test("settingsTransferRoundTripAndRejectedFiles") { SettingsTransferCheck(this).run() }
         finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
     }
 
@@ -122,7 +130,7 @@ class ActivityTest : Instrumentation() {
         val result = Bundle().apply {
             putString("class", this@ActivityTest.javaClass.name)
             putString("test", name)
-            putInt("numtests", if (previewOnly) 1 else 9)
+            putInt("numtests", if (previewOnly || transferOnly) 1 else 10)
             putInt("current", ++current)
         }
         sendStatus(1, result)
