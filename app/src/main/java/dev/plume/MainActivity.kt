@@ -4579,6 +4579,7 @@ class MainActivity : Activity() {
 
     private var recentAppsOpen = false
     private val systemHomePress = HomePress()
+    private var recentsBack: Pair<WeakReference<View>, String?>? = null
     private val recentWindows by lazy { findViewById<RecentWindowStrip>(R.id.recentWindows) }
     private val recentWindowRow by lazy { findViewById<LinearLayout>(R.id.recentWindowRow) }
 
@@ -4588,6 +4589,8 @@ class MainActivity : Activity() {
             activeMenu?.dismiss()
             setupDialog?.dismiss()
         }
+        // Back from Recent apps returns focus to where it was (a menu is its own window: then its icon).
+        if (recent && !recentAppsOpen) recentsBack = currentFocus?.let { WeakReference(it) to (it.tag as? String) }
         recentAppsOpen = recent
         allAppsGrid.removeAllViews()
         recentWindowRow.removeAllViews()
@@ -4727,12 +4730,16 @@ class MainActivity : Activity() {
 
     private fun closeAllApps() {
         allApps.visibility = View.GONE
+        val back = recentsBack.takeIf { recentAppsOpen }
+        recentsBack = null
         recentAppsOpen = false
         recentWindowRow.removeAllViews()
         findViewById<View>(R.id.content).visibility = View.VISIBLE
         homeFocusable(true)
         renderApps()
-        findViewById<View>(R.id.allAppsButton).requestFocus() // back where it was opened from
+        // The row is rebuilt, so a tile is found again by its tag; the top icons stay the same views.
+        val again = back?.second?.let { homeViewFor(it) } ?: back?.first?.get()?.takeIf { it.isAttachedToWindow }
+        (again ?: findViewById(R.id.allAppsButton)).requestFocus() // back where it was opened from
     }
 
     // ---------- screensaver ----------
@@ -6299,6 +6306,7 @@ class MainActivity : Activity() {
             R.string.clock_style to R.drawable.ms_schedule, R.string.clock_size to R.drawable.ms_format_size, R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
             R.string.screensaver to R.drawable.ms_bedtime, R.string.test_screensaver to R.drawable.ms_play_circle, R.string.screensaver_timing to R.drawable.ms_timer,
             R.string.home_button to R.drawable.ms_home, R.string.default_launcher to R.drawable.ms_home_app_logo, R.string.smooth_volume to R.drawable.ms_volume_up,
+            R.string.recent_previews to R.drawable.ms_view_carousel,
             R.string.section_keys to R.drawable.ms_keyboard, R.string.setup_home to R.drawable.ms_restart_alt,
         )
         val SECTION_ICONS = mapOf(
