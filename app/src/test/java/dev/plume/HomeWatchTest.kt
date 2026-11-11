@@ -11,8 +11,11 @@ class HomeWatchTest {
     private val gtv = "com.google.android.apps.tv.launcherx"
     private val gtvHome = "$gtv.home.HomeActivity"
     private val gtvKids = "$gtv.home.VanillaModeHomeActivity"
+    private val atv = "com.google.android.tvlauncher"
+    private val atvHome = "$atv.MainActivity"
     private val oldFire = "com.amazon.firelauncher"
-    private fun watch(fire: Boolean = true, homes: Set<String> = setOf(gtvHome, gtvKids)) = HomeWatch(fire) { homes }
+    private fun watch(fire: Boolean = true, homes: Set<String> = setOf(gtvHome, gtvKids)) =
+        HomeWatch(fire) { mapOf(gtv to homes, atv to setOf(atvHome)) }
 
     @Test fun amazonHomeFromAnAppJumpsAtOnce() {
         val w = watch()
@@ -60,6 +63,37 @@ class HomeWatchTest {
         assertEquals(HomeWatch.SETTINGS_WAIT_MS, w.opened(amazon, amazonHome, 4_000))
     }
 
+    // Issue 227: a slow Fire TV shows Amazon's home for over a second before the Settings that Plume opened.
+    @Test fun aLaunchFromPlumeWaitsForItsWindow() {
+        val w = watch()
+        w.opened("dev.plume", "dev.plume.MainActivity", 1_000)
+        w.launched(1_100)
+        assertEquals(HomeWatch.LAUNCH_WAIT_MS - 100, w.opened(amazon, amazonHome, 1_200))
+        assertEquals(HomeWatch.KEEP, w.opened(amazon, "$amazon.ui.HomeActivity", 2_000))
+        assertNull(w.opened("com.amazon.tv.settings.v2", "Settings", 2_600)) // the waiting jump is dropped
+    }
+
+    @Test fun aLaunchThatOpensNothingStillGoesHome() {
+        val w = watch()
+        w.launched(1_000)
+        assertEquals(HomeWatch.LAUNCH_WAIT_MS - 500, w.opened(amazon, amazonHome, 1_500)) // the jump fires when the wait ends
+    }
+
+    @Test fun anOldLaunchDoesNotDelayHome() {
+        val w = watch()
+        w.launched(1_000)
+        assertNull(w.opened("com.netflix.ninja", "Player", 1_400))
+        assertEquals(0L, w.opened(amazon, amazonHome, 2_000))
+        w.launched(3_000)
+        assertEquals(0L, w.opened(amazon, amazonHome, 3_000 + HomeWatch.LAUNCH_WAIT_MS + 1))
+    }
+
+    @Test fun aLaunchIsIgnoredOffFireTv() {
+        val w = watch(fire = false)
+        w.launched(1_000)
+        assertEquals(0L, w.opened(gtv, gtvHome, 1_200))
+    }
+
     @Test fun theWaitIsOnlyForFireTv() {
         val w = watch(fire = false)
         w.opened("dev.plume", "dev.plume.MainActivity", 1_000)
@@ -77,6 +111,23 @@ class HomeWatchTest {
         w.opened("dev.plume", "dev.plume.MainActivity", 2_000)
         assertEquals(0L, w.opened(gtv, gtvHome, 3_000))
         assertEquals(0L, w.opened(gtv, gtvKids, 4_000))
+    }
+
+    @Test fun shieldHomeJumpsAtOnce() {
+        val w = watch(fire = false)
+        assertEquals(0L, w.opened(atv, atvHome, 1_000))
+    }
+
+    @Test fun otherAndroidTvLauncherWindowsAreLeftAlone() {
+        val w = watch(fire = false)
+        assertNull(w.opened(atv, "$atv.settings.SettingsActivity", 1_000))
+        assertNull(w.opened(atv, gtvHome, 2_000))
+        assertNull(w.opened(gtv, atvHome, 3_000))
+        assertNull(w.opened(atv, null, 4_000))
+    }
+
+    @Test fun withoutAListAndroidTvWindowsAreLeftAlone() {
+        assertNull(HomeWatch(false) { emptyMap() }.opened(atv, atvHome, 1_000))
     }
 
     // #150: the Google TV launcher also draws notices and sign-in screens, and Plume took each for the home screen.
@@ -108,23 +159,32 @@ class HomeWatchTest {
 
     private fun entry(pkg: String, cls: String, target: String? = null) = HomeEntry(pkg, cls, target)
 
-    @Test fun theGoogleTvHomesAreWhatTheLauncherDeclaresForHome() {
+    @Test fun stockHomesAreWhatEachLauncherDeclaresForHome() {
         val found = listOf(
             entry(gtv, gtvHome),
             entry(gtv, gtvKids),
+            entry(atv, atvHome),
             entry(amazon, amazonHome),
             entry("dev.plume", "dev.plume.MainActivity"),
         )
-        assertEquals(setOf(gtvHome, gtvKids), googleTvHomes(found))
+        assertEquals(mapOf(gtv to setOf(gtvHome, gtvKids), atv to setOf(atvHome)), stockHomes(found))
     }
 
     @Test fun anAliasCountsUnderItsOwnNameAndItsRealClass() {
-        val found = listOf(entry(gtv, "$gtv.HomeAlias", target = "$gtv.home.RealHome"))
-        assertEquals(setOf("$gtv.HomeAlias", "$gtv.home.RealHome"), googleTvHomes(found))
+        for (pkg in listOf(gtv, atv)) {
+            val alias = "$pkg.HomeAlias"
+            val real = "$pkg.home.RealHome"
+            val found = listOf(entry(pkg, alias, target = real))
+            val homes = stockHomes(found)
+            assertEquals(mapOf(pkg to setOf(alias, real)), homes)
+            val w = HomeWatch(false) { homes }
+            assertEquals(0L, w.opened(pkg, alias, 1_000))
+            assertEquals(0L, w.opened(pkg, real, 2_000))
+        }
     }
 
-    @Test fun noGoogleTvLauncherGivesAnEmptySet() {
-        assertEquals(emptySet<String>(), googleTvHomes(listOf(entry(amazon, amazonHome))))
+    @Test fun noGoogleLauncherGivesAnEmptyMap() {
+        assertEquals(emptyMap<String, Set<String>>(), stockHomes(listOf(entry(amazon, amazonHome))))
     }
 
     // A second Home window must leave the jump waiting when Home is pressed from Plume.

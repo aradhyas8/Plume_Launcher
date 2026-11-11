@@ -33,6 +33,7 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <package android:name="com.google.android.apps.tv.launcherx" />
+        <package android:name="com.google.android.tvlauncher" />
         <!-- Fire OS's input switch, for the HDMI tiles (Remap.openInput) -->
         <package android:name="com.amazon.tv.inputpreference.service" />
         <!-- The TV provider (Watch Next, app channels). Stock Android TV makes it visible to all apps;
@@ -50,6 +51,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:directBootAware="true"
             android:exported="true"
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
@@ -67,6 +69,11 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".InputActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
 
         <!-- For launchers that list only LAUNCHER apps. -->
         <activity-alias
@@ -92,6 +99,11 @@
             android:authorities="${applicationId}.apk"
             android:exported="false"
             android:grantUriPermissions="true" />
+
+        <activity
+            android:name=".GalleryPreview"
+            android:exported="false"
+            android:screenOrientation="landscape" />
 
         <!-- Gallery screensaver; switched on and off from launcher settings. -->
         <service

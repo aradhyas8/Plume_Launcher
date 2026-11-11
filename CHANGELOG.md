@@ -16,6 +16,23 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- Fire TV: Settings opened from Plume stays open on slow TVs. Before, Plume came back in front of it in under a second (#227).
+- Shows row: when you change sources, the source name, show titles, details and posters slide in the direction of the button you push. Cards keep their positions. The row has one title with dots that show which source is on screen.
+- **Custom app pictures.** Hold **OK** on an app, then select **Change picture**. Upload an icon or banner from your phone.
+- Press Right on the last app tile to select the first app tile.
+- **Mute action.** Assign **Mute** to a remote button to switch sound off and on.
+
+- **Settings backup.** Select **Backup** to save display and layout settings, then restore them on another TV.
+
+- **Screensaver timing.** Choose **Start after** in Plume to set the TV timeout or select **Never**.
+
+- **Screensaver preview.** Gallery, photos, and Aerial Views preview without the TV's system preview activity.
+
+- **Plume All apps.** Assign this action to a remote key to open Plume's app list.
+- Fire TVs with DroidLogic inputs play HDMI inside Plume instead of using Amazon's input switcher.
+- Plume opens when the Shield's Android TV home screen appears with the Home button service enabled.
+- Plume leaves the system launcher in front while Google TV suspends Plume in a kids profile.
+- Plume starts at cold boot when it is the only Home app. Before, the TV stayed on the boot screen.
 - On Xiaomi TVs, Home opens Plume when **Smooth volume** is on. Before, Home opened the Xiaomi home screen.
 
 ## 1.7.1
@@ -47,6 +64,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - A video wallpaper shows its own first frame while it starts.
 - With **Large** or **Largest** apps, the apps row no longer covers the Continue watching title.
 - Glass rows no longer show a grey edge after the last tile.
+- **Rows of the shows row.** Select **Plume settings → Shows row → Rows**, then select **Mixed** (the default), **By title** or **Per channel**. The page says what each choice does and which buttons to press. By title and Per channel show one source at a time: Watch Next, or one channel that an app adds. The cards stay in place and change their picture, title and progress.
 - Continue watching shows the show you watched last first in apps such as Nuvio.
 - On Fire TV, Plume comes back when you press Home on the Plume home screen or in the Plume settings.
 - On Google TV, a notice or a sign-in screen no longer brings Plume to the front.
