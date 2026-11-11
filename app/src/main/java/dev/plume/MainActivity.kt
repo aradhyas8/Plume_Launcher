@@ -1432,6 +1432,8 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION") // defaultDisplay is the fallback on Android 8 and 9.
     private fun supportsUhdWallpaper(): Boolean {
+        // shortcut: Hisense lushan captures the 4K layer but displays it black; remove when panel output is verified.
+        if (Build.MANUFACTURER.equals("Hisense", ignoreCase = true) && Build.DEVICE == "lushan") return false
         val mode = if (Build.VERSION.SDK_INT >= 30) display?.mode else windowManager.defaultDisplay.mode
         if (mode == null || mode.physicalWidth < UHD_WIDTH || mode.physicalHeight < UHD_HEIGHT) return false
         val memory = getSystemService(android.app.ActivityManager::class.java)
