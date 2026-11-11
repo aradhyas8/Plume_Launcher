@@ -323,6 +323,10 @@ class MainActivity : Activity() {
     private val posterIo = Executors.newFixedThreadPool(3)
     private val loading = java.util.Collections.synchronizedSet(HashSet<String>())
     private val ui = Handler(Looper.getMainLooper())
+    /** Recent apps' full-size Continue Watching art, apart so it never pushes the row's posters out. */
+    private val windowArt = object : LruCache<String, Bitmap>(6 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap) = value.byteCount
+    }
     private val posters = object : LruCache<String, Bitmap>(6 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
@@ -4680,7 +4684,7 @@ class MainActivity : Activity() {
     }
 
     /** A window that shows a picture: the app's last screen, or its Continue Watching art. */
-    private fun pictureWindow(app: App, picture: Bitmap?, uri: String?) = FrameLayout(this).apply {
+    private fun pictureWindow(app: App, picture: Bitmap?, uri: String?, wide: Int) = FrameLayout(this).apply {
         val image = ImageView(this@MainActivity).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -4689,12 +4693,14 @@ class MainActivity : Activity() {
         style(this, dp(8), card = true)
         setOnClickListener { launch(app) }
         if (picture != null) return@apply image.setImageBitmap(picture)
-        image.tag = uri
-        posters.get(uri!!)?.let { return@apply image.setImageBitmap(it) }
+        // The window is ~4x a card's width: the card's small RGB_565 poster would be stretched soft and banded.
+        val key = "window|$uri"
+        image.tag = key
+        windowArt.get(key)?.let { return@apply image.setImageBitmap(it) }
         posterIo.execute {
-            val bmp = try { decode(uri) } catch (e: Exception) { null } ?: return@execute
-            posters.put(uri, bmp)
-            ui.post { if (image.tag == uri) image.setImageBitmap(bmp) }
+            val bmp = try { decode(uri!!, wide, Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } ?: return@execute
+            windowArt.put(key, bmp)
+            ui.post { if (image.tag == key) image.setImageBitmap(bmp) }
         }
     }
 
@@ -4719,7 +4725,7 @@ class MainActivity : Activity() {
             val preview = if (previews) RecentPreviews.get(this, app.pkg) else null
             val show = watchList.firstOrNull { it.pkg == app.pkg }
             val art = show?.image?.takeIf { preview == null }
-            val window = if (preview != null || art != null) pictureWindow(app, preview, art)
+            val window = if (preview != null || art != null) pictureWindow(app, preview, art, width)
             else appTile(app, labeled = false, window = true).apply {
                 // The row's mark, kept at a row tile's share of the window instead of filling it.
                 (this as? ViewGroup)?.getChildAt(0)?.setPadding(width * 3 / 10, height * 3 / 10, width * 3 / 10, height * 3 / 10)
@@ -6223,15 +6229,16 @@ class MainActivity : Activity() {
     }
 
     /** Downsample to card size in RGB_565 so a dozen posters stay around 1-2 MB. */
-    private fun decode(uri: String): Bitmap? {
+    /** At least [wide] px across (halved while it stays that wide); [config] RGB_565 for small cards, ARGB for large art. */
+    private fun decode(uri: String, wide: Int = dp(220), config: Bitmap.Config = Bitmap.Config.RGB_565): Bitmap? {
         val bytes = openStream(uri).use { it.readBytes() }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= dp(220)) sample *= 2
+        while (bounds.outWidth / (sample * 2) >= wide) sample *= 2
         val opts = BitmapFactory.Options().apply {
             inSampleSize = sample
-            inPreferredConfig = Bitmap.Config.RGB_565
+            inPreferredConfig = config
         }
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
     }

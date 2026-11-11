@@ -47,7 +47,10 @@ internal class HomePress {
 internal object RecentPreviews {
     private const val MAX = 6
     private val packageName = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")
-    private val memory = LruCache<String, Bitmap>(MAX)
+    // By size: a 960 px capture is ~2 MB, so about four stay decoded; the files keep all six.
+    private val memory = object : LruCache<String, Bitmap>(8 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap) = value.byteCount
+    }
     private val io = Executors.newSingleThreadExecutor()
 
     private fun dir(c: Context) = File(c.noBackupFilesDir, "recent-previews")
@@ -60,7 +63,7 @@ internal object RecentPreviews {
             out.parentFile?.mkdirs()
             val tmp = File(out.path + ".tmp")
             try {
-                tmp.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+                tmp.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
                 if (!tmp.renameTo(out)) tmp.delete()
             } catch (_: java.io.IOException) {
                 tmp.delete()
@@ -69,7 +72,7 @@ internal object RecentPreviews {
         }
     }
 
-    // ponytail: decodes on the caller's thread (~5 ms per 640 px JPEG, at most six); move to io if it ever shows.
+    // ponytail: decodes on the caller's thread (~10 ms per 960 px JPEG, at most six); move to io if it ever shows.
     fun get(c: Context, pkg: String): Bitmap? = memory.get(pkg) ?: file(c, pkg)?.takeIf { it.isFile }
         ?.let { BitmapFactory.decodeFile(it.path) }?.also { memory.put(pkg, it) }
 

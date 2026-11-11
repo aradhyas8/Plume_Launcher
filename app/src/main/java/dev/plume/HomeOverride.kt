@@ -174,7 +174,9 @@ class HomeOverride : AccessibilityService() {
                             val readable = try {
                                 source.copy(Bitmap.Config.ARGB_8888, false)
                             } finally { source.recycle() } ?: return@use
-                            val width = minOf(640, readable.width)
+                            // The selected window is ~45% of the screen: half the screen keeps it sharp (exactly
+                            // 2x down from a 1080p capture, so the filter stays clean).
+                            val width = minOf(readable.width / 2, 1280).coerceAtLeast(minOf(640, readable.width))
                             val height = (readable.height * width / readable.width).coerceAtLeast(1)
                             val preview = Bitmap.createScaledBitmap(readable, width, height, true)
                             if (preview !== readable) readable.recycle()
