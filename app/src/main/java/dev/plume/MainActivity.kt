@@ -2696,7 +2696,7 @@ class MainActivity : Activity() {
             R.string.recent_previews to Triple(getString(R.string.recent_previews), toggle(prefs.getBoolean(HomeOverride.RECENT_PREVIEWS, false))) {
                 if (prefs.getBoolean(HomeOverride.RECENT_PREVIEWS, false)) {
                     prefs.edit().remove(HomeOverride.RECENT_PREVIEWS).apply()
-                    HomeOverride.running?.clearRecentPreviews()
+                    RecentPreviews.clear(this)
                     renderSettings(R.string.recent_previews)
                 } else {
                     homePopup(0, getString(R.string.recent_previews), getString(R.string.recent_previews_disclosure), null,
@@ -4059,7 +4059,7 @@ class MainActivity : Activity() {
     private fun onHold(v: View) {
         val tag = v.tag as? String
         when {
-            recentAppsOpen -> return
+            recentAppsOpen -> if (tag != null && v.parent?.parent === recentWindowRow) recentMenu(v, tag)
             allApps.visibility == View.VISIBLE && tag != null -> unlock { // grid: pin to the front of the row (unhiding it)
                 prefs.edit().putStringSet("row_hidden", rowHiddenSet() - tag).apply()
                 saveOrder(listOf(tag) + sortedApps().map { it.pkg }.filter { it != tag })
@@ -4583,7 +4583,7 @@ class MainActivity : Activity() {
     private val recentWindows by lazy { findViewById<RecentWindowStrip>(R.id.recentWindows) }
     private val recentWindowRow by lazy { findViewById<LinearLayout>(R.id.recentWindowRow) }
 
-    private fun openAllApps(recent: Boolean = false) {
+    private fun openAllApps(recent: Boolean = false, at: Int = -1) {
         val selected = if (recent && recentAppsOpen) currentFocus?.tag else null
         if (recent) {
             activeMenu?.dismiss()
@@ -4597,7 +4597,7 @@ class MainActivity : Activity() {
         recentWindows.visibility = View.GONE
         allAppsGrid.visibility = if (recent) View.GONE else View.VISIBLE
         val margin = if (recent) 0 else dp(48)
-        allApps.setPadding(margin, if (recent) resources.displayMetrics.heightPixels / 9 else dp(28), margin, dp(28))
+        allApps.setPadding(margin, if (recent) resources.displayMetrics.heightPixels / 14 else dp(28), margin, dp(28))
         // Recent apps sits on the bare wallpaper, like the home screen: no scrim (text colour and shadow give contrast).
         allApps.setBackgroundColor(if (recent || glassActive()) Color.TRANSPARENT else ground)
         // Recent apps titles itself like Continue Watching; All apps keeps its own title.
@@ -4610,15 +4610,18 @@ class MainActivity : Activity() {
             textSize = if (recent) 14f else 20f
             alpha = if (recent) 0.7f else 1f
         }
-        val list = sortedApps().let { all -> if (recent) recentApps(all.filter { !it.pkg.startsWith(HDMI) }) {
-            prefs.getLong("t_${it.pkg}", 0)
-        } else all }
+        val list = sortedApps().let { all -> if (recent) recentApps(all.filter { !it.pkg.startsWith(HDMI) },
+            removed = { prefs.getLong("r_${it.pkg}", 0) }) { prefs.getLong("t_${it.pkg}", 0) } else all }
         val info = findViewById<TextView>(R.id.allAppsInfo).apply {
             visibility = if (recent && list.isEmpty()) View.VISIBLE else View.GONE
             isFocusable = list.isEmpty()
             isFocusableInTouchMode = list.isEmpty()
-            setText(R.string.recent_apps_empty)
+            // Without the Home service Plume sees only the apps it opens itself.
+            setText(if (HomeOverride.running != null) R.string.recent_apps_empty_any else R.string.recent_apps_empty)
+            textSize = 18f
+            (layoutParams as ViewGroup.MarginLayoutParams).topMargin = if (recent) resources.displayMetrics.heightPixels / 4 else dp(26)
         }
+        recentClear.visibility = if (recent && list.isNotEmpty()) View.VISIBLE else View.GONE
         if (recent) {
             recentWindows.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
             buildRecentWindows(list)
@@ -4626,7 +4629,7 @@ class MainActivity : Activity() {
             allApps.post {
                 if (!recentAppsOpen) return@post
                 val names = (0 until recentWindowRow.childCount).mapNotNull { (recentWindowRow.getChildAt(it) as ViewGroup).getChildAt(1) as? TextView }
-                val color = inkBehind(listOf(title, recentWindows))
+                val color = inkBehind(listOf(title, if (list.isEmpty()) info else recentWindows))
                 for (v in listOf(title, info) + names) ink(v, color)
             }
         } else {
@@ -4646,15 +4649,60 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.content).visibility = if (recent || glassActive()) View.INVISIBLE else View.VISIBLE
         homeFocusable(false)
         val row = if (recent) recentWindowRow else allAppsGrid
-        val target = selected?.let { row.findViewWithTag<View>(it) } ?: (row.getChildAt(0) as? ViewGroup)?.getChildAt(0)?.takeIf { recent }
-            ?: row.getChildAt(0) ?: info
+        val first = (row.getChildAt(if (at >= 0) minOf(at, row.childCount - 1) else 0) as? ViewGroup)?.getChildAt(0)?.takeIf { recent }
+        val target = selected?.let { row.findViewWithTag<View>(it) } ?: first ?: row.getChildAt(0) ?: info
         target.requestFocus()
     }
 
+    /** Recent apps' Clear all button, under the windows. Made once and kept in the screen's column. */
+    private val recentClear by lazy {
+        pill(getString(R.string.recent_clear_all)) { clearRecentApps() }.also { button ->
+            val column = recentWindows.parent as ViewGroup
+            column.addView(button, column.indexOfChild(recentWindows) + 1, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = dp(20)
+            })
+            button.nextFocusLeftId = button.id
+            button.nextFocusRightId = button.id
+        }
+    }
+
+    /** A small button in the home row's tile style (glass or rim card, rise on focus). */
+    private fun pill(text: String, onClick: () -> Unit) = LinearLayout(this).apply {
+        id = View.generateViewId()
+        gravity = Gravity.CENTER
+        setPadding(dp(20), dp(10), dp(20), dp(10))
+        addView(label(text, 15f))
+        style(this, dp(8), card = true)
+        elevation = 0f
+        setOnClickListener { onClick() }
+    }
+
+    /** A window that shows a picture: the app's last screen, or its Continue Watching art. */
+    private fun pictureWindow(app: App, picture: Bitmap?, uri: String?) = FrameLayout(this).apply {
+        val image = ImageView(this@MainActivity).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        addView(image, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        style(this, dp(8), card = true)
+        setOnClickListener { launch(app) }
+        if (picture != null) return@apply image.setImageBitmap(picture)
+        image.tag = uri
+        posters.get(uri!!)?.let { return@apply image.setImageBitmap(it) }
+        posterIo.execute {
+            val bmp = try { decode(uri) } catch (e: Exception) { null } ?: return@execute
+            posters.put(uri, bmp)
+            ui.post { if (image.tag == uri) image.setImageBitmap(bmp) }
+        }
+    }
+
     /**
-     * Recent apps: one window per app, made of the home row's own tiles (glass or rim card, the same mark, the same
-     * rise on focus). A window shows the app's last screen when the Home service captured one. The selected window
-     * sits in the centre; the others are smaller beside it. Only the selected window shows its name, as in the row.
+     * Recent apps: one window per app, made of the home row's own tiles (glass or rim card, the same rise on focus).
+     * A window shows the app's last screen when the Home service captured one, else the picture of the app's
+     * Continue Watching item, else its mark. The selected window sits in the centre; the others are smaller beside
+     * it. Only the selected window shows its name, and its Resume button when the app has something to resume.
      */
     private fun buildRecentWindows(list: List<App>) {
         val screen = resources.displayMetrics
@@ -4662,23 +4710,21 @@ class MainActivity : Activity() {
         val height = width * 9 / 16
         val gap = dp(GRID_GAP)
         val edge = (screen.widthPixels - width) / 2
-        recentWindowRow.setPadding(edge, dp(24), edge, dp(8))
+        recentWindowRow.setPadding(edge, dp(16), edge, dp(8))
         recentWindows.scrollTo(0, 0)
         val rest = if (dark) 0.85f else 1f
+        val previews = prefs.getBoolean(HomeOverride.RECENT_PREVIEWS, false)
+        val clear = recentClear
         for ((index, app) in list.withIndex()) {
-            val preview = HomeOverride.running?.recentPreview(app.pkg)
-            val window = if (preview != null) FrameLayout(this).apply {
-                addView(ImageView(this@MainActivity).apply {
-                    setImageBitmap(preview)
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-                style(this, dp(8), card = true)
-                setOnClickListener { launch(app) }
-            } else appTile(app, labeled = false, window = true).apply {
+            val preview = if (previews) RecentPreviews.get(this, app.pkg) else null
+            val show = watchList.firstOrNull { it.pkg == app.pkg }
+            val art = show?.image?.takeIf { preview == null }
+            val window = if (preview != null || art != null) pictureWindow(app, preview, art)
+            else appTile(app, labeled = false, window = true).apply {
                 // The row's mark, kept at a row tile's share of the window instead of filling it.
                 (this as? ViewGroup)?.getChildAt(0)?.setPadding(width * 3 / 10, height * 3 / 10, width * 3 / 10, height * 3 / 10)
             }
+            window.id = View.generateViewId()
             window.tag = app.pkg
             window.contentDescription = app.label
             // No system shadow: through a see-through pane this large, its corner-to-corner shape shows as a dark X.
@@ -4690,20 +4736,46 @@ class MainActivity : Activity() {
                 alpha = 0f
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
+            // The app's own link to the show, at the point where it stopped (see open).
+            val resume = show?.takeIf { it.intent != null }?.let { p ->
+                pill(getString(R.string.recent_resume, p.title)) { open(p) }.apply {
+                    alpha = 0f
+                    (getChildAt(0) as TextView).maxWidth = width - dp(40)
+                    nextFocusUpId = window.id
+                    nextFocusDownId = clear.id
+                    nextFocusLeftId = id
+                    nextFocusRightId = id
+                }
+            }
+            window.nextFocusDownId = resume?.id ?: clear.id
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 clipChildren = false
                 addView(window, LinearLayout.LayoutParams(MATCH_PARENT, height))
                 addView(name, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                resume?.let { addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    topMargin = dp(12)
+                }) }
                 scaleX = SIDE_WINDOW
                 scaleY = SIDE_WINDOW
+            }
+            // The name and Resume show while the window or its Resume button has focus.
+            val showLabels = Runnable {
+                val on = window.isFocused || resume?.isFocused == true
+                name.setActive(on)
+                name.animate().alpha(if (on) rest else 0f).setDuration(160).start()
+                resume?.animate()?.alpha(if (on) 1f else 0f)?.setDuration(160)?.start()
+            }
+            resume?.onFocusChangeListener.let { pillFocus ->
+                resume?.setOnFocusChangeListener { v, focused -> pillFocus?.onFocusChange(v, focused); v.post(showLabels) }
             }
             val tileFocus = window.onFocusChangeListener // the tile's own rise (see style)
             window.setOnFocusChangeListener { v, focused ->
                 tileFocus?.onFocusChange(v, focused)
                 v.animate().translationZ(0f).setDuration(0).start() // keeps the tile's rise, drops its shadow lift
-                name.setActive(focused)
-                name.animate().alpha(if (focused) rest else 0f).setDuration(160).start()
+                v.post(showLabels)
+                if (focused) clear.nextFocusUpId = window.id
                 if (focused) recentWindows.post {
                     if (!window.isFocused) return@post
                     val animate = animationsOn() && ValueAnimator.areAnimatorsEnabled()
@@ -4726,6 +4798,33 @@ class MainActivity : Activity() {
                 if (index > 0) marginStart = gap
             })
         }
+    }
+
+    /**
+     * Hold OK on a recent window: open it, or take it off the list. No "Close app": Android 14 and newer don't let one
+     * app stop another, and on a Google TV with Android 12 killBackgroundProcesses was refused ("Invalid packageName").
+     */
+    private fun recentMenu(v: View, pkg: String) {
+        val app = sortedApps().firstOrNull { it.pkg == pkg } ?: return
+        val at = (0 until recentWindowRow.childCount).indexOfFirst { (recentWindowRow.getChildAt(it) as ViewGroup).getChildAt(0) === v }
+        holdMenu(v, listOf(
+            getString(R.string.recent_open) to { launch(app) },
+            getString(R.string.recent_remove) to { forgetRecent(pkg); openAllApps(recent = true, at = at) },
+        ))
+    }
+
+    /** Off the list, with its saved picture, until it is opened again (see recentApps). */
+    private fun forgetRecent(pkg: String) {
+        prefs.edit().putLong("r_$pkg", System.currentTimeMillis()).apply()
+        RecentPreviews.remove(this, pkg)
+    }
+
+    private fun clearRecentApps() {
+        for (i in 0 until recentWindowRow.childCount) {
+            ((recentWindowRow.getChildAt(i) as ViewGroup).getChildAt(0).tag as? String)?.let { forgetRecent(it) }
+        }
+        RecentPreviews.clear(this)
+        openAllApps(recent = true)
     }
 
     private fun closeAllApps() {

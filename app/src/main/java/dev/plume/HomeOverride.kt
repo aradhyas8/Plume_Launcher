@@ -13,7 +13,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.util.LruCache
 import android.view.Display
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
@@ -59,7 +58,7 @@ class HomeOverride : AccessibilityService() {
         handler.removeCallbacks(jump)
         pendingHome = null
         handler.removeCallbacks(finishCapture)
-        clearRecentPreviews()
+        RecentPreviews.trim() // the saved pictures stay for the next time the service runs
         if (listening) {
             listening = false
             unregisterReceiver(packageReceiver)
@@ -115,7 +114,6 @@ class HomeOverride : AccessibilityService() {
     private val homePress = HomePress()
     private var lastForeground: String? = null
     private var foregroundApp: String? = null
-    private val recentPreviews = LruCache<String, Bitmap>(6)
     private class HomeCapture(val pkg: String, var recents: Boolean)
     private var pendingHome: HomeCapture? = null
     private val finishCapture = Runnable { pendingHome?.let(::finishHome) }
@@ -153,10 +151,6 @@ class HomeOverride : AccessibilityService() {
 
     fun openRecentApps() = requestHome(recents = true)
 
-    fun recentPreview(pkg: String): Bitmap? = if (previewsEnabled()) recentPreviews.get(pkg) else null
-
-    fun clearRecentPreviews() = recentPreviews.evictAll()
-
     private fun previewsEnabled() = getSharedPreferences("home", MODE_PRIVATE).getBoolean(RECENT_PREVIEWS, false)
 
     private fun requestHome(recents: Boolean) {
@@ -168,7 +162,7 @@ class HomeOverride : AccessibilityService() {
         }
         val capture = HomeCapture(pkg, recents)
         pendingHome = capture
-        recentPreviews.remove(pkg)
+        RecentPreviews.remove(this, pkg) // an old screen is wrong once the app moved on; a failed capture shows the app's art
         handler.postDelayed(finishCapture, 220)
         try {
             takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
@@ -184,12 +178,12 @@ class HomeOverride : AccessibilityService() {
                             val height = (readable.height * width / readable.width).coerceAtLeast(1)
                             val preview = Bitmap.createScaledBitmap(readable, width, height, true)
                             if (preview !== readable) readable.recycle()
-                            if (hasPreviewContent(preview)) recentPreviews.put(capture.pkg, preview) else preview.recycle()
+                            if (hasPreviewContent(preview)) RecentPreviews.put(this@HomeOverride, capture.pkg, preview) else preview.recycle()
                         }
                     } catch (_: RuntimeException) {
                         // A capture failure must not prevent Home from opening.
                     } catch (_: OutOfMemoryError) {
-                        clearRecentPreviews()
+                        RecentPreviews.trim()
                     } finally {
                         finishHome(capture)
                     }

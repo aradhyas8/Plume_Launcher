@@ -29,6 +29,20 @@ class RecentAppsTest {
         assertEquals(listOf("a", "b"), recentApps(installed) { opened.getValue(it) })
     }
 
+    @Test fun aRemovedAppStaysOffTheListUntilItIsOpenedAgain() {
+        val opened = mutableMapOf("a" to 10L, "b" to 20L)
+        val removed = mapOf("b" to 25L)
+        assertEquals(listOf("a"), recentApps(listOf("a", "b"), removed = { removed[it] ?: 0L }) { opened.getValue(it) })
+        opened["b"] = 30L
+        assertEquals(listOf("b", "a"), recentApps(listOf("a", "b"), removed = { removed[it] ?: 0L }) { opened.getValue(it) })
+    }
+
+    @Test fun onlyTheNewestPreviewsAreKept() {
+        val times = mapOf("a" to 1L, "b" to 5L, "c" to 3L, "d" to 4L)
+        assertEquals(listOf("c", "a"), overLimit(times.keys.toList(), 2) { times.getValue(it) })
+        assertEquals(emptyList<String>(), overLimit(listOf("a"), 6) { 1L })
+    }
+
     @Test fun firstPressSelectsHomeAndSecondPressSelectsRecents() {
         val home = HomePress()
         assertFalse(home.released(1_000))

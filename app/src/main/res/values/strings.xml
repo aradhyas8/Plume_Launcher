@@ -212,7 +212,13 @@
     <string name="act_plume_recents">Plume recent apps</string>
     <string name="recent_previews">App window previews</string>
     <string name="recent_previews_enable">Enable previews</string>
-    <string name="recent_previews_disclosure">Plume uses its Home accessibility service to capture the current screen when you press Home or open Recent apps from another app. Plume keeps up to six previews in memory on this TV. It does not save or share them. Turn this off to clear the previews.</string>
+    <string name="recent_previews_disclosure">Plume uses its Home accessibility service to capture the current screen when you press Home or open Recent apps from another app. Plume saves the last screen of up to six apps, only on this TV. It never shares them or puts them in a backup. Turn this off to delete them.</string>
+    <!-- %1$s: the show or film the app stopped at, from Continue Watching. -->
+    <string name="recent_resume">Resume %1$s</string>
+    <string name="recent_open">Open</string>
+    <string name="recent_remove">Remove from list</string>
+    <string name="recent_clear_all">Clear all</string>
+    <string name="recent_apps_empty_any">No recent apps yet. The apps you open show here.</string>
     <string name="recent_apps_empty">No recent apps yet. Open an app from Plume to add it here.</string>
     <string name="settings">Settings</string>
     <string name="continue_watching">Continue Watching</string>
