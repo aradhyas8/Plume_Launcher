@@ -1,4 +1,11 @@
 <resources>
+    <string name="change_app_picture">Change picture</string>
+    <string name="app_picture_icon">Icon</string>
+    <string name="app_picture_icon_hint">Used with Monochrome and Colour styles</string>
+    <string name="app_picture_banner_hint">Used with banner styles</string>
+    <string name="reset_app_picture">Reset picture</string>
+    <string name="waiting_app_picture">Waiting for a picture…</string>
+    <string name="app_picture_added">Picture saved. Send another, or press Done.</string>
     <string name="override_desc">Opens Plume whenever the Google TV home screen appears, so the Home button lands here.</string>
     <string name="delete_photo">Delete \"%1$s\"?</string>
     <string name="photo_added">Added \"%1$s\". Send another, or press Done.</string>
@@ -97,6 +104,7 @@
     <string name="cw_channels">Channels</string>
     <string name="row_name">Row name</string>
     <string name="watch_next">Android TV Watch Next</string>
+    <string name="watch_next_tab">Watch Next</string>
     <string name="bottom_row">Shows row</string>
     <string name="automatic">Automatic</string>
     <string name="all_on">All on</string>
@@ -116,6 +124,13 @@
     <string name="updating">Updating…</string>
     <string name="checking">Checking…</string>
     <string name="lock_layout">PIN lock</string>
+    <string name="backup">Backup</string>
+    <string name="save_settings">Save backup</string>
+    <string name="load_settings">Restore backup</string>
+    <string name="help_settings_transfer">Transfer display, layout, clock, weather, and app order settings. Media, PIN, remote buttons, and system settings stay on this TV.</string>
+    <string name="settings_saved">Saved to:\n%1$s\n\nCopy this file off the TV before you uninstall Plume.</string>
+    <string name="settings_load_warning">Load from:\n%1$s\n\nThis replaces supported settings. Missing settings return to their defaults. The PIN, media, and system settings stay unchanged.</string>
+    <string name="settings_transfer_failed">Could not transfer settings. Check the file, its format, and available storage.</string>
     <string name="plume_settings">Plume settings</string>
     <string name="enter_pin">Enter PIN</string>
     <string name="wrong_pin">Wrong PIN</string>
@@ -223,14 +238,30 @@
     <string name="help_apps_when_hidden">When the shows row hides, the apps stay in place or move down.</string>
     <string name="help_show_icons">The small app icon on each card. Colour shows it in the app\'s own colour.</string>
     <string name="help_row_name">The name above the row. Automatic uses the name your apps give it.</string>
+    <string name="cards_rows">Rows</string>
+    <string name="cards_mixed">Mixed</string>
+    <string name="cards_title">By title</string>
+    <string name="cards_each">Per channel</string>
+    <string name="help_cards_rows">How the shows are grouped. Select it to see the choices and the buttons that each one uses.</string>
+    <string name="help_cards_mixed">Every source in one row, newest first. There is nothing to switch.</string>
+    <string name="help_cards_title">One source at a time. Press Down from the apps to the title, then Left or Right to show another source. The arrows show where you can go.</string>
+    <string name="help_cards_each">One row for each source, shown one at a time. Press Down on a card for the next source, Up for the one before. The dots after the title show which source is on screen.</string>
+    <string name="cards_rows_note">A source is Watch Next, or a channel that an app adds. By title and Per channel need two or more sources with shows.</string>
+    <string name="cards_rows_one">Now only one source has shows, so the row looks the same.</string>
     <string name="help_from_apps">Choose the apps that can add shows to this row.</string>
     <string name="help_channels">Turn on or off the channels that apps add, like Recommended.</string>
     <string name="help_hidden_shows">Shows you hid from the row. Press OK to show all of them again.</string>
-    <string name="help_start_after">Opens the Android settings where you set how long the TV waits.</string>
+    <string name="help_screensaver_delay">Choose how long the TV waits before it starts the screensaver. This also changes the TV inactivity timeout.</string>
+    <string name="screensaver_delay_permission">To set the timeout here, grant Plume this permission once with ADB. You can also use Android settings.</string>
+    <string name="screensaver_delay_failed">The TV could not save this timeout. Open Android settings to change it.</string>
+    <plurals name="screensaver_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
     <string name="help_home_button">Home opens Plume. Hold Home to open the TV\'s own dashboard.</string>
     <string name="help_default_launcher">On Android TV, Plume can be the home app. Google TV keeps its own: use Home opens Plume there.</string>
     <string name="help_run_setup">Go through the Home button setup again.</string>
-    <string name="help_smooth_volume">Hold Volume to keep changing it. Home then takes about a second longer to open Plume. Off while remote keys are set.</string>
+    <string name="help_smooth_volume">Hold Volume to keep changing it. Home then shows the TV\'s own home screen for about a second before Plume opens. Off while remote keys are set.</string>
     <string name="help_remote_keys">Change what a button on your remote does when you press it or hold it.</string>
     <!-- Season and episode on a Continue Watching card, for example "S1 E3". -->
     <string name="season_episode">S%1$s E%2$s</string>
@@ -281,6 +312,8 @@
     <string name="section_screensaver">Screensaver</string>
     <string name="sources">Sources</string>
     <string name="no_signal">No signal</string>
+    <string name="input_opening">Opening input…</string>
+    <string name="input_failed">Could not open this input. Press Back to return.</string>
     <string name="in_row">In the row</string>
     <string name="input_added">Added to the row.</string>
     <string name="input_removed">Removed from the row.</string>
@@ -309,6 +342,8 @@
     <string name="act_stop">Stop</string>
     <string name="act_rewind">Rewind</string>
     <string name="act_forward">Fast-forward</string>
+    <string name="act_mute">Mute</string>
+    <string name="mute_unavailable">This TV cannot change the volume through Plume.</string>
     <string name="act_back">Back</string>
     <string name="act_recents">Recent apps</string>
     <string name="act_notifications">Notifications</string>
@@ -316,6 +351,7 @@
     <string name="act_power">Power menu</string>
     <string name="act_settings">Android settings</string>
     <string name="act_network">Network settings</string>
+    <string name="act_all_apps">Plume All apps</string>
     <plurals name="n_keys">
         <item quantity="one">%d key</item>
         <item quantity="other">%d keys</item>
