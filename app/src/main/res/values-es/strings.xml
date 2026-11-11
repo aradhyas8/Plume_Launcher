@@ -265,7 +265,7 @@
     <string name="section_clock_weather">Reloj y clima</string>
     <string name="section_remote_home">Control remoto y botón Inicio</string>
     <string name="section_lock">Bloquear diseño</string>
-    <string name="lock_note">Un PIN protege los ajustes de Plume, el Wi-Fi, los ajustes de Android y los cambios en la pantalla de inicio. Las apps se siguen abriendo.</string>
+    <string name="lock_note">Un PIN protege los ajustes de Plume, Wi-Fi, Android e inicio. Las apps aún se abren.</string>
     <string name="finish_setup">Terminar configuración</string>
     <string name="finish_setup_value">Haz que Inicio abra Plume</string>
     <!-- Botones del control remoto: cambiar lo que hace un botón del control -->

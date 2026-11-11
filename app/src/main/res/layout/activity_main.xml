@@ -357,7 +357,7 @@
             android:paddingStart="28dp"
             android:paddingTop="40dp"
             android:paddingEnd="40dp"
-            android:paddingBottom="27dp">
+            android:paddingBottom="16dp">
 
             <!-- "Plume settings ›" above a section's title, so you know where Back goes. -->
             <TextView
@@ -392,12 +392,12 @@
                     android:orientation="vertical" />
             </ScrollView>
 
-            <!-- What the focused row does; empty for rows that need no explaining, but always 3 lines tall. -->
+            <!-- Keep space for help so the list stays in place as focus moves. -->
             <TextView
                 android:id="@+id/settingsHelp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="6dp"
                 android:lineSpacingMultiplier="1.15"
                 android:ellipsize="end"
                 android:maxLines="3"

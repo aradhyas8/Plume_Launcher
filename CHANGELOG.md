@@ -43,6 +43,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - On Xiaomi TVs, Home opens Plume when **Smooth volume** is on. Before, Home opened the Xiaomi home screen.
 - On Xiaomi TVs, **Remote & Home button** shows Off until the **Home button** is on. Before, it showed On, but Home opened the Xiaomi home screen.
 - On supported CVTE TVs, press **Source** or select **TV sources** to open the TV source panel.
+- Plume settings shows more rows by using less space for the wallpaper preview and help text.
 
 ## 1.7.1
 
