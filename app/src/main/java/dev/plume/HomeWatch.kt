@@ -64,6 +64,7 @@ class HomeWatch(private val fire: Boolean, private val homes: () -> Map<String, 
         ANDROID_TV -> cls in homes()[pkg].orEmpty()
         AMAZON -> cls.startsWith("$AMAZON.ui.HomeActivity") // HomeActivity_vNext on current builds
         OLD_AMAZON -> cls == "$OLD_AMAZON.Launcher"
+        XIAOMI -> cls == "$XIAOMI.MainActivityUserMode"
         else -> false
     }
 
@@ -73,6 +74,7 @@ class HomeWatch(private val fire: Boolean, private val homes: () -> Map<String, 
         const val ANDROID_TV = "com.google.android.tvlauncher"
         private const val AMAZON = "com.amazon.tv.launcher"
         private const val OLD_AMAZON = "com.amazon.firelauncher"
+        private const val XIAOMI = "com.mitv.tvhome"
         private const val AMAZON_SETTINGS = "com.amazon.tv.settings"
         private const val JUMP_GAP_MS = 600L
         const val SETTINGS_WAIT_MS = 550L
