@@ -1030,6 +1030,10 @@ class MainActivity : Activity() {
             homeTest = 0
             return donePopup()
         }
+        // Plume as Android TV's home app, without the Home service: the system sends each Home press here as an intent.
+        // The service counts presses itself and sends Recent apps as an extra (handled above), so skip it when it is on.
+        if (intent.hasCategory(Intent.CATEGORY_HOME) && !prefs.getBoolean("return_dream", false) && HomeOverride.running == null &&
+            systemHomePress.released(SystemClock.uptimeMillis())) return openAllApps(recent = true)
         val back = returnTo // set when Plume started the app that Home leaves
         returnTo = null
         if (editing) endEdit()
@@ -1079,13 +1083,12 @@ class MainActivity : Activity() {
         ground =if (dark) DARK_BG else 0xFFF3F5F7.toInt()
         findViewById<View>(R.id.root).setBackgroundColor(ground)
         // With glass, the wallpaper and the frost behind the grid are the point of All apps: let them show.
-        allApps.setBackgroundColor(if (recentAppsOpen) 0x66000000 else if (glassy != null) Color.TRANSPARENT else ground)
+        allApps.setBackgroundColor(if (recentAppsOpen || glassy != null) Color.TRANSPARENT else ground)
         findViewById<TextView>(R.id.clock).typeface = clockFace()
         findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
         for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
             findViewById<TextView>(id).setTextColor(fg)
         }
-        if (recentAppsOpen) findViewById<TextView>(R.id.allAppsTitle).setTextColor(Color.WHITE)
         iconInk = fg
         for (v in topIcons()) v.setColorFilter(if (v.isFocused) fg else iconInk)
         watchInk = fg
@@ -2758,6 +2761,8 @@ class MainActivity : Activity() {
                     k == R.string.theme && theme == "auto" -> autoNote()
                     k == R.string.theme && theme == "wallpaper" -> getString(R.string.help_theme_wallpaper)
                     k == R.string.glass && glassStyle() == GlassStyle.CLEAR && currentWallpaper().startsWith("video:") -> getString(R.string.glass_clear_video)
+                    // Fire OS never passes the Home key to Plume, so it can't see a double press there.
+                    k == R.string.home_button && fireTv() -> getString(R.string.help_home_button_fire)
                     else -> ROW_HELP[k]?.let { getString(it) }
                 }
             }
@@ -3727,8 +3732,8 @@ class MainActivity : Activity() {
     }
 
     /** The home row shows marks only by default (see rowNames); the All apps grid always labels them. */
-    private fun appTile(a: App, labeled: Boolean = true): View {
-        if (!labeled && isBannerStyle(iconStyle())) bannerTile(a)?.let { it.contentDescription = a.label; return it }
+    private fun appTile(a: App, labeled: Boolean = true, window: Boolean = false): View {
+        if (!labeled && !window && isBannerStyle(iconStyle())) bannerTile(a)?.let { it.contentDescription = a.label; return it }
         val logo = LOGOS[a.pkg]
         val custom = (if (!labeled && !a.pkg.startsWith(HDMI) && !isBannerStyle(iconStyle())) AppPictures.read(this, a.pkg, banner = false) else null)
             ?.apply { if (!colourIcons()) colorFilter = GREYSCALE }
@@ -4573,6 +4578,7 @@ class MainActivity : Activity() {
     // ---------- all apps ----------
 
     private var recentAppsOpen = false
+    private val systemHomePress = HomePress()
     private val recentWindows by lazy { findViewById<RecentWindowStrip>(R.id.recentWindows) }
     private val recentWindowRow by lazy { findViewById<LinearLayout>(R.id.recentWindowRow) }
 
@@ -4589,26 +4595,37 @@ class MainActivity : Activity() {
         allAppsGrid.visibility = if (recent) View.GONE else View.VISIBLE
         val margin = if (recent) 0 else dp(48)
         allApps.setPadding(margin, if (recent) resources.displayMetrics.heightPixels / 9 else dp(28), margin, dp(28))
-        allApps.setBackgroundColor(if (recent) 0x66000000 else if (glassActive()) Color.TRANSPARENT else ground)
-        findViewById<TextView>(R.id.allAppsTitle).apply {
+        // Recent apps sits on the bare wallpaper, like the home screen: no scrim (text colour and shadow give contrast).
+        allApps.setBackgroundColor(if (recent || glassActive()) Color.TRANSPARENT else ground)
+        // Recent apps titles itself like Continue Watching; All apps keeps its own title.
+        val title = findViewById<TextView>(R.id.allAppsTitle).apply {
             setText(if (recent) R.string.recent_apps else R.string.all_apps)
-            setTextColor(if (recent) Color.WHITE else fg)
+            setTextColor(fg)
+            if (!recent) setShadowLayer(0f, 0f, 0f, 0)
             setPaddingRelative(if (recent) dp(48) else 0, 0, 0, 0)
-            textSize = if (recent) 26f else 20f
+            typeface = Typeface.create(if (recent) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
+            textSize = if (recent) 14f else 20f
+            alpha = if (recent) 0.7f else 1f
         }
         val list = sortedApps().let { all -> if (recent) recentApps(all.filter { !it.pkg.startsWith(HDMI) }) {
             prefs.getLong("t_${it.pkg}", 0)
         } else all }
         val info = findViewById<TextView>(R.id.allAppsInfo).apply {
-            visibility = if (recent) View.VISIBLE else View.GONE
+            visibility = if (recent && list.isEmpty()) View.VISIBLE else View.GONE
             isFocusable = list.isEmpty()
             isFocusableInTouchMode = list.isEmpty()
-            setTextColor(Color.WHITE)
-            setText(if (list.isEmpty()) R.string.recent_apps_empty else R.string.recent_apps_hint)
+            setText(R.string.recent_apps_empty)
         }
         if (recent) {
             recentWindows.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
             buildRecentWindows(list)
+            // One colour for the title and names, picked against the wallpaper behind them once laid out (see fitInk).
+            allApps.post {
+                if (!recentAppsOpen) return@post
+                val names = (0 until recentWindowRow.childCount).mapNotNull { (recentWindowRow.getChildAt(it) as ViewGroup).getChildAt(1) as? TextView }
+                val color = inkBehind(listOf(title, recentWindows))
+                for (v in listOf(title, info) + names) ink(v, color)
+            }
         } else {
             val gap = dp(10)
             val width = (resources.displayMetrics.widthPixels - dp(96) - gap * 5) / 6
@@ -4626,81 +4643,72 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.content).visibility = if (recent || glassActive()) View.INVISIBLE else View.VISIBLE
         homeFocusable(false)
         val row = if (recent) recentWindowRow else allAppsGrid
-        val target = selected?.let { row.findViewWithTag<View>(it) } ?: row.getChildAt(0) ?: info
+        val target = selected?.let { row.findViewWithTag<View>(it) } ?: (row.getChildAt(0) as? ViewGroup)?.getChildAt(0)?.takeIf { recent }
+            ?: row.getChildAt(0) ?: info
         target.requestFocus()
     }
 
+    /**
+     * Recent apps: one window per app, made of the home row's own tiles (glass or rim card, the same mark, the same
+     * rise on focus). A window shows the app's last screen when the Home service captured one. The selected window
+     * sits in the centre; the others are smaller beside it. Only the selected window shows its name, as in the row.
+     */
     private fun buildRecentWindows(list: List<App>) {
         val screen = resources.displayMetrics
         val width = minOf(screen.widthPixels * 45 / 100, screen.heightPixels * 4 / 5)
         val height = width * 9 / 16
-        val gap = dp(14)
+        val gap = dp(GRID_GAP)
         val edge = (screen.widthPixels - width) / 2
-        recentWindowRow.setPadding(edge, dp(12), edge, dp(8))
+        recentWindowRow.setPadding(edge, dp(24), edge, dp(8))
         recentWindows.scrollTo(0, 0)
+        val rest = if (dark) 0.85f else 1f
         for ((index, app) in list.withIndex()) {
-            val radius = dp(12).toFloat()
-            val window = FrameLayout(this).apply {
-                val color = BRAND_COLOURS[app.pkg]?.let(::deepen) ?: 0xFF20323B.toInt()
-                background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                    intArrayOf(color, 0xFF10171C.toInt())).apply { cornerRadius = radius }
-                clipToOutline = true
-            }
             val preview = HomeOverride.running?.recentPreview(app.pkg)
-            val banner = if (preview == null) appBanner(app) else null
-            val hasArt = preview != null || banner != null
-            val image = ImageView(this).apply {
-                if (preview != null) setImageBitmap(preview) else setImageDrawable(banner ?: app.icon)
-                scaleType = if (hasArt) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
+            val window = if (preview != null) FrameLayout(this).apply {
+                addView(ImageView(this@MainActivity).apply {
+                    setImageBitmap(preview)
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                style(this, dp(8), card = true)
+                setOnClickListener { launch(app) }
+            } else appTile(app, labeled = false, window = true).apply {
+                // The row's mark, kept at a row tile's share of the window instead of filling it.
+                (this as? ViewGroup)?.getChildAt(0)?.setPadding(width * 3 / 10, height * 3 / 10, width * 3 / 10, height * 3 / 10)
+            }
+            window.tag = app.pkg
+            window.contentDescription = app.label
+            val name = fittingLabel(app.label, 16f).apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(6), dp(14), dp(6), 0)
+                alpha = 0f
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
-            val imageSize = if (hasArt) MATCH_PARENT else height / 3
-            window.addView(image, FrameLayout.LayoutParams(imageSize, imageSize, Gravity.CENTER))
-            val rim = GradientDrawable().apply {
-                cornerRadius = radius
-                setColor(Color.TRANSPARENT)
-                setStroke(dp(1), 0x55FFFFFF)
-            }
-            window.foreground = rim
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 clipChildren = false
-                tag = app.pkg
-                contentDescription = app.label
-                isFocusableInTouchMode = true
-                setOnClickListener { launch(app) }
                 addView(window, LinearLayout.LayoutParams(MATCH_PARENT, height))
-                addView(label(app.label, 16f).apply {
-                    gravity = Gravity.CENTER
-                    setTextColor(Color.WHITE)
-                    setPadding(dp(6), dp(10), dp(6), 0)
-                    maxWidth = width - dp(16)
-                    compoundDrawablePadding = dp(8)
-                    app.icon.constantState?.newDrawable(resources)?.mutate()?.let { icon ->
-                        icon.setBounds(0, 0, dp(20), dp(20))
-                        setCompoundDrawablesRelative(icon, null, null, null)
-                    }
-                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    gravity = Gravity.CENTER_HORIZONTAL
-                })
-                alpha = 0.72f
-                scaleX = 0.84f
-                scaleY = 0.84f
+                addView(name, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                scaleX = SIDE_WINDOW
+                scaleY = SIDE_WINDOW
             }
-            card.setOnFocusChangeListener { _, focused ->
-                val animate = animationsOn() && ValueAnimator.areAnimatorsEnabled()
-                rim.setStroke(dp(if (focused) 2 else 1), if (focused) Color.WHITE else 0x55FFFFFF)
+            val tileFocus = window.onFocusChangeListener // the tile's own rise (see style)
+            window.setOnFocusChangeListener { v, focused ->
+                tileFocus?.onFocusChange(v, focused)
+                name.setActive(focused)
+                name.animate().alpha(if (focused) rest else 0f).setDuration(160).start()
                 if (focused) recentWindows.post {
-                    if (!card.isFocused) return@post
+                    if (!window.isFocused) return@post
+                    val animate = animationsOn() && ValueAnimator.areAnimatorsEnabled()
                     val rtl = recentWindows.layoutDirection == View.LAYOUT_DIRECTION_RTL
                     for (i in 0 until recentWindowRow.childCount) {
-                        val neighbor = recentWindowRow.getChildAt(i)
-                        val selected = neighbor === card
-                        val scale = if (selected) 1f else 0.84f
-                        val shift = index.compareTo(i) * width * if (rtl) -0.08f else 0.08f
-                        neighbor.animate().alpha(if (selected) 1f else 0.72f)
-                            .scaleX(scale).scaleY(scale).translationX(shift)
+                        val other = recentWindowRow.getChildAt(i)
+                        val steps = i - index
+                        // Smaller side windows leave a hole; pull each one in so every visible gap stays [gap] wide.
+                        val pull = width * (1 - SIDE_WINDOW) * (kotlin.math.abs(steps) - 0.5f)
+                        val scale = if (steps == 0) 1f else SIDE_WINDOW
+                        other.animate().scaleX(scale).scaleY(scale)
+                            .translationX(if (steps == 0) 0f else if ((steps > 0) != rtl) -pull else pull)
                             .setDuration(if (animate) 160 else 0).setInterpolator(DECELERATE).start()
                     }
                     val target = (if (rtl) list.lastIndex - index else index) * (width + gap)
@@ -6401,6 +6409,7 @@ class MainActivity : Activity() {
         )
         val GREYSCALE = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
         val DECELERATE = android.view.animation.DecelerateInterpolator(1.5f)
+        const val SIDE_WINDOW = 0.78f // Recent apps: scale of the windows beside the selected one
         @Volatile var APPS: List<App>? = null
         @Volatile var SOURCES: List<App>? = null
         /** Mono marks made by glyph(), by package; null = icon has no usable symbol. Main thread only. */

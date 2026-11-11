@@ -213,7 +213,6 @@
     <string name="recent_previews">App window previews</string>
     <string name="recent_previews_enable">Enable previews</string>
     <string name="recent_previews_disclosure">Plume uses its Home accessibility service to capture the current screen when you press Home or open Recent apps from another app. Plume keeps up to six previews in memory on this TV. It does not save or share them. Turn this off to clear the previews.</string>
-    <string name="recent_apps_hint">← → Switch　·　OK Open　·　Back Home</string>
     <string name="recent_apps_empty">No recent apps yet. Open an app from Plume to add it here.</string>
     <string name="settings">Settings</string>
     <string name="continue_watching">Continue Watching</string>
@@ -266,6 +265,7 @@
         <item quantity="other">%d minutes</item>
     </plurals>
     <string name="help_home_button">Home opens Plume. Press Home twice for recent apps. Hold Home to open the TV\'s own dashboard.</string>
+    <string name="help_home_button_fire">Home opens Plume. For recent apps, hold OK on All apps.</string>
     <string name="help_default_launcher">On Android TV, Plume can be the home app. Google TV keeps its own: use Home opens Plume there.</string>
     <string name="help_run_setup">Go through the Home button setup again.</string>
     <string name="help_smooth_volume">Hold Volume to keep changing it. Home then takes about a second longer to open Plume. Off while remote keys are set.</string>
