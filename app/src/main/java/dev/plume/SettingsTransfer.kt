@@ -27,7 +27,8 @@ internal object SettingsTransfer {
         "wx_unit" to setOf("c", "f"),
     )
     private val switches = setOf("glass", "colour_icons", "app_anim", "row_drop", "cw_colour", "geo_manual")
-    private val keys = choices.keys + switches + setOf("order", "row_hidden", "cw_off", "row_name", "top_bar",
+    private val clockFormats = ClockFormat.entries.associateBy { it.key }
+    private val keys = choices.keys + switches + clockFormats.keys + setOf("order", "row_hidden", "cw_off", "row_name", "top_bar",
         "wp_every", "geo_city", "geo_lat", "geo_lon")
     private val pkg = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")
 
@@ -54,6 +55,10 @@ internal object SettingsTransfer {
                     value
                 }
                 key in switches -> { require(value is Boolean) { "Invalid $key" }; value }
+                key in clockFormats -> {
+                    require(value is String && clockFormats.getValue(key).accepts(value)) { "Invalid $key" }
+                    value
+                }
                 key == "geo_lat" || key == "geo_lon" -> {
                     require(value is Number) { "Invalid $key" }
                     val number = value.toDouble()

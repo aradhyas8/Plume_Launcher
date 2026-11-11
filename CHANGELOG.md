@@ -21,6 +21,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Enable **App window previews** to show each app's last screen on Android 11 and later. Plume keeps them on the TV after a restart.
 - With no captured screen, a window shows the app's Continue Watching picture.
 - Hold OK on a window to remove it from the list, or select **Clear all**.
+- Choose a date or time format in **Clock & weather**. Select a preset or enter a custom format with a preview.
+
 - Fire TV: Settings opened from Plume stays open on slow TVs. Before, Plume came back in front of it in under a second (#227).
 - Shows row: when you change sources, the source name, show titles, details and posters slide in the direction of the button you push. Cards keep their positions. The row has one title with dots that show which source is on screen.
 - **Custom app pictures.** Hold **OK** on an app, then select **Change picture**. Upload an icon or banner from your phone.
@@ -38,6 +40,9 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Plume opens when the Shield's Android TV home screen appears with the Home button service enabled.
 - Plume leaves the system launcher in front while Google TV suspends Plume in a kids profile.
 - Plume starts at cold boot when it is the only Home app. Before, the TV stayed on the boot screen.
+- On Xiaomi TVs, Home opens Plume when **Smooth volume** is on. Before, Home opened the Xiaomi home screen.
+- On Xiaomi TVs, **Remote & Home button** shows Off until the **Home button** is on. Before, it showed On, but Home opened the Xiaomi home screen.
+- On supported CVTE TVs, press **Source** or select **TV sources** to open the TV source panel.
 
 ## 1.7.1
 

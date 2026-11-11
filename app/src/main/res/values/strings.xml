@@ -272,7 +272,7 @@
     <string name="help_home_button_fire">Home opens Plume. For recent apps, hold OK on All apps.</string>
     <string name="help_default_launcher">On Android TV, Plume can be the home app. Google TV keeps its own: use Home opens Plume there.</string>
     <string name="help_run_setup">Go through the Home button setup again.</string>
-    <string name="help_smooth_volume">Hold Volume to keep changing it. Home then takes about a second longer to open Plume. Off while remote keys are set.</string>
+    <string name="help_smooth_volume">Hold Volume to keep changing it. Home then shows the TV\'s own home screen for about a second before Plume opens. Off while remote keys are set.</string>
     <string name="help_remote_keys">Change what a button on your remote does when you press it or hold it.</string>
     <!-- Season and episode on a Continue Watching card, for example "S1 E3". -->
     <string name="season_episode">S%1$s E%2$s</string>
@@ -322,6 +322,8 @@
     <string name="section_app_row">Apps row</string>
     <string name="section_screensaver">Screensaver</string>
     <string name="sources">Sources</string>
+    <string name="tv_sources">TV sources</string>
+    <string name="tv_sources_failed">Could not open TV sources.</string>
     <string name="no_signal">No signal</string>
     <string name="input_opening">Opening input…</string>
     <string name="input_failed">Could not open this input. Press Back to return.</string>
@@ -420,4 +422,14 @@
     <string name="clock_medium">Medium</string>
     <string name="clock_large">Large</string>
     <string name="help_clock_size">How big the clock is on Home.</string>
+    <string name="date_format">Date format</string>
+    <string name="time_format">Time format</string>
+    <string name="clock_format_default">Default</string>
+    <string name="clock_format_custom">Custom format</string>
+    <string name="date_format_hint">yyyy-MM-dd EEEE</string>
+    <string name="time_format_hint">HH:mm</string>
+    <string name="date_format_tokens">Use yyyy for year, MM for month, dd for day, and EEEE for weekday.</string>
+    <string name="time_format_tokens">Use HH for 24-hour time, h and a for 12-hour time, and mm for minutes.</string>
+    <string name="clock_format_preview">Preview: %1$s</string>
+    <string name="clock_format_invalid">Use a valid pattern, for example %1$s.</string>
 </resources>

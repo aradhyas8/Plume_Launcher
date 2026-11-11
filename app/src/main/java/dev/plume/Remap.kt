@@ -88,6 +88,9 @@ object Remap {
     internal fun lookup(map: Map<String, Entry>, keyCode: Int, scanCode: Int) =
         map[id(keyCode, scanCode)] ?: if (keyCode != KeyEvent.KEYCODE_UNKNOWN) map["k$keyCode"] else null
 
+    internal fun cvteSourceKey(keyCode: Int, scanCode: Int, map: Map<String, Entry>) =
+        keyCode == KeyEvent.KEYCODE_TV_INPUT && lookup(map, keyCode, scanCode) == null
+
     internal fun kept(keyCode: Int, scanCode: Int) = keyCode in KEEP || (keyCode == KeyEvent.KEYCODE_UNKNOWN && scanCode == 0)
 
     private fun store(c: Context) = c.getSharedPreferences("home", Context.MODE_PRIVATE)

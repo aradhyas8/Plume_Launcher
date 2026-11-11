@@ -64,10 +64,13 @@ import android.os.UserManager
 import android.provider.MediaStore
 import android.provider.Settings
 import android.text.InputType
+import android.text.Editable
+import android.text.InputFilter
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.text.TextUtils
+import android.text.TextWatcher
 import android.text.format.DateFormat
 import android.text.style.BulletSpan
 import android.text.style.StyleSpan
@@ -90,6 +93,7 @@ import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.TextClock
 import android.widget.Toast
 import android.widget.VideoView
 import android.view.SurfaceView
@@ -334,6 +338,7 @@ class MainActivity : Activity() {
     // Kept across activity rebuilds (theme switch), so the new home screen shows its apps at once.
     private var apps = APPS ?: emptyList()
     private var sources = SOURCES ?: emptyList() // HDMI ports and the devices on them: the Sources list, not the apps
+    private var cvteSourcePanel = CVTE_SOURCE_PANEL
     private var appsDirty = APPS == null
     private var watchKey: String? = null
     private var cardSources = emptyList<CardSource>() // By title and Per channel: the sources the shows row is split in
@@ -740,8 +745,8 @@ class MainActivity : Activity() {
         return false
     }
 
+    /** Whether Android resolves the Home intent to Plume. Xiaomi can grant the Home role without routing Home to Plume. */
     private fun isDefaultHome(): Boolean {
-        if (Build.VERSION.SDK_INT >= 29 && getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_HOME) == true) return true
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         return packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == packageName
     }
@@ -1076,6 +1081,21 @@ class MainActivity : Activity() {
 
     private fun clockSize() = CLOCK_SIZES.keys.first { it.toString() == prefs.getString("clock_size", "48") }
 
+    private fun clockPattern(format: ClockFormat) = prefs.getString(format.key, null)?.takeIf(format::accepts)
+
+    private fun applyClockFormats() {
+        val time = clockPattern(ClockFormat.TIME)
+        findViewById<TextClock>(R.id.clock).apply {
+            format12Hour = time ?: "h:mm"
+            format24Hour = time ?: "HH:mm"
+        }
+        val date = clockPattern(ClockFormat.DATE) ?: "EEE d MMM"
+        findViewById<TextClock>(R.id.date).apply {
+            format12Hour = date
+            format24Hour = date
+        }
+    }
+
     private fun applyTheme() {
         dark = wantDark()
         fg = if (dark) DARK_TEXT else 0xFF111214.toInt()
@@ -1093,6 +1113,7 @@ class MainActivity : Activity() {
         allApps.setBackgroundColor(if (recentAppsOpen || glassy != null) Color.TRANSPARENT else ground)
         findViewById<TextView>(R.id.clock).typeface = clockFace()
         findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
+        applyClockFormats()
         for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
             findViewById<TextView>(id).setTextColor(fg)
         }
@@ -2669,6 +2690,8 @@ class MainActivity : Activity() {
             R.string.clock_style to Triple(getString(R.string.clock_style), getString(CLOCK_STYLES.getValue(prefs.getString("clock_style", "light")!!))) {
                 steps[R.string.clock_style]!!(1)
             },
+            R.string.date_format to clockFormatRow(R.string.date_format, ClockFormat.DATE),
+            R.string.time_format to clockFormatRow(R.string.time_format, ClockFormat.TIME),
             // "weather" is off/c/f as before; "wx_unit" keeps the unit while it's off.
             R.string.weather to Triple(getString(R.string.weather), toggle(weather != "off")) {
                 if (weather == "off") prefs.edit().putString("weather", unit).apply()
@@ -2750,7 +2773,8 @@ class MainActivity : Activity() {
             Triple(R.string.bottom_row, "${rowName()} · ${rows[R.string.show_row]!!.second}", listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
                 R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.cards_rows, R.string.restore_hidden)),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${prefs.getString("geo_city", null) ?: rows[R.string.weather_location]!!.second}",
-                listOf(R.string.clock_style, R.string.clock_size, R.string.weather, R.string.weather_units, R.string.weather_location)),
+                listOf(R.string.clock_style, R.string.clock_size, R.string.date_format, R.string.time_format,
+                    R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
@@ -2831,6 +2855,67 @@ class MainActivity : Activity() {
     }
 
     private var lastSettings = 0 // section used last, focused when settings open again
+
+    private fun clockFormatRow(title: Int, format: ClockFormat) = page(getString(title),
+        clockPattern(format)?.let { DateFormat.format(it, System.currentTimeMillis()).toString() }
+            ?: getString(R.string.clock_format_default)) { pickClockFormat(title, format) }
+
+    private fun saveClockFormat(title: Int, format: ClockFormat, pattern: String?) {
+        prefs.edit().putString(format.key, pattern).apply()
+        applyClockFormats()
+        findViewById<View>(R.id.clock).post { fitInk() }
+        renderSettings(title)
+    }
+
+    private fun pickClockFormat(title: Int, format: ClockFormat, focus: Int? = null) {
+        val selected = clockPattern(format)
+        val patterns = listOf(null) + format.presets
+        val example = Calendar.getInstance().apply { set(2026, Calendar.NOVEMBER, 23, 17, 5, 9) }
+        val rows = patterns.map { pattern ->
+            page(pattern?.let { DateFormat.format(it, example).toString() } ?: getString(R.string.clock_format_default),
+                if (pattern == selected) CHOSEN else "") { saveClockFormat(title, format, pattern) }
+        } + page(getString(R.string.clock_format_custom), if (selected != null && selected !in format.presets) CHOSEN else "") {
+            editClockFormat(title, format, selected ?: format.presets.first())
+        }
+        val selectedRow = patterns.indexOf(selected).takeIf { it >= 0 } ?: rows.lastIndex
+        showPage(getString(title), rows, focus ?: selectedRow, crumb = getString(R.string.section_clock_weather)) {
+            renderSettings(title)
+        }
+    }
+
+    private fun editClockFormat(title: Int, format: ClockFormat, pattern: String) {
+        fun save(value: String, field: EditText) {
+            if (!format.accepts(value)) return
+            getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(field.windowToken, 0)
+            saveClockFormat(title, format, value)
+        }
+        val preview = label("", 14f).apply { maxLines = 3; setPadding(dp(14), dp(8), dp(14), dp(8)) }
+        val hint = getString(if (format == ClockFormat.DATE) R.string.date_format_hint else R.string.time_format_hint)
+        lateinit var field: EditText
+        field = textField(pattern, hint, InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, EditorInfo.IME_ACTION_DONE) { save(it, field) }
+        field.filters = arrayOf(InputFilter.LengthFilter(ClockFormat.MAX_LENGTH))
+        fun updatePreview(value: String) {
+            preview.text = if (format.accepts(value)) getString(R.string.clock_format_preview, DateFormat.format(value, System.currentTimeMillis()))
+                else getString(R.string.clock_format_invalid, hint)
+        }
+        updatePreview(pattern)
+        field.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = updatePreview(s.toString().trim())
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        val top = (field.parent as LinearLayout).apply {
+            val help = if (format == ClockFormat.DATE) R.string.date_format_tokens else R.string.time_format_tokens
+            addView(label(getString(help), 12f).apply { maxLines = 3; setPadding(dp(14), dp(8), dp(14), 0) })
+            addView(preview)
+        }
+        showPage(getString(R.string.clock_format_custom), listOf(page(getString(R.string.done)) { save(field.text.toString().trim(), field) }),
+            top = top, crumb = getString(title)) { pickClockFormat(title, format, format.presets.size + 1) }
+        val done = settingsList.getChildAt(1)
+        done.nextFocusUpId = field.id
+        field.nextFocusDownId = done.id
+        field.requestFocus()
+    }
 
     /** What Auto does here today, under Wallpaper & theme. Times in the TV's 12- or 24-hour format. */
     private fun autoNote(): String {
@@ -3499,6 +3584,9 @@ class MainActivity : Activity() {
                 return@execute
             }
             val inputs = hdmiInputs()
+            val panel = Intent("com.cvte.intent.SHOW_INPUT").setPackage("com.cvte.tv.setting").takeIf {
+                it.resolveActivityInfo(packageManager, PackageManager.MATCH_DEFAULT_ONLY)?.exported == true
+            }
             ui.post {
                 if (isDestroyed) return@post
                 if (inputs.isNotEmpty() && !prefs.getBoolean("inputs_moved", false)) moveInputsToSources(inputs)
@@ -3506,7 +3594,9 @@ class MainActivity : Activity() {
                 APPS = list
                 sources = inputs
                 SOURCES = inputs
-                if (movingTop == null) applyTopBar() // Sources shows only while the TV has an input
+                cvteSourcePanel = panel
+                CVTE_SOURCE_PANEL = panel
+                if (movingTop == null) applyTopBar()
                 renderApps()
                 if (allApps.visibility == View.VISIBLE) openAllApps(recentAppsOpen) // a fresh remote request can precede the app list
             }
@@ -3961,6 +4051,13 @@ class MainActivity : Activity() {
             if (e.action == KeyEvent.ACTION_UP) endWallPreview()
             return true
         }
+        val panel = cvteSourcePanel
+        if (panel != null && !editing && movingTop == null &&
+            settingsScrim.visibility != View.VISIBLE && allApps.visibility != View.VISIBLE &&
+            Remap.cvteSourceKey(e.keyCode, e.scanCode, Remap.all(this))) {
+            if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) openCvteSources(panel)
+            return true
+        }
         val confirm = e.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || e.keyCode == KeyEvent.KEYCODE_ENTER ||
             e.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
         if (movingTop != null && topMoveKey(e, confirm)) return true
@@ -4253,8 +4350,10 @@ class MainActivity : Activity() {
         return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - "power", "plume"))
     }
 
-    /** What is really on screen: Sources stays out while the TV has no input. */
-    private fun shownTop(order: List<Int> = topOrder()) = order.filter { it != R.id.sourcesButton || sources.isNotEmpty() }
+    private fun hasSources() = sources.isNotEmpty() || cvteSourcePanel != null
+
+    /** What is really on screen: Sources stays out while there is nothing to open. */
+    private fun shownTop(order: List<Int> = topOrder()) = order.filter { it != R.id.sourcesButton || hasSources() }
 
     /** Puts the icons in [order], hides the others, and gives the first one on screen no left margin. */
     private fun applyTopBar(order: List<Int> = topOrder()) {
@@ -4327,7 +4426,7 @@ class MainActivity : Activity() {
         popupMenu(anchor, below = true) { dismiss ->
             hidden.map { id ->
                 val icon = findViewById<ImageView>(id)
-                val note = if (id == R.id.sourcesButton && sources.isEmpty()) getString(R.string.shows_with_input) else ""
+                val note = if (id == R.id.sourcesButton && !hasSources()) getString(R.string.shows_with_input) else ""
                 settingsRow(icon.contentDescription.toString(), note) { dismiss(); addTopIcon(id, anchor) }.also { row ->
                     (row as LinearLayout).addView(ImageView(this).apply {
                         setImageDrawable(icon.drawable.constantState?.newDrawable(resources)?.mutate() ?: icon.drawable)
@@ -4394,12 +4493,25 @@ class MainActivity : Activity() {
         return true
     }
 
-    /** The TV's inputs under the Sources icon, as on any TV: the logo of what is plugged in, its name, no signal if none. */
+    private fun openCvteSources(panel: Intent) {
+        try {
+            startActivity(panel)
+        } catch (_: ActivityNotFoundException) {
+            toast(getString(R.string.tv_sources_failed))
+        } catch (_: SecurityException) {
+            toast(getString(R.string.tv_sources_failed))
+        }
+    }
+
+    /** The native source panel where available, plus the HDMI inputs users can pin. */
     private fun showSources(anchor: View) {
-        if (sources.isEmpty()) return
+        if (!hasSources()) return
         popupMenu(anchor, below = true) { dismiss ->
             val pinned = pinnedInputs()
-            sources.sortedBy { it.label.lowercase() }.map { src ->
+            val native = cvteSourcePanel?.let { panel ->
+                settingsRow(getString(R.string.tv_sources), "") { dismiss(); openCvteSources(panel) }
+            }
+            val hdmi = sources.sortedBy { it.label.lowercase() }.map { src ->
                 val state = listOfNotNull(
                     if (src.offline) getString(R.string.no_signal) else null,
                     if (src.pkg in pinned) getString(R.string.in_row) else null,
@@ -4411,12 +4523,14 @@ class MainActivity : Activity() {
                     }, 0, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(12) })
                     row.setOnLongClickListener { dismiss(); unlock { togglePin(src) }; true } // hold OK: in or out of the home row
                 }
-            } + label(getString(R.string.sources_hint), 12f).apply {
+            }
+            val hint = if (hdmi.isEmpty()) null else label(getString(R.string.sources_hint), 12f).apply {
                 secondary(0.6f)
                 setPadding(dp(14), dp(8), dp(14), dp(4))
                 isSingleLine = false // short, and it wraps rather than widen the list
                 maxWidth = dp(180)
             }
+            listOfNotNull(native) + hdmi + listOfNotNull(hint)
         }
     }
 
@@ -5907,8 +6021,8 @@ class MainActivity : Activity() {
 
     /**
      * Split by source, the row has one title: the source on show, then a counter (dots up to five sources, "2 / 7" past that).
-     * By title it can be selected: a glass chip that fits the name, with an arrow on each side that has another source. The
-     * arrows always keep their space, so the name sits on the grid edge, where the plain title sits.
+     * By title it can be selected: a glass chip that fits the name, with the arrows after the name. The chip's start edge
+     * never moves, so the name sits on the grid edge, where the plain title sits, for every source.
      */
     private fun setUpTitle() {
         watchTitle.isFocusable = false
@@ -5932,20 +6046,20 @@ class MainActivity : Activity() {
         val ink = watchTitle.currentTextColor
         watchTitle.chipColor = if (Color.luminance(ink) > 0.5f) 0x38FFFFFF else 0x24000000
         val at = cardSources.indexOfFirst { it.key == cardCurrent?.key }
-        // Arrows only while selected, and only on a side that has another source. The start arrow always keeps its space, so the
-        // name stays on the grid edge; the chip leaves that space out when the arrow is hidden. The end arrow just goes.
-        val back = at > 0
-        val next = at in 0 until cardSources.size - 1
-        fun arrow(id: Int, on: Boolean) = if (!cycle) null else getDrawable(id)!!.mutate().apply {
-            setBounds(0, 0, dp(CHEVRON), dp(CHEVRON)); setTint(ink); alpha = if (on && watchTitle.isFocused) 255 else 0
+        // Arrows only while selected, one for each way that has another source, both after the name (left one on the left, as
+        // the remote's keys), so the chip's start edge stays in one place for every source.
+        val ids = listOfNotNull(R.drawable.ms_chevron_left.takeIf { at > 0 }, R.drawable.ms_chevron_right.takeIf { at in 0 until cardSources.size - 1 })
+        val c = dp(CHEVRON)
+        val arrows = if (!cycle || ids.isEmpty()) null else LayerDrawable(ids.map { getDrawable(it)!!.mutate().apply { setTint(ink) } }.toTypedArray()).apply {
+            ids.indices.forEach { setLayerSize(it, c, c); setLayerGravity(it, Gravity.LEFT or Gravity.TOP); setLayerInset(it, it * (c + dp(4)), 0, 0, 0) }
+            setBounds(0, 0, ids.size * c + (ids.size - 1) * dp(4), c)
+            alpha = if (watchTitle.isFocused) 255 else 0
         }
-        watchTitle.setCompoundDrawablesRelative(arrow(R.drawable.ms_chevron_left, back), null,
-            if (next) arrow(R.drawable.ms_chevron_right, true) else null, null)
-        watchTitle.chipInset = if (cycle && !back) dp(CHEVRON + 8) else 0
+        watchTitle.setCompoundDrawablesRelative(null, null, arrows, null)
         val side = if (cycle) dp(12) else 0
         watchTitle.setPaddingRelative(side, dp(4), side, dp(4))
         val lp = watchTitle.layoutParams as LinearLayout.LayoutParams
-        val start = if (cycle) -(side + dp(CHEVRON + 8)) else 0
+        val start = -side
         if (lp.marginStart != start) { lp.marginStart = start; watchTitle.layoutParams = lp }
         val room = ((resources.displayMetrics.widthPixels - dp(96)) * 2 / 3).toFloat()
         val name = TextUtils.ellipsize(rowTitle(), watchTitle.paint, room, TextUtils.TruncateAt.END)
@@ -6128,7 +6242,6 @@ class MainActivity : Activity() {
             }
         }
         frame.addView(img, MATCH_PARENT, MATCH_PARENT)
-        if (!gapBefore) frame.pivotX = 0f // the first card grows to the right and keeps the grid edge
         frame.setOnClickListener { (frame.getTag(R.id.watchRow) as? Prog)?.let { open(it) } }
         // 2:1 keeps logos and badges that providers bake into 16:9 art.
         col.addView(frame, LinearLayout.LayoutParams(w, w / 2))
@@ -6495,7 +6608,9 @@ class MainActivity : Activity() {
             R.string.show_row to R.drawable.ms_visibility, R.string.apps_when_hidden to R.drawable.ms_vertical_align_bottom, R.string.row_name to R.drawable.ms_edit,
             R.string.show_icons to R.drawable.ms_badge, R.string.cw_apps to R.drawable.ms_widgets, R.string.cw_channels to R.drawable.ms_podcasts,
             R.string.restore_hidden to R.drawable.ms_visibility_off,
-            R.string.clock_style to R.drawable.ms_schedule, R.string.clock_size to R.drawable.ms_format_size, R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
+            R.string.clock_style to R.drawable.ms_schedule, R.string.clock_size to R.drawable.ms_format_size,
+            R.string.date_format to R.drawable.ms_schedule, R.string.time_format to R.drawable.ms_schedule,
+            R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
             R.string.screensaver to R.drawable.ms_bedtime, R.string.test_screensaver to R.drawable.ms_play_circle, R.string.screensaver_timing to R.drawable.ms_timer,
             R.string.home_button to R.drawable.ms_home, R.string.default_launcher to R.drawable.ms_home_app_logo, R.string.smooth_volume to R.drawable.ms_volume_up,
             R.string.recent_previews to R.drawable.ms_view_carousel,
@@ -6617,6 +6732,7 @@ class MainActivity : Activity() {
         val EASE = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f) // Material's emphasized decelerate
         @Volatile var APPS: List<App>? = null
         @Volatile var SOURCES: List<App>? = null
+        private var CVTE_SOURCE_PANEL: Intent? = null
         /** Mono marks made by glyph(), by package; null = icon has no usable symbol. Main thread only. */
         val GLYPHS = HashMap<String, Bitmap?>()
         /** accent() colours by package; null = no clear colour. Main thread only. */
