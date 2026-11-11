@@ -5764,7 +5764,6 @@ class MainActivity : Activity() {
             }
         }
         frame.addView(img, MATCH_PARENT, MATCH_PARENT)
-        if (!gapBefore) frame.pivotX = 0f // the first card grows to the right and keeps the grid edge
         frame.setOnClickListener { (frame.getTag(R.id.watchRow) as? Prog)?.let { open(it) } }
         // 2:1 keeps logos and badges that providers bake into 16:9 art.
         col.addView(frame, LinearLayout.LayoutParams(w, w / 2))
