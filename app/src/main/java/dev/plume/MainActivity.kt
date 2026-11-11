@@ -2844,7 +2844,7 @@ class MainActivity : Activity() {
             sectionRow(R.string.section_remote_home) +
             Triple(R.string.lock_layout, rows[R.string.lock_layout]!!, RowStyle(R.drawable.ms_lock, help = getString(R.string.lock_note))) +
             Triple(R.string.backup, page(getString(R.string.backup), "›") { showBackup() },
-                RowStyle(R.drawable.ms_folder, help = getString(R.string.help_settings_transfer))) +
+                RowStyle(R.drawable.ms_folder, help = getString(R.string.help_backup))) +
             Triple(R.string.updates, rows[R.string.updates]!!.let { (t, _, a) -> page(t, "›", a) },
                 RowStyle(R.drawable.ms_system_update, rows[R.string.updates]!!.second, help = getString(R.string.help_updates))) +
             listOfNotNull(if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) null
@@ -2967,6 +2967,7 @@ class MainActivity : Activity() {
             text = crumb?.let { "$it  ›" }
             visibility = if (crumb == null) View.GONE else View.VISIBLE
         }
+        findViewById<TextView>(R.id.settingsHelp).setLines(if (back == null) 2 else 3)
         showHelp(null)
         settingsList.removeAllViews()
         top?.let { settingsList.addView(it) }
@@ -3374,7 +3375,7 @@ class MainActivity : Activity() {
             id = View.generateViewId()
             orientation = LinearLayout.VERTICAL
             setPadding(dp(8), dp(8), dp(8), dp(10))
-            addView(wallpaperThumb(choice, forDark, big = true), LinearLayout.LayoutParams(MATCH_PARENT, dp(100)))
+            addView(wallpaperThumb(choice, forDark, big = true), LinearLayout.LayoutParams(MATCH_PARENT, dp(64)))
             addView(LinearLayout(context).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(8), dp(10), dp(4), 0)
@@ -3527,7 +3528,7 @@ class MainActivity : Activity() {
     }
 
     private fun showHelp(text: String?) = findViewById<TextView>(R.id.settingsHelp).apply {
-        this.text = text // the line keeps its 3 lines when empty, so the list above doesn't jump as focus moves
+        this.text = text
     }
 
     private fun toggle(on: Boolean) = if (on) TOGGLE_ON else TOGGLE_OFF

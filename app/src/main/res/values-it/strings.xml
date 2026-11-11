@@ -274,7 +274,7 @@
     <string name="section_clock_weather">Orologio e meteo</string>
     <string name="section_remote_home">Telecomando e pulsante Home</string>
     <string name="section_lock">Blocca layout</string>
-    <string name="lock_note">Un PIN protegge le impostazioni di Plume, il Wi-Fi, le impostazioni Android e le modifiche alla Home. Le app si aprono comunque.</string>
+    <string name="lock_note">Un PIN protegge le impostazioni di Plume, Wi-Fi, Android e Home. Le app si aprono comunque.</string>
     <string name="finish_setup">Completa la configurazione</string>
     <string name="finish_setup_value">Fai aprire Plume con Home</string>
     <string name="section_keys">Tasti telecomando</string>

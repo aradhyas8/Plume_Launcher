@@ -291,7 +291,7 @@
     <string name="section_clock_weather">Relógio e clima</string>
     <string name="section_remote_home">Início e controle</string>
     <string name="section_lock">Bloqueio por PIN</string>
-    <string name="lock_note">Um PIN protege as configurações do Plume, o Wi-Fi e as configurações do Android, e mudanças na tela inicial. Os apps continuam abrindo.</string>
+    <string name="lock_note">Um PIN protege os ajustes do Plume, Wi-Fi, Android e tela inicial. Os apps ainda abrem.</string>
     <string name="finish_setup">Concluir configuração</string>
     <string name="finish_setup_value">Fazer o Início abrir o Plume</string>
     <string name="section_keys">Teclas do controle</string>
@@ -330,11 +330,11 @@
     <string name="section_style">Estilo</string>
     <string name="group_home_screen">Tela inicial</string>
     <string name="group_tv">TV</string>
-    <string name="help_style">Claro ou escuro, vidro e como os apps abrem. Para mover, ocultar ou adicionar um ícone da barra superior, segure OK sobre ele.</string>
+    <string name="help_style">Segure OK em um ícone da barra superior para mover, ocultar ou adicionar ícones.</string>
     <string name="help_theme">O Automático fica claro do nascer ao pôr do sol e escuro à noite.</string>
     <string name="help_glass">Desligado: blocos sólidos. Fosco: o papel de parede desfocado atrás dos blocos. Transparente: o papel de parede nítido atrás deles.</string>
     <string name="help_app_animations">O app cresce a partir do seu bloco ao abrir.</string>
-    <string name="help_wallpaper">A imagem atrás dos seus apps. Pressione OK para escolher outra.</string>
+    <string name="help_wallpaper">Pressione OK para escolher um papel de parede.</string>
     <string name="help_wp_tile">Pressione OK para experimentar. Pressione qualquer botão para voltar.</string>
     <string name="wp_group_yours">Seus</string>
     <string name="wp_group_more">Mais</string>
