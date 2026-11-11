@@ -16,6 +16,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- Choose a date or time format in **Clock & weather**. Select a preset or enter a custom format with a preview.
+
 - Fire TV: Settings opened from Plume stays open on slow TVs. Before, Plume came back in front of it in under a second (#227).
 - Shows row: when you change sources, the source name, show titles, details and posters slide in the direction of the button you push. Cards keep their positions. The row has one title with dots that show which source is on screen.
 - **Custom app pictures.** Hold **OK** on an app, then select **Change picture**. Upload an icon or banner from your phone.

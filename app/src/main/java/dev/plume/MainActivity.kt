@@ -64,10 +64,13 @@ import android.os.UserManager
 import android.provider.MediaStore
 import android.provider.Settings
 import android.text.InputType
+import android.text.Editable
+import android.text.InputFilter
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.text.TextUtils
+import android.text.TextWatcher
 import android.text.format.DateFormat
 import android.text.style.BulletSpan
 import android.text.style.StyleSpan
@@ -90,6 +93,7 @@ import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.TextClock
 import android.widget.Toast
 import android.widget.VideoView
 import android.view.SurfaceView
@@ -1063,6 +1067,21 @@ class MainActivity : Activity() {
 
     private fun clockSize() = CLOCK_SIZES.keys.first { it.toString() == prefs.getString("clock_size", "48") }
 
+    private fun clockPattern(format: ClockFormat) = prefs.getString(format.key, null)?.takeIf(format::accepts)
+
+    private fun applyClockFormats() {
+        val time = clockPattern(ClockFormat.TIME)
+        findViewById<TextClock>(R.id.clock).apply {
+            format12Hour = time ?: "h:mm"
+            format24Hour = time ?: "HH:mm"
+        }
+        val date = clockPattern(ClockFormat.DATE) ?: "EEE d MMM"
+        findViewById<TextClock>(R.id.date).apply {
+            format12Hour = date
+            format24Hour = date
+        }
+    }
+
     private fun applyTheme() {
         dark = wantDark()
         fg = if (dark) DARK_TEXT else 0xFF111214.toInt()
@@ -1080,6 +1099,7 @@ class MainActivity : Activity() {
         allApps.setBackgroundColor(if (glassy != null) Color.TRANSPARENT else ground)
         findViewById<TextView>(R.id.clock).typeface = clockFace()
         findViewById<TextView>(R.id.clock).textSize = clockSize().toFloat()
+        applyClockFormats()
         for (id in intArrayOf(R.id.clock, R.id.date, R.id.appsTitle, R.id.watchTitle, R.id.allAppsTitle, R.id.rowLabel, R.id.weather, R.id.featured)) {
             findViewById<TextView>(id).setTextColor(fg)
         }
@@ -2656,6 +2676,8 @@ class MainActivity : Activity() {
             R.string.clock_style to Triple(getString(R.string.clock_style), getString(CLOCK_STYLES.getValue(prefs.getString("clock_style", "light")!!))) {
                 steps[R.string.clock_style]!!(1)
             },
+            R.string.date_format to clockFormatRow(R.string.date_format, ClockFormat.DATE),
+            R.string.time_format to clockFormatRow(R.string.time_format, ClockFormat.TIME),
             // "weather" is off/c/f as before; "wx_unit" keeps the unit while it's off.
             R.string.weather to Triple(getString(R.string.weather), toggle(weather != "off")) {
                 if (weather == "off") prefs.edit().putString("weather", unit).apply()
@@ -2722,7 +2744,8 @@ class MainActivity : Activity() {
             Triple(R.string.bottom_row, "${rowName()} · ${rows[R.string.show_row]!!.second}", listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
                 R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.cards_rows, R.string.restore_hidden)),
             Triple(R.string.section_clock_weather, if (weather == "off") on(false) else "${rows[R.string.weather_units]!!.second} · ${prefs.getString("geo_city", null) ?: rows[R.string.weather_location]!!.second}",
-                listOf(R.string.clock_style, R.string.clock_size, R.string.weather, R.string.weather_units, R.string.weather_location)),
+                listOf(R.string.clock_style, R.string.clock_size, R.string.date_format, R.string.time_format,
+                    R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
@@ -2800,6 +2823,67 @@ class MainActivity : Activity() {
     }
 
     private var lastSettings = 0 // section used last, focused when settings open again
+
+    private fun clockFormatRow(title: Int, format: ClockFormat) = page(getString(title),
+        clockPattern(format)?.let { DateFormat.format(it, System.currentTimeMillis()).toString() }
+            ?: getString(R.string.clock_format_default)) { pickClockFormat(title, format) }
+
+    private fun saveClockFormat(title: Int, format: ClockFormat, pattern: String?) {
+        prefs.edit().putString(format.key, pattern).apply()
+        applyClockFormats()
+        findViewById<View>(R.id.clock).post { fitInk() }
+        renderSettings(title)
+    }
+
+    private fun pickClockFormat(title: Int, format: ClockFormat, focus: Int? = null) {
+        val selected = clockPattern(format)
+        val patterns = listOf(null) + format.presets
+        val example = Calendar.getInstance().apply { set(2026, Calendar.NOVEMBER, 23, 17, 5, 9) }
+        val rows = patterns.map { pattern ->
+            page(pattern?.let { DateFormat.format(it, example).toString() } ?: getString(R.string.clock_format_default),
+                if (pattern == selected) CHOSEN else "") { saveClockFormat(title, format, pattern) }
+        } + page(getString(R.string.clock_format_custom), if (selected != null && selected !in format.presets) CHOSEN else "") {
+            editClockFormat(title, format, selected ?: format.presets.first())
+        }
+        val selectedRow = patterns.indexOf(selected).takeIf { it >= 0 } ?: rows.lastIndex
+        showPage(getString(title), rows, focus ?: selectedRow, crumb = getString(R.string.section_clock_weather)) {
+            renderSettings(title)
+        }
+    }
+
+    private fun editClockFormat(title: Int, format: ClockFormat, pattern: String) {
+        fun save(value: String, field: EditText) {
+            if (!format.accepts(value)) return
+            getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(field.windowToken, 0)
+            saveClockFormat(title, format, value)
+        }
+        val preview = label("", 14f).apply { maxLines = 3; setPadding(dp(14), dp(8), dp(14), dp(8)) }
+        val hint = getString(if (format == ClockFormat.DATE) R.string.date_format_hint else R.string.time_format_hint)
+        lateinit var field: EditText
+        field = textField(pattern, hint, InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS, EditorInfo.IME_ACTION_DONE) { save(it, field) }
+        field.filters = arrayOf(InputFilter.LengthFilter(ClockFormat.MAX_LENGTH))
+        fun updatePreview(value: String) {
+            preview.text = if (format.accepts(value)) getString(R.string.clock_format_preview, DateFormat.format(value, System.currentTimeMillis()))
+                else getString(R.string.clock_format_invalid, hint)
+        }
+        updatePreview(pattern)
+        field.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = updatePreview(s.toString().trim())
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        val top = (field.parent as LinearLayout).apply {
+            val help = if (format == ClockFormat.DATE) R.string.date_format_tokens else R.string.time_format_tokens
+            addView(label(getString(help), 12f).apply { maxLines = 3; setPadding(dp(14), dp(8), dp(14), 0) })
+            addView(preview)
+        }
+        showPage(getString(R.string.clock_format_custom), listOf(page(getString(R.string.done)) { save(field.text.toString().trim(), field) }),
+            top = top, crumb = getString(title)) { pickClockFormat(title, format, format.presets.size + 1) }
+        val done = settingsList.getChildAt(1)
+        done.nextFocusUpId = field.id
+        field.nextFocusDownId = done.id
+        field.requestFocus()
+    }
 
     /** What Auto does here today, under Wallpaper & theme. Times in the TV's 12- or 24-hour format. */
     private fun autoNote(): String {
@@ -6130,7 +6214,9 @@ class MainActivity : Activity() {
             R.string.show_row to R.drawable.ms_visibility, R.string.apps_when_hidden to R.drawable.ms_vertical_align_bottom, R.string.row_name to R.drawable.ms_edit,
             R.string.show_icons to R.drawable.ms_badge, R.string.cw_apps to R.drawable.ms_widgets, R.string.cw_channels to R.drawable.ms_podcasts,
             R.string.restore_hidden to R.drawable.ms_visibility_off,
-            R.string.clock_style to R.drawable.ms_schedule, R.string.clock_size to R.drawable.ms_format_size, R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
+            R.string.clock_style to R.drawable.ms_schedule, R.string.clock_size to R.drawable.ms_format_size,
+            R.string.date_format to R.drawable.ms_schedule, R.string.time_format to R.drawable.ms_schedule,
+            R.string.weather to R.drawable.ms_partly_cloudy_day, R.string.weather_units to R.drawable.ms_thermostat, R.string.weather_location to R.drawable.ms_location_on,
             R.string.screensaver to R.drawable.ms_bedtime, R.string.test_screensaver to R.drawable.ms_play_circle, R.string.screensaver_timing to R.drawable.ms_timer,
             R.string.home_button to R.drawable.ms_home, R.string.default_launcher to R.drawable.ms_home_app_logo, R.string.smooth_volume to R.drawable.ms_volume_up,
             R.string.section_keys to R.drawable.ms_keyboard, R.string.setup_home to R.drawable.ms_restart_alt,

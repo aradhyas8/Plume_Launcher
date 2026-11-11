@@ -409,4 +409,14 @@
     <string name="clock_medium">Medium</string>
     <string name="clock_large">Large</string>
     <string name="help_clock_size">How big the clock is on Home.</string>
+    <string name="date_format">Date format</string>
+    <string name="time_format">Time format</string>
+    <string name="clock_format_default">Default</string>
+    <string name="clock_format_custom">Custom format</string>
+    <string name="date_format_hint">yyyy-MM-dd EEEE</string>
+    <string name="time_format_hint">HH:mm</string>
+    <string name="date_format_tokens">Use yyyy for year, MM for month, dd for day, and EEEE for weekday.</string>
+    <string name="time_format_tokens">Use HH for 24-hour time, h and a for 12-hour time, and mm for minutes.</string>
+    <string name="clock_format_preview">Preview: %1$s</string>
+    <string name="clock_format_invalid">Use a valid pattern, for example %1$s.</string>
 </resources>
