@@ -4784,7 +4784,7 @@ class MainActivity : Activity() {
      * Recent apps: one frosted window per app, in the home row's tile style (glass or rim card, the same rise on
      * focus). A title bar with the app's own icon and name sits on the pane; under it, inset and rounded, the app's
      * last screen, its Continue Watching art, or its banner or icon. The selected window sits in the centre, the
-     * others smaller beside it. Under the selected window: Resume (when the app has a show to resume) and Remove.
+     * others smaller beside it. Under the selected window: Remove.
      */
     private fun buildRecentWindows(list: List<App>) {
         val screen = resources.displayMetrics
@@ -4800,8 +4800,7 @@ class MainActivity : Activity() {
         val clear = recentClear
         for ((index, app) in list.withIndex()) {
             val preview = if (previews) RecentPreviews.get(this, app.pkg) else null
-            val show = watchList.firstOrNull { it.pkg == app.pkg }
-            val art = show?.image?.takeIf { preview == null }
+            val art = watchList.firstOrNull { it.pkg == app.pkg }?.image?.takeIf { preview == null }
             val window = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(LinearLayout(this@MainActivity).apply {
@@ -4837,13 +4836,8 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 alpha = 0f
             }
-            val buttons = listOfNotNull(
-                // The app's own link to the show, at the point where it stopped (see open).
-                show?.takeIf { it.intent != null }?.let { p ->
-                    pill(getString(R.string.recent_resume, p.title)) { open(p) }.apply { (getChildAt(0) as TextView).maxWidth = width / 2 }
-                },
-                pill(getString(R.string.recent_remove)) { removeWindow(card, app.pkg, index) },
-            )
+            // No Resume: OK on the window already returns to the app where it was left.
+            val buttons = listOf(pill(getString(R.string.recent_remove)) { removeWindow(card, app.pkg, index) })
             for ((i, b) in buttons.withIndex()) {
                 actions.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     if (i > 0) marginStart = dp(12)

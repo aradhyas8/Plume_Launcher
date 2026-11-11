@@ -213,8 +213,6 @@
     <string name="recent_previews">App window previews</string>
     <string name="recent_previews_enable">Enable previews</string>
     <string name="recent_previews_disclosure">Plume uses its Home accessibility service to capture the current screen when you press Home or open Recent apps from another app. Plume saves the last screen of up to six apps, only on this TV. It never shares them or puts them in a backup. Turn this off to delete them.</string>
-    <!-- %1$s: the show or film the app stopped at, from Continue Watching. -->
-    <string name="recent_resume">Resume %1$s</string>
     <string name="recent_open">Open</string>
     <string name="recent_remove">Remove</string>
     <string name="recent_clear_all">Clear all</string>
