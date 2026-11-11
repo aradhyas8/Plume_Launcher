@@ -50,7 +50,11 @@ internal object Qr {
         return rem
     }
 
-    fun encode(text: String): Array<BooleanArray> {
+    data class Symbol(val modules: Array<BooleanArray>, val fixed: Array<BooleanArray>)
+
+    fun encode(text: String): Array<BooleanArray> = symbol(text).modules
+
+    fun symbol(text: String): Symbol {
         val bytes = text.toByteArray()
         val v = DATA.indices.firstOrNull { bytes.size + 2 <= DATA[it] } ?: throw IllegalArgumentException("text too long for a QR code here")
 
@@ -130,6 +134,6 @@ internal object Qr {
             up = !up
             col -= 2
         }
-        return m
+        return Symbol(m, fn)
     }
 }

@@ -1,19 +1,34 @@
 package dev.plume
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import java.io.File
 
 /**
  * The "Shows from your apps" wallpaper: the picture of a show that an app publishes (Watch Next, or a home channel),
- * one at a time, changed every so often like a folder of photos. Nothing goes online but what the cards already
- * fetch from the apps' own addresses, and nothing happens unless someone picks it. One picture is kept on disk and
- * replaced by the next; another wallpaper deletes it.
+ * one at a time. If the user adds a key, TMDB can supply a backdrop when the app has no suitable picture.
+ * Plume keeps one picture on disk. Choosing another wallpaper deletes it.
  */
 internal object ShowsWall {
     /** The wallpaper choice, next to "res:…", "file:…", "folder:…" and "bing". */
     const val CHOICE = "shows"
 
-    fun file(c: Context) = File(c.filesDir, "shows.jpg")
+    fun file(c: Context) = File(c.filesDir, "shows-hd.jpg")
+
+    fun migrate(c: Context) {
+        val old = File(c.filesDir, "shows.jpg")
+        if (!old.isFile) return
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(old.path, bounds)
+        val hd = file(c)
+        if (hd.exists() || !fits(bounds.outWidth, bounds.outHeight)) old.delete()
+        else old.renameTo(hd)
+    }
+
+    fun clear(c: Context) {
+        file(c).delete()
+        File(c.filesDir, "shows.jpg").delete()
+    }
 
     /**
      * Whether the app's art is wide enough for a wallpaper. A thumbnail is (apps give 16:9 there). Poster art says its
@@ -21,8 +36,8 @@ internal object ShowsWall {
      */
     fun wide(thumbnail: Boolean, ratio: Int) = thumbnail || ratio in 0..2
 
-    /** What the picture itself must be: at least 480 px wide, between 1.2:1 and 2.5:1. Checked on the bytes, as the ratio an app gives can be wrong. */
-    fun fits(w: Int, h: Int) = w >= 480 && h > 0 && w * 10 >= h * 12 && w * 10 <= h * 25
+    /** The 16:9 crop must fill a 1080p wallpaper. Reject tall art and very wide strips. */
+    fun fits(w: Int, h: Int) = w >= 1920 && h >= 1080 && w * 10L >= h * 12L && w * 10L <= h * 25L
 
     /** [keys] in the order to try them: the one after [current] first, then on, and [current] last. An unknown [current] keeps the order. */
     fun order(keys: List<String>, current: String?): List<String> {
