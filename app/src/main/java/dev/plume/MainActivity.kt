@@ -311,7 +311,7 @@ class MainActivity : Activity() {
     }
     /** [group]: what shares the front places in Continue Watching, the app or, for an app channel, that channel. */
     private class Prog(val title: String, val sub: String, val progress: Int, val image: String?, val intent: String?, val pkg: String?,
-                       val group: String? = pkg, val wide: Boolean = true) // wide: the art can be a wallpaper (see ShowsWall.wide)
+                       val group: String? = pkg, val wallpaperArt: List<String> = emptyList(), val tmdbType: String? = null)
     /** One row of cards you can switch to: Watch Next, or one app channel that is on. */
     private class CardSource(val key: String, val title: String)
     /** What the shows row holds: the [sources] it is split in (none when mixed), the one on show and its cards. */
@@ -1628,7 +1628,10 @@ class MainActivity : Activity() {
         }
         return when {
             choice == Bing.CHOICE -> fitWallpaper { Bing.file(this).inputStream() }
-            choice == ShowsWall.CHOICE -> fitWallpaper { ShowsWall.file(this).inputStream() }
+            choice == ShowsWall.CHOICE -> {
+                ShowsWall.migrate(this)
+                fitWallpaper { ShowsWall.file(this).inputStream() }
+            }
             choice.startsWith("pack:") -> fitWallpaper { File(packDir(), choice.removePrefix("pack:")).inputStream() }
             choice.startsWith("folder:") -> {
                 val uri = ContentUris.withAppendedId(PHOTOS, folderPhoto(choice) ?: return null)
@@ -1678,6 +1681,9 @@ class MainActivity : Activity() {
                 getString(PHOTO_EVERY[photoEvery()]!!) + "  ›", style = RowStyle(R.drawable.ms_schedule, help = getString(R.string.help_photo_every))) { pickPhotoEvery() } else null,
             if (current == ShowsWall.CHOICE) settingsRow(getString(R.string.wp_sources),
                 getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) + "  ›", style = RowStyle(R.drawable.ms_filter_list, help = getString(R.string.help_wp_sources))) { pickWpSources() } else null,
+            if (current == ShowsWall.CHOICE) settingsRow(getString(R.string.tmdb_artwork),
+                getString(if (Tmdb.key(this) == null) R.string.off else R.string.on) + "  ›",
+                style = RowStyle(R.drawable.ms_landscape, help = getString(R.string.tmdb_help))) { configureTmdb(forDark) } else null,
         )
         wallGrid(getString(R.string.wallpaper), groups, forDark, current, focusOn, extras) { renderSettings(WALLPAPER_CARD) }
     }
@@ -2117,6 +2123,72 @@ class MainActivity : Activity() {
 
     // ---------- shows wallpaper (see ShowsWall) ----------
 
+    private fun configureTmdb(forDark: Boolean) {
+        val configured = Tmdb.key(this) != null
+        lateinit var field: EditText
+        fun save(key: String?) {
+            if (!field.isEnabled) return
+            if (key != null && !Tmdb.validKey(key)) {
+                field.error = getString(R.string.tmdb_key_invalid)
+                return
+            }
+            field.isEnabled = false
+            io.execute {
+                val error = try {
+                    if (key != null && !Tmdb.acceptsKey(key)) R.string.tmdb_key_invalid
+                    else {
+                        Tmdb.saveKey(this, key)
+                        showFailed.clear()
+                        null
+                    }
+                } catch (_: Exception) {
+                    R.string.tmdb_key_error
+                }
+                ui.post {
+                    if (isDestroyed) return@post
+                    if (error == null) {
+                        if (currentWallpaper() == ShowsWall.CHOICE) refreshShows()
+                        if (field.isAttachedToWindow) {
+                            getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(field.windowToken, 0)
+                            pickWallpaper(forDark, ShowsWall.CHOICE)
+                        }
+                    } else if (field.isAttachedToWindow) {
+                        field.isEnabled = true
+                        field.requestFocus()
+                        field.error = getString(error)
+                    }
+                }
+            }
+        }
+        field = textField("", getString(R.string.tmdb_key), InputType.TYPE_TEXT_VARIATION_PASSWORD,
+            EditorInfo.IME_ACTION_DONE) { save(it) }
+        field.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+        val top = (field.parent as LinearLayout).apply {
+            addView(label(getString(R.string.tmdb_help), 14f).apply {
+                maxLines = 4
+                setPadding(dp(14), dp(8), dp(14), dp(8))
+            }, 0)
+            addView(ImageView(context).apply {
+                setImageResource(R.drawable.tmdb_logo)
+                contentDescription = getString(R.string.tmdb_name)
+            }, LinearLayout.LayoutParams(dp(52), dp(38)).apply { marginStart = dp(14); topMargin = dp(10) })
+            addView(label(getString(R.string.tmdb_credit), 13f).apply {
+                maxLines = 4
+                setPadding(dp(14), dp(6), dp(14), dp(8))
+            })
+        }
+        val rows = listOfNotNull(
+            page(getString(R.string.done)) { save(field.text.toString().trim()) },
+            if (configured) page(getString(R.string.tmdb_turn_off)) { save(null) } else null,
+        )
+        showPage(getString(R.string.tmdb_artwork), rows, top = top, crumb = getString(R.string.wallpaper)) {
+            pickWallpaper(forDark, ShowsWall.CHOICE)
+        }
+        settingsList.getChildAt(1).nextFocusUpId = field.id
+        field.nextFocusDownId = settingsList.getChildAt(1).id
+        field.requestFocus()
+    }
+
     private fun showKey(p: Prog) = "${p.pkg}/${p.title}/${p.image}"
 
     /** An app's name: from the app list when it is loaded, else from the package manager (null when the app is not there). */
@@ -2145,7 +2217,7 @@ class MainActivity : Activity() {
     private fun pickWpSources(focus: Int = 0) {
         io.execute {
             val sources = wpSourceList()
-            val counts = sources.map { s -> try { programsFor(s).let { l -> l.count { it.image != null && it.wide } to l.size } } catch (e: Exception) { 0 to 0 } }
+            val counts = sources.map { s -> try { programsFor(s).let { l -> l.count { it.wallpaperArt.isNotEmpty() } to l.size } } catch (e: Exception) { 0 to 0 } }
             ui.post {
                 if (isDestroyed) return@post
                 showPage(getString(R.string.wp_sources), sources.mapIndexed { i, s ->
@@ -2176,8 +2248,11 @@ class MainActivity : Activity() {
     private fun refreshShows() {
         if (checkSelfPermission(TV_LISTINGS) != PackageManager.PERMISSION_GRANTED) return
         io.execute {
+            ShowsWall.migrate(this)
+            val key = Tmdb.key(this)
             val list = try {
-                wpSourceList().filter { wpSourceOn(it.first) }.flatMap { programsFor(it) }.filter { it.image != null && it.wide }.distinctBy { showKey(it) }
+                wpSourceList().filter { wpSourceOn(it.first) }.flatMap { programsFor(it) }
+                    .filter { it.wallpaperArt.isNotEmpty() || (key != null && it.tmdbType != "") }
             } catch (e: Exception) {
                 emptyList()
             }
@@ -2185,10 +2260,29 @@ class MainActivity : Activity() {
             val now = System.currentTimeMillis()
             var chosen: Prog? = null
             var network = 0
+            var lookups = 0
+            var tmdbAvailable = true
             for (k in ShowsWall.order(byKey.keys.toList(), prefs.getString("wp_show_key", null))) {
                 if (ShowsWall.skipped(showFailed, k, now)) continue
                 val p = byKey[k] ?: continue
-                when (fetchShow(p)) {
+                var result = FETCH_DEAD
+                for (uri in p.wallpaperArt) {
+                    val fetched = fetchShow(uri)
+                    if (fetched == FETCH_OK) { result = fetched; break }
+                    if (fetched == FETCH_NETWORK) result = fetched
+                }
+                if (result != FETCH_OK && key != null && p.tmdbType != "") {
+                    if (!tmdbAvailable || lookups >= 5) continue
+                    lookups++
+                    try {
+                        val backdrop = Tmdb.backdrop(p.title, p.tmdbType, key)
+                        if (backdrop != null) result = fetchShow(backdrop)
+                    } catch (_: Exception) {
+                        tmdbAvailable = false
+                        result = FETCH_NETWORK
+                    }
+                }
+                when (result) {
                     FETCH_OK -> { chosen = p; break }
                     FETCH_DEAD -> showFailed[k] = now + ShowsWall.DEAD_MS
                     else -> {
@@ -2211,8 +2305,8 @@ class MainActivity : Activity() {
     }
 
     /** [FETCH_OK] when the picture is on disk now, [FETCH_DEAD] when it will never do (not found, not wide, too big), [FETCH_NETWORK] when it failed this time. */
-    private fun fetchShow(p: Prog): Int = try {
-        val bytes = openStream(p.image!!).use { input -> // stops just past SHOW_MAX: a bigger picture is not read into memory
+    private fun fetchShow(uri: String): Int = try {
+        val bytes = openStream(uri).use { input -> // stops just past SHOW_MAX: a bigger picture is not read into memory
             val out = java.io.ByteArrayOutputStream()
             val buf = ByteArray(64 * 1024)
             while (out.size() <= SHOW_MAX) { val n = input.read(buf); if (n < 0) break; out.write(buf, 0, n) }
@@ -2236,7 +2330,7 @@ class MainActivity : Activity() {
     /** No wallpaper uses the shows any more: the picture and what Plume remembers about it go, at once. */
     private fun dropShowsIfUnused() {
         if (currentWallpaper(false) == ShowsWall.CHOICE || currentWallpaper(true) == ShowsWall.CHOICE) return
-        ShowsWall.file(this).delete()
+        ShowsWall.clear(this)
         prefs.edit().remove("wp_show_key").remove("wp_show_at").remove("wp_show_title").apply()
     }
 
@@ -5942,8 +6036,18 @@ class MainActivity : Activity() {
                 ).joinToString(" - ")
                 val progress = if (duration > 0 && position >= 1000) (position * 100 / duration).toInt().coerceIn(0, 100) else 0
                 val pkg = str("package_name")
-                val wide = ShowsWall.wide(str("thumbnail_uri") != null, num("poster_art_aspect_ratio").toInt())
-                val prog = Prog(title, sub, progress, str("thumbnail_uri") ?: str("poster_art_uri"), str("intent_uri"), pkg, group ?: pkg, wide)
+                val thumbnail = str("thumbnail_uri")
+                val poster = str("poster_art_uri")
+                val widePoster = poster?.takeIf { ShowsWall.wide(false, num("poster_art_aspect_ratio").toInt()) }
+                val tmdbType = when (str("type")?.toIntOrNull()) {
+                    TvContract.PreviewPrograms.TYPE_MOVIE -> "movie"
+                    TvContract.PreviewPrograms.TYPE_TV_SERIES, TvContract.PreviewPrograms.TYPE_TV_SEASON,
+                    TvContract.PreviewPrograms.TYPE_TV_EPISODE -> "tv"
+                    null -> null
+                    else -> ""
+                }
+                val prog = Prog(title, sub, progress, thumbnail ?: poster, str("intent_uri"), pkg, group ?: pkg,
+                    listOfNotNull(widePoster, thumbnail).distinct(), tmdbType)
                 val engaged = num("last_engagement_time_utc_millis")
                 out += Triple(num("weight"),
                     if (group == null) watchSortKey(num("watch_next_type"), engaged) else channelSortKey(engaged, prefs.getLong("t_$pkg", 0)), prog)

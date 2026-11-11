@@ -372,6 +372,14 @@
     </plurals>
     <string name="fire_os_no_input">Fire TV didn\'t let Plume switch to this input. Hold Home and pick Inputs.</string>
     <string name="shows_wallpaper">Your shows</string>
+    <string name="tmdb_artwork">TMDB artwork</string>
+    <string name="tmdb_name">TMDB</string>
+    <string name="tmdb_help">Enter a TMDB API key to find sharp wallpapers. When needed, Plume sends show titles to TMDB.</string>
+    <string name="tmdb_key">TMDB API key (v3)</string>
+    <string name="tmdb_key_invalid">Enter a valid TMDB API key (v3).</string>
+    <string name="tmdb_key_error">Could not verify or save the key. Try again.</string>
+    <string name="tmdb_turn_off">Turn off TMDB and remove key</string>
+    <string name="tmdb_credit">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
     <string name="wp_sources">Shows from</string>
     <string name="wp_usable">%1$d/%2$d</string>
     <string name="featured_now">Featured: %1$s</string>

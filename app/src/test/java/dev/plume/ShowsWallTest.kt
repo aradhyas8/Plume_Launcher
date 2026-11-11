@@ -18,15 +18,29 @@ class ShowsWallTest {
 
     @Test fun aPictureFitsWhenItIsWideAndBigEnough() {
         assertTrue(ShowsWall.fits(1920, 1080))
-        assertTrue(ShowsWall.fits(1600, 900))
-        assertTrue(ShowsWall.fits(640, 360))
-        assertTrue(ShowsWall.fits(800, 600)) // 4:3
+        assertTrue(ShowsWall.fits(1920, 1440)) // 4:3 crops to 1920 by 1080
+        assertTrue(ShowsWall.fits(3840, 2160))
+        assertFalse(ShowsWall.fits(1600, 900))
+        assertFalse(ShowsWall.fits(640, 360))
+        assertFalse(ShowsWall.fits(1919, 1080))
+        assertFalse(ShowsWall.fits(1920, 1079))
         assertTrue(ShowsWall.fits(2560, 1080)) // 21:9 is under 2.5:1
         assertFalse(ShowsWall.fits(1000, 1500)) // a poster
         assertFalse(ShowsWall.fits(600, 600)) // a square
         assertFalse(ShowsWall.fits(320, 180)) // too small
         assertFalse(ShowsWall.fits(1920, 0))
         assertFalse(ShowsWall.fits(3000, 1000)) // a strip
+    }
+
+    @Test fun tmdbNeedsOneExactMatchOfTheRightType() {
+        val movie = Tmdb.Title(1, "movie", "The Bridge", "The Bridge")
+        val series = Tmdb.Title(2, "tv", "The Bridge", "Bron")
+        val titles = listOf(movie, series)
+        assertEquals(null, Tmdb.match(titles, "The Bridge", null))
+        assertEquals(null, Tmdb.match(titles, "Bridge", "tv"))
+        assertEquals(series, Tmdb.match(titles, " the bridge ", "tv"))
+        assertEquals(series, Tmdb.match(titles, "Bron", null))
+        assertEquals(null, Tmdb.match(titles + series.copy(id = 3), "Bron", "tv"))
     }
 
     @Test fun theNextOneComesAfterTheCurrentAndTheCurrentIsLast() {
