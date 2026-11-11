@@ -311,6 +311,8 @@
     <string name="section_app_row">Apps row</string>
     <string name="section_screensaver">Screensaver</string>
     <string name="sources">Sources</string>
+    <string name="tv_sources">TV sources</string>
+    <string name="tv_sources_failed">Could not open TV sources.</string>
     <string name="no_signal">No signal</string>
     <string name="input_opening">Opening input…</string>
     <string name="input_failed">Could not open this input. Press Back to return.</string>

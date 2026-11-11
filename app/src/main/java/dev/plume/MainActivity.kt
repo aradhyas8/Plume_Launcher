@@ -334,6 +334,7 @@ class MainActivity : Activity() {
     // Kept across activity rebuilds (theme switch), so the new home screen shows its apps at once.
     private var apps = APPS ?: emptyList()
     private var sources = SOURCES ?: emptyList() // HDMI ports and the devices on them: the Sources list, not the apps
+    private var cvteSourcePanel = CVTE_SOURCE_PANEL
     private var appsDirty = APPS == null
     private var watchKey: String? = null
     private var cardSources = emptyList<CardSource>() // By title and Per channel: the sources the shows row is split in
@@ -3552,6 +3553,9 @@ class MainActivity : Activity() {
                 return@execute
             }
             val inputs = hdmiInputs()
+            val panel = Intent("com.cvte.intent.SHOW_INPUT").setPackage("com.cvte.tv.setting").takeIf {
+                it.resolveActivityInfo(packageManager, PackageManager.MATCH_DEFAULT_ONLY)?.exported == true
+            }
             ui.post {
                 if (isDestroyed) return@post
                 if (inputs.isNotEmpty() && !prefs.getBoolean("inputs_moved", false)) moveInputsToSources(inputs)
@@ -3559,7 +3563,9 @@ class MainActivity : Activity() {
                 APPS = list
                 sources = inputs
                 SOURCES = inputs
-                if (movingTop == null) applyTopBar() // Sources shows only while the TV has an input
+                cvteSourcePanel = panel
+                CVTE_SOURCE_PANEL = panel
+                if (movingTop == null) applyTopBar()
                 renderApps()
                 if (allApps.visibility == View.VISIBLE) openAllApps() // a fresh remote request can precede the app list
             }
@@ -4011,6 +4017,13 @@ class MainActivity : Activity() {
             if (e.action == KeyEvent.ACTION_UP) endWallPreview()
             return true
         }
+        val panel = cvteSourcePanel
+        if (panel != null && !editing && movingTop == null &&
+            settingsScrim.visibility != View.VISIBLE && allApps.visibility != View.VISIBLE &&
+            Remap.cvteSourceKey(e.keyCode, e.scanCode, Remap.all(this))) {
+            if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) openCvteSources(panel)
+            return true
+        }
         val confirm = e.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || e.keyCode == KeyEvent.KEYCODE_ENTER ||
             e.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
         if (movingTop != null && topMoveKey(e, confirm)) return true
@@ -4298,8 +4311,10 @@ class MainActivity : Activity() {
         return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - "power", "plume"))
     }
 
-    /** What is really on screen: Sources stays out while the TV has no input. */
-    private fun shownTop(order: List<Int> = topOrder()) = order.filter { it != R.id.sourcesButton || sources.isNotEmpty() }
+    private fun hasSources() = sources.isNotEmpty() || cvteSourcePanel != null
+
+    /** What is really on screen: Sources stays out while there is nothing to open. */
+    private fun shownTop(order: List<Int> = topOrder()) = order.filter { it != R.id.sourcesButton || hasSources() }
 
     /** Puts the icons in [order], hides the others, and gives the first one on screen no left margin. */
     private fun applyTopBar(order: List<Int> = topOrder()) {
@@ -4368,7 +4383,7 @@ class MainActivity : Activity() {
         popupMenu(anchor, below = true) { dismiss ->
             hidden.map { id ->
                 val icon = findViewById<ImageView>(id)
-                val note = if (id == R.id.sourcesButton && sources.isEmpty()) getString(R.string.shows_with_input) else ""
+                val note = if (id == R.id.sourcesButton && !hasSources()) getString(R.string.shows_with_input) else ""
                 settingsRow(icon.contentDescription.toString(), note) { dismiss(); addTopIcon(id, anchor) }.also { row ->
                     (row as LinearLayout).addView(ImageView(this).apply {
                         setImageDrawable(icon.drawable.constantState?.newDrawable(resources)?.mutate() ?: icon.drawable)
@@ -4435,12 +4450,25 @@ class MainActivity : Activity() {
         return true
     }
 
-    /** The TV's inputs under the Sources icon, as on any TV: the logo of what is plugged in, its name, no signal if none. */
+    private fun openCvteSources(panel: Intent) {
+        try {
+            startActivity(panel)
+        } catch (_: ActivityNotFoundException) {
+            toast(getString(R.string.tv_sources_failed))
+        } catch (_: SecurityException) {
+            toast(getString(R.string.tv_sources_failed))
+        }
+    }
+
+    /** The native source panel where available, plus the HDMI inputs users can pin. */
     private fun showSources(anchor: View) {
-        if (sources.isEmpty()) return
+        if (!hasSources()) return
         popupMenu(anchor, below = true) { dismiss ->
             val pinned = pinnedInputs()
-            sources.sortedBy { it.label.lowercase() }.map { src ->
+            val native = cvteSourcePanel?.let { panel ->
+                settingsRow(getString(R.string.tv_sources), "") { dismiss(); openCvteSources(panel) }
+            }
+            val hdmi = sources.sortedBy { it.label.lowercase() }.map { src ->
                 val state = listOfNotNull(
                     if (src.offline) getString(R.string.no_signal) else null,
                     if (src.pkg in pinned) getString(R.string.in_row) else null,
@@ -4452,12 +4480,14 @@ class MainActivity : Activity() {
                     }, 0, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(12) })
                     row.setOnLongClickListener { dismiss(); unlock { togglePin(src) }; true } // hold OK: in or out of the home row
                 }
-            } + label(getString(R.string.sources_hint), 12f).apply {
+            }
+            val hint = if (hdmi.isEmpty()) null else label(getString(R.string.sources_hint), 12f).apply {
                 secondary(0.6f)
                 setPadding(dp(14), dp(8), dp(14), dp(4))
                 isSingleLine = false // short, and it wraps rather than widen the list
                 maxWidth = dp(180)
             }
+            listOfNotNull(native) + hdmi + listOfNotNull(hint)
         }
     }
 
@@ -6334,6 +6364,7 @@ class MainActivity : Activity() {
         val DECELERATE = android.view.animation.DecelerateInterpolator(1.5f)
         @Volatile var APPS: List<App>? = null
         @Volatile var SOURCES: List<App>? = null
+        private var CVTE_SOURCE_PANEL: Intent? = null
         /** Mono marks made by glyph(), by package; null = icon has no usable symbol. Main thread only. */
         val GLYPHS = HashMap<String, Bitmap?>()
         /** accent() colours by package; null = no clear colour. Main thread only. */

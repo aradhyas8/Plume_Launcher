@@ -103,6 +103,16 @@ class RemapTest {
         assertEquals("app:old", Remap.lookup(map, 249, 0)?.short)
     }
 
+    @Test fun cvteSourceShortcutLeavesRemapsAndOtherKeysAlone() {
+        val source = KeyEvent.KEYCODE_TV_INPUT
+        val scan = 12
+        val remap = Remap.Entry("none", "")
+        assertTrue(Remap.cvteSourceKey(source, scan, emptyMap()))
+        assertFalse(Remap.cvteSourceKey(KeyEvent.KEYCODE_MENU, scan, emptyMap()))
+        assertFalse(Remap.cvteSourceKey(source, scan, mapOf(Remap.id(source, scan) to remap)))
+        assertFalse(Remap.cvteSourceKey(source, scan, mapOf(Remap.id(source, 0) to remap)))
+    }
+
     @Test fun keptRefusesKeysThatMustNotChange() {
         assertTrue(Remap.kept(KeyEvent.KEYCODE_BACK, 158))
         assertTrue(Remap.kept(KeyEvent.KEYCODE_POWER, 116))
