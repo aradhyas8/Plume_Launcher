@@ -66,9 +66,6 @@ class CrossfadeLabel @JvmOverloads constructor(context: Context, attrs: Attribut
     var chip = false
         set(value) { field = value; invalidate() }
     var chipColor = 0x40FFFFFF
-    /** Px at the start the chip leaves out: the space of an arrow that is hidden. */
-    var chipInset = 0
-        set(value) { field = value; invalidate() }
     private var chipW = 0f
     private var chipMove: ValueAnimator? = null
     private val chipPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -92,7 +89,7 @@ class CrossfadeLabel @JvmOverloads constructor(context: Context, attrs: Attribut
         if (chip) {
             val r = 8 * resources.displayMetrics.density
             chipPaint.color = chipColor
-            canvas.drawRoundRect((scrollX + chipInset).toFloat(), scrollY.toFloat(), scrollX + chipW, (scrollY + height).toFloat(), r, r, chipPaint)
+            canvas.drawRoundRect(scrollX.toFloat(), scrollY.toFloat(), scrollX + chipW, (scrollY + height).toFloat(), r, r, chipPaint)
         }
         drawText(canvas)
     }

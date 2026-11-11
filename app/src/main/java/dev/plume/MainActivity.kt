@@ -5543,8 +5543,8 @@ class MainActivity : Activity() {
 
     /**
      * Split by source, the row has one title: the source on show, then a counter (dots up to five sources, "2 / 7" past that).
-     * By title it can be selected: a glass chip that fits the name, with an arrow on each side that has another source. The
-     * arrows always keep their space, so the name sits on the grid edge, where the plain title sits.
+     * By title it can be selected: a glass chip that fits the name, with the arrows after the name. The chip's start edge
+     * never moves, so the name sits on the grid edge, where the plain title sits, for every source.
      */
     private fun setUpTitle() {
         watchTitle.isFocusable = false
@@ -5568,20 +5568,20 @@ class MainActivity : Activity() {
         val ink = watchTitle.currentTextColor
         watchTitle.chipColor = if (Color.luminance(ink) > 0.5f) 0x38FFFFFF else 0x24000000
         val at = cardSources.indexOfFirst { it.key == cardCurrent?.key }
-        // Arrows only while selected, and only on a side that has another source. The start arrow always keeps its space, so the
-        // name stays on the grid edge; the chip leaves that space out when the arrow is hidden. The end arrow just goes.
-        val back = at > 0
-        val next = at in 0 until cardSources.size - 1
-        fun arrow(id: Int, on: Boolean) = if (!cycle) null else getDrawable(id)!!.mutate().apply {
-            setBounds(0, 0, dp(CHEVRON), dp(CHEVRON)); setTint(ink); alpha = if (on && watchTitle.isFocused) 255 else 0
+        // Arrows only while selected, one for each way that has another source, both after the name (left one on the left, as
+        // the remote's keys), so the chip's start edge stays in one place for every source.
+        val ids = listOfNotNull(R.drawable.ms_chevron_left.takeIf { at > 0 }, R.drawable.ms_chevron_right.takeIf { at in 0 until cardSources.size - 1 })
+        val c = dp(CHEVRON)
+        val arrows = if (!cycle || ids.isEmpty()) null else LayerDrawable(ids.map { getDrawable(it)!!.mutate().apply { setTint(ink) } }.toTypedArray()).apply {
+            ids.indices.forEach { setLayerSize(it, c, c); setLayerGravity(it, Gravity.LEFT or Gravity.TOP); setLayerInset(it, it * (c + dp(4)), 0, 0, 0) }
+            setBounds(0, 0, ids.size * c + (ids.size - 1) * dp(4), c)
+            alpha = if (watchTitle.isFocused) 255 else 0
         }
-        watchTitle.setCompoundDrawablesRelative(arrow(R.drawable.ms_chevron_left, back), null,
-            if (next) arrow(R.drawable.ms_chevron_right, true) else null, null)
-        watchTitle.chipInset = if (cycle && !back) dp(CHEVRON + 8) else 0
+        watchTitle.setCompoundDrawablesRelative(null, null, arrows, null)
         val side = if (cycle) dp(12) else 0
         watchTitle.setPaddingRelative(side, dp(4), side, dp(4))
         val lp = watchTitle.layoutParams as LinearLayout.LayoutParams
-        val start = if (cycle) -(side + dp(CHEVRON + 8)) else 0
+        val start = -side
         if (lp.marginStart != start) { lp.marginStart = start; watchTitle.layoutParams = lp }
         val room = ((resources.displayMetrics.widthPixels - dp(96)) * 2 / 3).toFloat()
         val name = TextUtils.ellipsize(rowTitle(), watchTitle.paint, room, TextUtils.TruncateAt.END)
