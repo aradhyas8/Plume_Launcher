@@ -216,7 +216,7 @@
     <!-- %1$s: the show or film the app stopped at, from Continue Watching. -->
     <string name="recent_resume">Resume %1$s</string>
     <string name="recent_open">Open</string>
-    <string name="recent_remove">Remove from list</string>
+    <string name="recent_remove">Remove</string>
     <string name="recent_clear_all">Clear all</string>
     <string name="recent_apps_empty_any">No recent apps yet. The apps you open show here.</string>
     <string name="recent_apps_empty">No recent apps yet. Open an app from Plume to add it here.</string>

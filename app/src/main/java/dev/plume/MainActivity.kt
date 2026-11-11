@@ -1056,6 +1056,9 @@ class MainActivity : Activity() {
         if (!ready) return
         when {
             settingsScrim.visibility == View.VISIBLE -> pageBack?.invoke() ?: closeLauncherSettings()
+            allApps.visibility == View.VISIBLE && recentAppsOpen && animationsOn() && ValueAnimator.areAnimatorsEnabled() ->
+                recentWindows.animate().alpha(0f).scaleX(0.94f).scaleY(0.94f).setDuration(150).setInterpolator(EASE)
+                    .withEndAction { recentWindows.alpha = 1f; recentWindows.scaleX = 1f; recentWindows.scaleY = 1f; if (recentAppsOpen) closeAllApps() }.start()
             allApps.visibility == View.VISIBLE -> closeAllApps()
         }
     }
@@ -4595,6 +4598,7 @@ class MainActivity : Activity() {
         }
         // Back from Recent apps returns focus to where it was (a menu is its own window: then its icon).
         if (recent && !recentAppsOpen) recentsBack = currentFocus?.let { WeakReference(it) to (it.tag as? String) }
+        val opening = recent && !recentAppsOpen
         recentAppsOpen = recent
         allAppsGrid.removeAllViews()
         recentWindowRow.removeAllViews()
@@ -4628,13 +4632,22 @@ class MainActivity : Activity() {
         recentClear.visibility = if (recent && list.isNotEmpty()) View.VISIBLE else View.GONE
         if (recent) {
             recentWindows.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+            recentsFocus = (selected as? String)?.takeIf { pkg -> list.any { it.pkg == pkg } }
+                ?: list.getOrNull(if (at >= 0) minOf(at, list.size - 1) else 0)?.pkg
             buildRecentWindows(list)
-            // One colour for the title and names, picked against the wallpaper behind them once laid out (see fitInk).
+            // The title and the empty text sit on the wallpaper: one colour picked against it once laid out (see fitInk).
             allApps.post {
                 if (!recentAppsOpen) return@post
-                val names = (0 until recentWindowRow.childCount).mapNotNull { (recentWindowRow.getChildAt(it) as ViewGroup).getChildAt(1) as? TextView }
-                val color = inkBehind(listOf(title, if (list.isEmpty()) info else recentWindows))
-                for (v in listOf(title, info) + names) ink(v, color)
+                val color = inkBehind(listOf(title, if (list.isEmpty()) info else title))
+                for (v in listOf(title, info)) ink(v, color)
+            }
+            // Opening: the windows settle in from slightly smaller, as Plume's sheets do.
+            if (opening) recentWindows.apply {
+                val animate = animationsOn() && ValueAnimator.areAnimatorsEnabled()
+                alpha = if (animate) 0f else 1f
+                scaleX = if (animate) 0.94f else 1f
+                scaleY = scaleX
+                animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(if (animate) 220 else 0).setInterpolator(EASE).start()
             }
         } else {
             val gap = dp(10)
@@ -4658,40 +4671,60 @@ class MainActivity : Activity() {
         target.requestFocus()
     }
 
-    /** Recent apps' Clear all button, under the windows. Made once and kept in the screen's column. */
+    /**
+     * Recent apps' Clear all, small, at the end of the title's line. Made once: the title moves into a header row
+     * with it (All apps keeps the same title, the button hidden).
+     */
     private val recentClear by lazy {
-        pill(getString(R.string.recent_clear_all)) { clearRecentApps() }.also { button ->
-            val column = recentWindows.parent as ViewGroup
-            column.addView(button, column.indexOfChild(recentWindows) + 1, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                topMargin = dp(20)
-            })
+        val title = findViewById<TextView>(R.id.allAppsTitle)
+        val column = title.parent as ViewGroup
+        val at = column.indexOfChild(title)
+        val params = title.layoutParams as LinearLayout.LayoutParams
+        column.removeView(title)
+        val header = FrameLayout(this)
+        header.addView(title, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.START or Gravity.CENTER_VERTICAL))
+        column.addView(header, at, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = params.bottomMargin })
+        pill(getString(R.string.recent_clear_all), small = true) { clearRecentApps() }.also { button ->
+            header.addView(button, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.END or Gravity.CENTER_VERTICAL).apply { marginEnd = dp(48) })
             button.nextFocusLeftId = button.id
             button.nextFocusRightId = button.id
+            button.nextFocusUpId = button.id
         }
     }
 
-    /** A small button in the home row's tile style (glass or rim card, rise on focus). */
-    private fun pill(text: String, onClick: () -> Unit) = LinearLayout(this).apply {
+    /** A button in the home row's tile style (glass or rim card, rise on focus); [small] for the quiet ones. */
+    private fun pill(text: String, small: Boolean = false, onClick: () -> Unit) = LinearLayout(this).apply {
         id = View.generateViewId()
         gravity = Gravity.CENTER
-        setPadding(dp(20), dp(10), dp(20), dp(10))
-        addView(label(text, 15f))
+        if (small) setPadding(dp(14), dp(6), dp(14), dp(6)) else setPadding(dp(18), dp(8), dp(18), dp(8))
+        addView(label(text, if (small) 13f else 15f))
         style(this, dp(8), card = true)
         elevation = 0f
         setOnClickListener { onClick() }
     }
 
-    /** A window that shows a picture: the app's last screen, or its Continue Watching art. */
-    private fun pictureWindow(app: App, picture: Bitmap?, uri: String?, wide: Int) = FrameLayout(this).apply {
-        val image = ImageView(this@MainActivity).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    /**
+     * What a window shows under its title bar: the app's last screen, else its Continue Watching art, else its banner
+     * (never stretched past its own size) or icon. Rounded inside the frosted frame, like a window on a pane.
+     */
+    private fun windowContent(app: App, picture: Bitmap?, uri: String?, wide: Int): View = FrameLayout(this).apply {
+        val inner = dp(8).toFloat()
+        background = GradientDrawable().apply { cornerRadius = inner; setColor(0x26000000) }
+        clipToOutline = true
+        val image = ImageView(this@MainActivity).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        if (picture == null && uri == null) {
+            val banner = appBanner(app)?.takeIf { it.intrinsicWidth >= dp(120) }
+            image.setImageDrawable(banner ?: app.icon)
+            image.scaleType = ImageView.ScaleType.FIT_CENTER
+            val w = banner?.let { minOf(it.intrinsicWidth, wide / 2) } ?: dp(88)
+            val h = banner?.let { w * it.intrinsicHeight / maxOf(1, it.intrinsicWidth) } ?: dp(88)
+            addView(image, FrameLayout.LayoutParams(w, h, Gravity.CENTER))
+            return@apply
         }
+        image.scaleType = ImageView.ScaleType.CENTER_CROP
         addView(image, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        style(this, dp(8), card = true)
-        setOnClickListener { launch(app) }
         if (picture != null) return@apply image.setImageBitmap(picture)
         // The window is ~4x a card's width: the card's small RGB_565 poster would be stretched soft and banded.
         val key = "window|$uri"
@@ -4704,31 +4737,90 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Where the strip is, in windows from the first (fractional while it moves); see [placeWindows]. */
+    private var recentAt = 0f
+    private var recentMotion: ValueAnimator? = null
+
     /**
-     * Recent apps: one window per app, made of the home row's own tiles (glass or rim card, the same rise on focus).
-     * A window shows the app's last screen when the Home service captured one, else the picture of the app's
-     * Continue Watching item, else its mark. The selected window sits in the centre; the others are smaller beside
-     * it. Only the selected window shows its name, and its Resume button when the app has something to resume.
+     * One position drives the whole strip, so the scroll, each window's size and its pull toward the centre move
+     * as one piece: [at] 2.5 is halfway between the third and fourth window.
+     */
+    private fun placeWindows(at: Float, width: Int, gap: Int) {
+        recentAt = at
+        val rtl = recentWindows.layoutDirection == View.LAYOUT_DIRECTION_RTL
+        val count = recentWindowRow.childCount
+        recentWindows.scrollTo(((if (rtl) count - 1 - at else at) * (width + gap)).toInt(), 0)
+        for (i in 0 until count) {
+            val d = i - at
+            val far = kotlin.math.abs(d)
+            val shrink = width * (1 - SIDE_WINDOW)
+            // Smaller side windows leave a hole: pull each one in so every visible gap stays [gap] wide.
+            val pull = shrink * (if (far < 1) far / 2 else far - 0.5f)
+            recentWindowRow.getChildAt(i).apply {
+                val size = 1 - (1 - SIDE_WINDOW) * minOf(far, 1f)
+                scaleX = size
+                scaleY = size
+                translationX = if ((d > 0) != rtl) -pull else pull
+            }
+        }
+    }
+
+    /** Glide the strip to window [to] from wherever it is now; a new press takes over mid-way, with no jump. */
+    private fun moveWindows(to: Int, width: Int, gap: Int) {
+        recentMotion?.cancel()
+        val from = recentAt
+        if (from == to.toFloat()) return placeWindows(from, width, gap)
+        if (!animationsOn() || !ValueAnimator.areAnimatorsEnabled()) return placeWindows(to.toFloat(), width, gap)
+        glass.kick(400) // the frost follows the windows while they move
+        recentMotion = ValueAnimator.ofFloat(from, to.toFloat()).apply {
+            duration = 300
+            interpolator = EASE
+            addUpdateListener { placeWindows(it.animatedValue as Float, width, gap) }
+            start()
+        }
+    }
+
+    /**
+     * Recent apps: one frosted window per app, in the home row's tile style (glass or rim card, the same rise on
+     * focus). A title bar with the app's own icon and name sits on the pane; under it, inset and rounded, the app's
+     * last screen, its Continue Watching art, or its banner or icon. The selected window sits in the centre, the
+     * others smaller beside it. Under the selected window: Resume (when the app has a show to resume) and Remove.
      */
     private fun buildRecentWindows(list: List<App>) {
         val screen = resources.displayMetrics
         val width = minOf(screen.widthPixels * 45 / 100, screen.heightPixels * 4 / 5)
-        val height = width * 9 / 16
+        val inset = dp(8)
+        val bar = dp(44)
+        val height = bar + (width - inset * 2) * 9 / 16 + inset
         val gap = dp(GRID_GAP)
         val edge = (screen.widthPixels - width) / 2
         recentWindowRow.setPadding(edge, dp(16), edge, dp(8))
-        recentWindows.scrollTo(0, 0)
-        val rest = if (dark) 0.85f else 1f
+        recentMotion?.cancel()
         val previews = prefs.getBoolean(HomeOverride.RECENT_PREVIEWS, false)
         val clear = recentClear
         for ((index, app) in list.withIndex()) {
             val preview = if (previews) RecentPreviews.get(this, app.pkg) else null
             val show = watchList.firstOrNull { it.pkg == app.pkg }
             val art = show?.image?.takeIf { preview == null }
-            val window = if (preview != null || art != null) pictureWindow(app, preview, art, width)
-            else appTile(app, labeled = false, window = true).apply {
-                // The row's mark, kept at a row tile's share of the window instead of filling it.
-                (this as? ViewGroup)?.getChildAt(0)?.setPadding(width * 3 / 10, height * 3 / 10, width * 3 / 10, height * 3 / 10)
+            val window = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(LinearLayout(this@MainActivity).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(14), 0, dp(14), 0)
+                    addView(ImageView(this@MainActivity).apply {
+                        setImageDrawable(app.icon.constantState?.newDrawable(resources) ?: app.icon)
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, LinearLayout.LayoutParams(dp(24), dp(24)))
+                    addView(label(app.label, 15f).apply {
+                        setPaddingRelative(dp(10), 0, 0, 0)
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                }, LinearLayout.LayoutParams(MATCH_PARENT, bar))
+                addView(windowContent(app, preview, art, width), LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply {
+                    setMargins(inset, 0, inset, inset)
+                })
+                style(this, dp(14), card = true)
+                setOnClickListener { launch(app) }
             }
             window.id = View.generateViewId()
             window.tag = app.pkg
@@ -4736,74 +4828,74 @@ class MainActivity : Activity() {
             // No system shadow: through a see-through pane this large, its corner-to-corner shape shows as a dark X.
             // The glass draws its own shade along the bottom rim (see GlassLayer.light).
             window.elevation = 0f
-            val name = fittingLabel(app.label, 16f).apply {
-                gravity = Gravity.CENTER
-                setPadding(dp(6), dp(14), dp(6), 0)
-                alpha = 0f
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }
-            // The app's own link to the show, at the point where it stopped (see open).
-            val resume = show?.takeIf { it.intent != null }?.let { p ->
-                pill(getString(R.string.recent_resume, p.title)) { open(p) }.apply {
-                    alpha = 0f
-                    (getChildAt(0) as TextView).maxWidth = width - dp(40)
-                    nextFocusUpId = window.id
-                    nextFocusDownId = clear.id
-                    nextFocusLeftId = id
-                    nextFocusRightId = id
-                }
-            }
-            window.nextFocusDownId = resume?.id ?: clear.id
+            window.nextFocusUpId = clear.id
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 clipChildren = false
-                addView(window, LinearLayout.LayoutParams(MATCH_PARENT, height))
-                addView(name, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                resume?.let { addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    gravity = Gravity.CENTER_HORIZONTAL
-                    topMargin = dp(12)
-                }) }
-                scaleX = SIDE_WINDOW
-                scaleY = SIDE_WINDOW
             }
-            // The name and Resume show while the window or its Resume button has focus.
-            val showLabels = Runnable {
-                val on = window.isFocused || resume?.isFocused == true
-                name.setActive(on)
-                name.animate().alpha(if (on) rest else 0f).setDuration(160).start()
-                resume?.animate()?.alpha(if (on) 1f else 0f)?.setDuration(160)?.start()
+            val actions = LinearLayout(this).apply {
+                gravity = Gravity.CENTER
+                alpha = 0f
             }
-            resume?.onFocusChangeListener.let { pillFocus ->
-                resume?.setOnFocusChangeListener { v, focused -> pillFocus?.onFocusChange(v, focused); v.post(showLabels) }
+            val buttons = listOfNotNull(
+                // The app's own link to the show, at the point where it stopped (see open).
+                show?.takeIf { it.intent != null }?.let { p ->
+                    pill(getString(R.string.recent_resume, p.title)) { open(p) }.apply { (getChildAt(0) as TextView).maxWidth = width / 2 }
+                },
+                pill(getString(R.string.recent_remove)) { removeWindow(card, app.pkg, index) },
+            )
+            for ((i, b) in buttons.withIndex()) {
+                actions.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    if (i > 0) marginStart = dp(12)
+                })
+                b.nextFocusUpId = window.id
+                b.nextFocusDownId = b.id
+            }
+            buttons.first().nextFocusLeftId = buttons.first().id
+            buttons.last().nextFocusRightId = buttons.last().id
+            window.nextFocusDownId = buttons.first().id
+            card.addView(window, LinearLayout.LayoutParams(MATCH_PARENT, height))
+            card.addView(actions, LinearLayout.LayoutParams(MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+            // The buttons show while the window or one of them has focus.
+            val showActions = Runnable {
+                val on = window.isFocused || buttons.any { it.isFocused }
+                actions.animate().alpha(if (on) 1f else 0f).setDuration(160).start()
+            }
+            for (b in buttons) {
+                val pillFocus = b.onFocusChangeListener
+                b.setOnFocusChangeListener { v, focused -> pillFocus?.onFocusChange(v, focused); v.post(showActions) }
             }
             val tileFocus = window.onFocusChangeListener // the tile's own rise (see style)
             window.setOnFocusChangeListener { v, focused ->
                 tileFocus?.onFocusChange(v, focused)
                 v.animate().translationZ(0f).setDuration(0).start() // keeps the tile's rise, drops its shadow lift
-                v.post(showLabels)
-                if (focused) clear.nextFocusUpId = window.id
-                if (focused) recentWindows.post {
-                    if (!window.isFocused) return@post
-                    val animate = animationsOn() && ValueAnimator.areAnimatorsEnabled()
-                    val rtl = recentWindows.layoutDirection == View.LAYOUT_DIRECTION_RTL
-                    for (i in 0 until recentWindowRow.childCount) {
-                        val other = recentWindowRow.getChildAt(i)
-                        val steps = i - index
-                        // Smaller side windows leave a hole; pull each one in so every visible gap stays [gap] wide.
-                        val pull = width * (1 - SIDE_WINDOW) * (kotlin.math.abs(steps) - 0.5f)
-                        val scale = if (steps == 0) 1f else SIDE_WINDOW
-                        other.animate().scaleX(scale).scaleY(scale)
-                            .translationX(if (steps == 0) 0f else if ((steps > 0) != rtl) -pull else pull)
-                            .setDuration(if (animate) 160 else 0).setInterpolator(DECELERATE).start()
-                    }
-                    val target = (if (rtl) list.lastIndex - index else index) * (width + gap)
-                    if (animate) recentWindows.smoothScrollTo(target, 0) else recentWindows.scrollTo(target, 0)
+                v.post(showActions)
+                if (focused) {
+                    clear.nextFocusDownId = window.id
+                    moveWindows(index, width, gap)
                 }
             }
             recentWindowRow.addView(card, LinearLayout.LayoutParams(width, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 if (index > 0) marginStart = gap
             })
         }
+        // Start where focus will land (see openAllApps), without motion; the scroll waits for layout.
+        val start = list.indexOfFirst { it.pkg == recentsFocus }.coerceAtLeast(0)
+        recentsFocus = null
+        placeWindows(start.toFloat(), width, gap)
+        recentWindows.post { if (recentAppsOpen) placeWindows(recentAt, width, gap) }
+    }
+
+    /** The window that should be selected when the strip is rebuilt (see buildRecentWindows). */
+    private var recentsFocus: String? = null
+
+    /** Remove: the window fades and shrinks away, then the strip closes the gap from the next window. */
+    private fun removeWindow(card: View, pkg: String, index: Int) {
+        forgetRecent(pkg)
+        val done = { openAllApps(recent = true, at = index) }
+        if (!animationsOn() || !ValueAnimator.areAnimatorsEnabled()) return done()
+        card.animate().alpha(0f).scaleX(SIDE_WINDOW).scaleY(SIDE_WINDOW).setDuration(180).setInterpolator(EASE)
+            .withEndAction { if (recentAppsOpen) done() }.start()
     }
 
     /**
@@ -6528,6 +6620,7 @@ class MainActivity : Activity() {
         val GREYSCALE = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
         val DECELERATE = android.view.animation.DecelerateInterpolator(1.5f)
         const val SIDE_WINDOW = 0.78f // Recent apps: scale of the windows beside the selected one
+        val EASE = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f) // Material's emphasized decelerate
         @Volatile var APPS: List<App>? = null
         @Volatile var SOURCES: List<App>? = null
         /** Mono marks made by glyph(), by package; null = icon has no usable symbol. Main thread only. */
