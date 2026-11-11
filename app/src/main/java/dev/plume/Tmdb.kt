@@ -44,7 +44,7 @@ internal object Tmdb {
             (name.trim().equals(it.name.trim(), ignoreCase = true) || name.trim().equals(it.originalName.trim(), ignoreCase = true))
     }.distinctBy { it.type to it.id }.singleOrNull()
 
-    fun backdrop(title: String, type: String?, key: String): String? {
+    fun backdrop(title: String, type: String?, key: String, preferUhd: Boolean): String? {
         val query = URLEncoder.encode(title, "UTF-8")
         val results = request("search/multi?query=$query", key)?.getJSONArray("results")
             ?: throw IOException("TMDB rejected the key")
@@ -65,7 +65,9 @@ internal object Tmdb {
             .map { images.getJSONObject(it) }
             .filter { it.isNull("iso_639_1") && ShowsWall.fits(it.optInt("width"), it.optInt("height")) }
             .filter { imagePath.matches(it.optString("file_path")) }
-            .maxByOrNull { it.optDouble("vote_average", 0.0) }
+            .maxWithOrNull(compareBy<JSONObject> {
+                wallpaperWidth(it.optInt("width"), it.optInt("height"), preferUhd)
+            }.thenBy { it.optDouble("vote_average", 0.0) })
             ?.let { "https://image.tmdb.org/t/p/original${it.getString("file_path")}" }
     }
 

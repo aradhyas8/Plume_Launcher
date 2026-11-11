@@ -17,7 +17,7 @@
 
 <main class="wrap doc">
   <h1>Privacy Policy</h1>
-  <p class="date">Last updated: 25 October 2026</p>
+  <p class="date">Last updated: 11 November 2026</p>
 
   <p>Plume Launcher ("Plume") is a home screen app for Android TV and Google TV, made by aradhyas8. This policy explains what Plume reads, what it sends, and to whom.</p>
 
@@ -30,7 +30,7 @@
   </ul>
 
   <h2>Data that stays on your TV</h2>
-  <p>Plume reads the following data to show your home screen. It does not leave your TV.</p>
+  <p>Plume keeps the following data on your TV. The services below list any data that Plume sends.</p>
   <ul>
     <li><strong>Installed apps</strong>, to show the apps row and All apps.</li>
     <li><strong>TV listings and Continue Watching</strong> (Android TV's Watch Next list and app channels), to show what you were watching.</li>
@@ -41,18 +41,20 @@
   </ul>
 
   <h2>Services Plume connects to</h2>
-  <p>These services receive your TV's IP address with each request, as any internet request does. Plume sends no other personal data to them.</p>
+  <p>These services receive your TV's IP address with each request. The table lists the data that Plume sends to each service.</p>
   <div class="table-scroll"><table>
     <tr><th>Service</th><th>Why</th><th>When</th></tr>
     <tr><td>ipwho.is</td><td>Find your approximate city from your IP address, for the weather</td><td>Only if weather is on and set to automatic location</td></tr>
     <tr><td>Open-Meteo (api.open-meteo.com, geocoding-api.open-meteo.com)</td><td>Get the weather, and find a city you type</td><td>Only if weather is on</td></tr>
     <tr><td>Bing (www.bing.com)</td><td>Download the daily wallpaper image</td><td>Only if you choose the Bing wallpaper</td></tr>
+    <tr><td>TMDB (api.themoviedb.org, image.tmdb.org)</td><td>Verify your API key and use it to find artwork by show title</td><td>When you add a key, and when Your shows needs artwork</td></tr>
     <tr><td>GitHub (github.com, api.github.com)</td><td>Check for updates, download updates and gallery images</td><td>Once a day for updates; gallery only if you choose it</td></tr>
   </table></div>
   <p>Each service has its own privacy policy. Plume does not control how they handle requests.</p>
 
-  <h2>Adding photos from your phone</h2>
+  <h2>Sending from your phone</h2>
   <p>When you add a wallpaper by QR code, Plume runs a small web page on your TV for a short time. Your phone sends the photo straight to the TV over your home network. The photo does not go through the internet or any server.</p>
+  <p>The TMDB key form also runs on your TV. Use trusted Wi-Fi because the form sends the key over unencrypted HTTP. Plume saves the key on the TV when you select <strong>Done</strong> and excludes it from backups. Select <strong>Turn off TMDB and remove key</strong> to stop lookups.</p>
 
   <h2>Accessibility service</h2>
   <p>Plume includes an accessibility service. It is used for one purpose: to open Plume when you press the Home button, and to run the remote key changes you set up in Plume. The service listens to remote key presses and to which app's window is in front. It does not read screen content, text you type, or other apps' data. It does not store or send any of this information. You can turn the service off at any time in Plume's settings or in Android's Accessibility settings.</p>

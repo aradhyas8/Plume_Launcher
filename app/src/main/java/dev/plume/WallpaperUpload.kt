@@ -156,10 +156,11 @@ internal class UploadServer(val code: String, private val temp: File, private va
 
 /**
  * Turns a photo into a wallpaper: upright (phones often store photos sideways with an orientation tag),
- * cropped to 16:9 around the centre, 1920×1080, mutable. [open] is called once per pass over the image.
+ * cropped to 16:9 around the centre. Use 1080p or native 4K when [allowUhd] and the crop can fill it.
+ * [open] is called once per pass over the image.
  * Returns null if it isn't an image Android can decode.
  */
-internal fun fitWallpaper(open: () -> InputStream): Bitmap? {
+internal fun fitWallpaper(allowUhd: Boolean = false, open: () -> InputStream): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     open().use { BitmapFactory.decodeStream(it, null, bounds) }
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
@@ -175,9 +176,11 @@ internal fun fitWallpaper(open: () -> InputStream): Bitmap? {
     }
     val (w, h) = if (rotation % 180 == 0) bounds.outWidth to bounds.outHeight else bounds.outHeight to bounds.outWidth
     // Decode at the smallest size whose 16:9 crop still covers the screen: a 12 MP photo in full is ~48 MB.
-    val cropW = minOf(w, h * 16 / 9)
+    val cropW = minOf(w.toLong(), h * 16L / 9)
+    val width = wallpaperWidth(w, h, allowUhd)
+    val height = width * 9 / 16
     var sample = 1
-    while (cropW / (sample * 2) >= WALL_W) sample *= 2
+    while (cropW / (sample * 2L) >= width) sample *= 2
     val decoded = open().use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return null
     val upright = if (rotation == 0) decoded else
         Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, Matrix().apply { postRotate(rotation.toFloat()) }, true)
@@ -186,8 +189,9 @@ internal fun fitWallpaper(open: () -> InputStream): Bitmap? {
     val ch = cw * 9 / 16
     val left = (upright.width - cw) / 2
     val top = (upright.height - ch) / 2
-    val out = Bitmap.createBitmap(WALL_W, WALL_H, Bitmap.Config.ARGB_8888)
-    Canvas(out).drawBitmap(upright, Rect(left, top, left + cw, top + ch), Rect(0, 0, WALL_W, WALL_H), Paint(Paint.FILTER_BITMAP_FLAG))
+    if (width == UHD_WIDTH && upright.width == width && upright.height == height) return upright
+    val out = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    Canvas(out).drawBitmap(upright, Rect(left, top, left + cw, top + ch), Rect(0, 0, width, height), Paint(Paint.FILTER_BITMAP_FLAG))
     upright.recycle()
     return out
 }
@@ -211,4 +215,8 @@ internal fun importVideoWallpaper(src: File, dir: File): File? {
 }
 
 private const val WALL_W = 1920
-private const val WALL_H = 1080
+internal const val UHD_WIDTH = 3840
+internal const val UHD_HEIGHT = 2160
+
+internal fun wallpaperWidth(width: Int, height: Int, allowUhd: Boolean): Int =
+    if (allowUhd && width >= UHD_WIDTH && height >= UHD_HEIGHT) UHD_WIDTH else WALL_W

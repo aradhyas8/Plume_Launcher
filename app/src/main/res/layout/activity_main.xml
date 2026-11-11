@@ -7,6 +7,13 @@
     android:background="#F3F5F7">
 
     <SurfaceView
+        android:id="@+id/photoWallpaper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
+    <SurfaceView
         android:id="@+id/videoWallpaper"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

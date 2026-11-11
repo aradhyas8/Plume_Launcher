@@ -43,6 +43,14 @@ class ShowsWallTest {
         assertEquals(null, Tmdb.match(titles + series.copy(id = 3), "Bron", "tv"))
     }
 
+    @Test fun native4kNeedsAnImageThatFillsTheCropAndACompatibleTv() {
+        assertEquals(3840, wallpaperWidth(3840, 2160, true))
+        assertEquals(3840, wallpaperWidth(4000, 3000, true))
+        assertEquals(1920, wallpaperWidth(3840, 2159, true))
+        assertEquals(1920, wallpaperWidth(3839, 2160, true))
+        assertEquals(1920, wallpaperWidth(3840, 2160, false))
+    }
+
     @Test fun theNextOneComesAfterTheCurrentAndTheCurrentIsLast() {
         val keys = listOf("a", "b", "c", "d")
         assertEquals(listOf("c", "d", "a", "b"), ShowsWall.order(keys, "b"))

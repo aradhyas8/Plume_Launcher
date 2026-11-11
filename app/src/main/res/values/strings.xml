@@ -376,6 +376,9 @@
     <string name="tmdb_name">TMDB</string>
     <string name="tmdb_help">Enter a TMDB API key to find sharp wallpapers. When needed, Plume sends show titles to TMDB.</string>
     <string name="tmdb_key">TMDB API key (v3)</string>
+    <string name="tmdb_from_phone">Send key from phone</string>
+    <string name="tmdb_scan">Use trusted Wi-Fi. Scan the code, paste your key on your phone, then select Done on the TV.</string>
+    <string name="tmdb_phone_unavailable">Phone setup is unavailable. Enter the key on your TV.</string>
     <string name="tmdb_key_invalid">Enter a valid TMDB API key (v3).</string>
     <string name="tmdb_key_error">Could not verify or save the key. Try again.</string>
     <string name="tmdb_turn_off">Turn off TMDB and remove key</string>

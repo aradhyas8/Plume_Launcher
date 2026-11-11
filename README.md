@@ -209,7 +209,7 @@ Fire TV does not send Home presses to the service. Smooth volume can also turn H
   ```
 
 - **Aerial Views screensaver:** **Plume settings → Screensaver → Screensaver → Aerial Views**. It uses the scenes you downloaded for the wallpaper, so nothing downloads twice. Press ◀ or ▶ to skip.
-- **Your shows:** Choose **Wallpaper → Your shows**. Plume skips images that fall below 1920 × 1080 after cropping. Open **Wallpaper → TMDB artwork** and enter a [TMDB API key (v3)](https://www.themoviedb.org/settings/api) to find more backdrops.
+- **Your shows:** Choose **Wallpaper → Your shows**. Plume skips images below 1920 × 1080 after cropping and uses native 4K when the image and TV support it. To find more backdrops, open **Wallpaper → TMDB artwork** and add a [TMDB API key (v3)](https://www.themoviedb.org/settings/api). Select **Send key from phone** to paste the key on your phone. Use trusted Wi-Fi, then select **Done** on the TV.
 - **Gallery screensaver:** public-domain landscape paintings (4.7 MB), downloaded only while you use it.
 
 Plume shows every wallpaper as it is, with no dark fades on top.
@@ -261,7 +261,7 @@ Plume has no analytics, no ads and no account. It only connects to the internet 
 - download the Gallery paintings from this repository, **only if you choose that screensaver**
 - check this repository for wallpapers **when you open Built-in**. Plume updates photos you already downloaded. New photos download only when you select them.
 - get the Bing picture of the day (about 300 KB), **only if you choose it as your wallpaper**. Plume sends a request to [bing.com](https://www.bing.com) when the home screen opens: once a day, or once an hour until the picture has changed that day. Bing sees the TV's IP address and its language and country. Plume keeps one picture and deletes it when you choose another wallpaper.
-- find artwork through [TMDB](https://www.themoviedb.org) **only if you add an API key and use Your shows**. TMDB receives the show title when Plume needs a backdrop. The key stays on this TV. Select **Turn off TMDB and remove key** to stop lookups.
+- find artwork through [TMDB](https://www.themoviedb.org) **only if you add an API key and use Your shows**. TMDB receives the key to authenticate requests and the show title when Plume needs a backdrop. Plume stores the key on the TV and excludes it from backups. The QR form sends it over unencrypted HTTP on your local network. Select **Turn off TMDB and remove key** to stop lookups.
 - download one NASA Earth video from [svs.gsfc.nasa.gov](https://svs.gsfc.nasa.gov/4019), **only when you select that scene**. NASA sees the TV's IP address.
 - download an Apple Aerial video from [sylvan.apple.com](https://sylvan.apple.com) or an Amazon Fire TV video from [Amazon's Fire TV CDN](https://aebcs-cdn-prod-na.services.firetv.amazon.dev), **only when you select that scene**. The source sees the TV's IP address.
 - fetch the weather, **only if you turn it on**. It looks up your approximate location from your IP address via [ipwho.is](https://ipwho.is), then gets the forecast from [Open-Meteo](https://open-meteo.com). The Auto theme uses the same location for sunrise and sunset, with no extra request. Clearing Plume's data removes it.
