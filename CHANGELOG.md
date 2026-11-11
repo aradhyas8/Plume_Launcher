@@ -47,6 +47,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - **Wallpaper** opens at the top. Press Back in a submenu to return to the control you opened.
 - **Your shows** uses artwork that fills a 1080p wallpaper. Supported TVs show 4K when the image is large enough.
 - Add a TMDB key to find more show artwork. Select **Send key from phone** to scan a QR code.
+- Plume uses 1080p wallpapers on Hisense lushan TVs to prevent a black background.
+- Top icons use a smaller, lighter shadow over wallpapers.
 
 ## 1.7.1
 

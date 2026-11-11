@@ -1165,7 +1165,7 @@ class MainActivity : Activity() {
     }
 
     /**
-     * A soft shadow in the opposite colour under a top icon, as [ink] gives text, so it holds on busy photos too.
+     * A tight contrast shadow under a top icon so it stays readable on busy photos.
      * Drawn once into a small bitmap in the icon's background, under its focus ring; none on a plain wallpaper.
      */
     private fun iconShadow(v: ImageView) {
@@ -1173,14 +1173,14 @@ class MainActivity : Activity() {
         val icon = v.drawable?.constantState?.newDrawable(resources)?.mutate()
         val box = v.layoutParams.width - v.paddingLeft - v.paddingRight
         if (wpThumb == null || icon == null || box <= 0) return layers.setDrawable(0, ColorDrawable(Color.TRANSPARENT))
-        val blur = dp(2)
+        val blur = dp(1).coerceAtLeast(1)
         val mask = Bitmap.createBitmap(box + blur * 2, box + blur * 2, Bitmap.Config.ARGB_8888)
         icon.setBounds(blur, blur, blur + box, blur + box)
         icon.draw(Canvas(mask))
         val shape = mask.extractAlpha()
         mask.eraseColor(Color.TRANSPARENT)
         Canvas(mask).drawBitmap(shape, 0f, dp(1).toFloat(), Paint().apply {
-            color = if (iconInk == Color.WHITE) 0x59000000 else 0x59FFFFFF
+            color = if (iconInk == Color.WHITE) 0x2E000000 else 0x2EFFFFFF
             maskFilter = BlurMaskFilter(blur.toFloat(), BlurMaskFilter.Blur.NORMAL)
         })
         shape.recycle()
@@ -1432,6 +1432,8 @@ class MainActivity : Activity() {
 
     @Suppress("DEPRECATION") // defaultDisplay is the fallback on Android 8 and 9.
     private fun supportsUhdWallpaper(): Boolean {
+        // shortcut: Hisense lushan captures the 4K layer but displays it black; remove when panel output is verified.
+        if (Build.MANUFACTURER.equals("Hisense", ignoreCase = true) && Build.DEVICE == "lushan") return false
         val mode = if (Build.VERSION.SDK_INT >= 30) display?.mode else windowManager.defaultDisplay.mode
         if (mode == null || mode.physicalWidth < UHD_WIDTH || mode.physicalHeight < UHD_HEIGHT) return false
         val memory = getSystemService(android.app.ActivityManager::class.java)
