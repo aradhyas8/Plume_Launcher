@@ -4678,6 +4678,9 @@ class MainActivity : Activity() {
             }
             window.tag = app.pkg
             window.contentDescription = app.label
+            // No system shadow: through a see-through pane this large, its corner-to-corner shape shows as a dark X.
+            // The glass draws its own shade along the bottom rim (see GlassLayer.light).
+            window.elevation = 0f
             val name = fittingLabel(app.label, 16f).apply {
                 gravity = Gravity.CENTER
                 setPadding(dp(6), dp(14), dp(6), 0)
@@ -4695,6 +4698,7 @@ class MainActivity : Activity() {
             val tileFocus = window.onFocusChangeListener // the tile's own rise (see style)
             window.setOnFocusChangeListener { v, focused ->
                 tileFocus?.onFocusChange(v, focused)
+                v.animate().translationZ(0f).setDuration(0).start() // keeps the tile's rise, drops its shadow lift
                 name.setActive(focused)
                 name.animate().alpha(if (focused) rest else 0f).setDuration(160).start()
                 if (focused) recentWindows.post {
