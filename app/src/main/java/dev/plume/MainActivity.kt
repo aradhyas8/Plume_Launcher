@@ -734,8 +734,8 @@ class MainActivity : Activity() {
         return false
     }
 
+    /** Whether Android resolves the Home intent to Plume. Xiaomi can grant the Home role without routing Home to Plume. */
     private fun isDefaultHome(): Boolean {
-        if (Build.VERSION.SDK_INT >= 29 && getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_HOME) == true) return true
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         return packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == packageName
     }

@@ -34,6 +34,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Plume leaves the system launcher in front while Google TV suspends Plume in a kids profile.
 - Plume starts at cold boot when it is the only Home app. Before, the TV stayed on the boot screen.
 - On Xiaomi TVs, Home opens Plume when **Smooth volume** is on. Before, Home opened the Xiaomi home screen.
+- On Xiaomi TVs, **Remote & Home button** shows Off until the **Home button** is on. Before, it showed On, but Home opened the Xiaomi home screen.
 
 ## 1.7.1
 
