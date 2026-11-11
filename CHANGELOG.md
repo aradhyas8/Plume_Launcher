@@ -16,6 +16,11 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Recent apps.** Press Home twice to open a row of app windows. Press Left or Right to switch apps. Press Back to return to Plume.
+- Hold OK on All apps, then select Recent apps. You can also assign Plume recent apps to a remote key.
+- Enable **App window previews** to show each app's last screen on Android 11 and later. Plume keeps them on the TV after a restart.
+- With no captured screen, a window shows the app's Continue Watching picture.
+- Hold OK on a window to remove it from the list, or select **Clear all**.
 - Choose a date or time format in **Clock & weather**. Select a preset or enter a custom format with a preview.
 
 - Fire TV: Settings opened from Plume stays open on slow TVs. Before, Plume came back in front of it in under a second (#227).

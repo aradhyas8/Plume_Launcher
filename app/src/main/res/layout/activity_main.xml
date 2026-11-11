@@ -299,6 +299,37 @@
                 android:text="@string/all_apps"
                 android:textSize="20sp" />
 
+            <dev.plume.RecentWindowStrip
+                android:id="@+id/recentWindows"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:clipChildren="false"
+                android:focusable="false"
+                android:scrollbars="none"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/recentWindowRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:orientation="horizontal" />
+            </dev.plume.RecentWindowStrip>
+
+            <TextView
+                android:id="@+id/allAppsInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="26dp"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
             <GridLayout
                 android:id="@+id/allAppsGrid"
                 android:layout_width="wrap_content"
