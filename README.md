@@ -95,18 +95,19 @@ You need Android TV or Google TV on **Android 8.0 or newer**.
 
 #### Android 13 and newer
 
-Android 13+ greys out the Accessibility switch for sideloaded apps, and most Google TV builds hide **Allow restricted settings**. If your TV shows that menu, use it: **Settings → Apps → Plume → ⋮ → Allow restricted settings**. If not, unlock it once from a computer or a phone adb app on the same network:
+Android 13 and newer can grey out the Accessibility switch for apps installed outside the Play Store. If your TV shows **Allow restricted settings** in Plume's App info, use it to enable the switch. If Plume reaches the ADB step, turn on debugging in Developer options. Choose **Set up on this TV** if the TV supports **Network debugging** or **USB debugging** over port `5555`. If Android asks, allow the one-time connection. Plume then enables its Home button service.
 
-1. **Settings → System → About**: press **Android TV OS build** seven times.
-2. **Settings → System → Developer options**: turn on **Network debugging** (**USB debugging** on some TVs).
-3. Run, with the address Plume shows:
+If the TV requires a pairing code, choose **Use a phone or computer**. Keep the devices on the same network. To enable Developer options, open **Settings → System → About** and press **Android TV OS build** seven times.
+
+1. In Developer options, open **Wireless debugging → Pair device with pairing code**. Use the address and port in the pairing dialog with `adb pair`.
+2. Use the address and port on the main **Wireless debugging** screen with `adb connect`. For **Network debugging**, skip pairing and connect to the TV on port `5555`.
+3. Check that `adb devices` lists the TV as `device`. Then run the grant:
 
    ```sh
-   adb connect <tv-address>:5555
    adb shell pm grant dev.plume android.permission.WRITE_SECURE_SETTINGS
    ```
 
-4. Accept the prompt on the TV, then choose **Try again** in Plume. Plume turns the service on by itself.
+4. Return to Plume and choose **Try again**. Press Home when Plume asks you to check the button.
 
 The same grant also lets Plume set the Gallery screensaver and turn its Home service back on after a force-stop. Everything else works without it.
 </details>

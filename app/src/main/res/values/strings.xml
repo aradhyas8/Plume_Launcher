@@ -288,6 +288,13 @@
     <string name="setup_service_title">Turn on Plume\'s Home button</string>
     <string name="setup_service_body">Accessibility settings will open. Select \"Plume: Home button\", turn it on, then press Back to come back here.</string>
     <string name="setup_adb_title">Unlock it once with ADB</string>
+    <string name="setup_on_this_tv">Set up on this TV</string>
+    <string name="setup_developer_options">Open Developer options</string>
+    <string name="setup_use_other_device">Use a phone or computer</string>
+    <string name="setup_local_body">Turn on Network debugging or USB debugging in Developer options. If that menu is missing, open Settings → System → About. Press Android TV OS build seven times. Then return here.</string>
+    <string name="setup_local_wait">If Android asks to allow debugging, select Allow. Leave Always allow off for this one-time setup.</string>
+    <string name="setup_local_failed">Plume could not complete local setup. Check that Network debugging or USB debugging is on. If your TV needs a pairing code, use a phone or computer.</string>
+    <string name="setup_manual_adb_body">For Wireless debugging, pair using the port in the pairing dialog. Connect using the port on the main Wireless debugging screen. For Network debugging, skip pairing and use port 5555. Run the grant after ADB connects.</string>
     <string name="setup_adb_body">This TV blocks the Home button switch for apps installed outside the Play Store. Turn on network debugging in Developer options, then run these from a computer or a phone ADB app. Plume does the rest.</string>
     <string name="setup_scan_help">Step-by-step help</string>
     <string name="setup_done_title">Home is set</string>

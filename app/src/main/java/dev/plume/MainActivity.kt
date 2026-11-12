@@ -102,6 +102,7 @@ import java.lang.ref.WeakReference
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.Socket
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 import java.net.URLEncoder
@@ -644,6 +645,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        cancelLocalHomeSetup()
         unregisterReceiver(unlockReceiver)
         if (ready) {
             videoWallpaper.clear()
@@ -775,6 +777,7 @@ class MainActivity : Activity() {
     // doesn't sends us to the background.
 
     private var setupDialog: Dialog? = null
+    private var localHomeSocket: Socket? = null
     private var setupStep = 0 // 1 role dialog open, 2 Accessibility settings open, 3 App info open
     private var homeTest = 0 // the way being checked (1 role, 2 service) while waiting for a Home press
     private var leftDuringTest = false
@@ -888,8 +891,46 @@ class MainActivity : Activity() {
             getString(R.string.setup_no_menu) to { adbPopup() })
     }
 
-    /** The one-time grant lets Plume switch the service on itself, past the greyed-out toggle. */
     private fun adbPopup() {
+        localHomePopup(R.string.setup_local_body)
+    }
+
+    private fun localHomePopup(body: Int) {
+        homePopup(3, getString(R.string.setup_adb_title), getString(body), null,
+            getString(R.string.setup_on_this_tv) to { grantHomeLocally() },
+            getString(R.string.setup_developer_options) to { openSettings(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS) },
+            getString(R.string.setup_use_other_device) to { manualAdbPopup() })
+    }
+
+    private fun grantHomeLocally() {
+        if (checkSelfPermission(WRITE_SECURE) == PackageManager.PERMISSION_GRANTED) return tryHomeService()
+        homePopup(3, getString(R.string.setup_adb_title), getString(R.string.setup_local_wait), null,
+            getString(android.R.string.cancel) to { setupDialog?.dismiss() })
+        val socket = Socket()
+        localHomeSocket = socket
+        Thread({
+            try {
+                socket.use { LocalAdb.grantHomePermission(it) }
+            } catch (e: java.io.IOException) {
+                // The permission check below also covers a disconnect after the grant.
+            } catch (e: java.security.GeneralSecurityException) {
+                // Devices without a compatible provider can use the manual setup.
+            }
+            ui.post {
+                if (localHomeSocket !== socket) return@post
+                localHomeSocket = null
+                if (checkSelfPermission(WRITE_SECURE) == PackageManager.PERMISSION_GRANTED) tryHomeService()
+                else localHomePopup(R.string.setup_local_failed)
+            }
+        }, "home-local-adb").start()
+    }
+
+    private fun cancelLocalHomeSetup() {
+        localHomeSocket?.let { runCatching { it.close() } }
+        localHomeSocket = null
+    }
+
+    private fun manualAdbPopup() {
         val mono = Typeface.MONOSPACE
         val code = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -898,7 +939,8 @@ class MainActivity : Activity() {
                 cornerRadius = dp(10).toFloat()
                 setColor(if (dark) DARK_BG else 0xFFE9EBEF.toInt())
             }
-            listOfNotNull(lanAddress()?.let { "adb connect $it:5555" }, "adb shell pm grant $packageName $WRITE_SECURE").forEach {
+            listOf("adb pair <IP>:<pairing-port>", "adb connect <IP>:<connection-port>",
+                "adb shell pm grant $packageName $WRITE_SECURE").forEach {
                 addView(label(it, 12f).apply { typeface = mono; maxLines = 2; ellipsize = null; setPadding(0, dp(2), 0, dp(2)) })
             }
         }
@@ -915,9 +957,9 @@ class MainActivity : Activity() {
             addView(code, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             addView(qr, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(20) })
         }
-        homePopup(3, getString(R.string.setup_adb_title), getString(R.string.setup_adb_body), extra,
+        homePopup(3, getString(R.string.setup_adb_title), getString(R.string.setup_manual_adb_body), extra,
             getString(R.string.setup_try_again) to { tryHomeService() },
-            getString(R.string.setup_close) to { setupDialog?.dismiss() })
+            getString(R.string.setup_on_this_tv) to { adbPopup() })
     }
 
     /**
@@ -962,6 +1004,7 @@ class MainActivity : Activity() {
      * [frosted] makes it Frosted glass whatever the Glass setting is, when there is a picture to blur.
      */
     private fun homePopup(step: Int, title: String, body: String?, extra: View?, vararg buttons: Pair<String, () -> Unit>, frosted: Boolean = false) {
+        cancelLocalHomeSetup()
         setupDialog?.let { setupDialog = null; it.dismiss() } // replaced, not closed: the dismiss listener leaves the flow alone
         val frost = frosted && Backdrop.of(currentWallpaper()) != Backdrop.PLAIN
         val card: LinearLayout = if (frost || glassActive()) glassSurface(dp(20).toFloat()).also { box ->
@@ -1001,6 +1044,7 @@ class MainActivity : Activity() {
         }
         dialog.setOnDismissListener {
             if (setupDialog !== dialog) return@setOnDismissListener
+            cancelLocalHomeSetup()
             setupDialog = null // closed with Back or a button: setup stops here, and Settings can start it again
             setupStep = 0
             homeTest = 0
@@ -6875,7 +6919,7 @@ class MainActivity : Activity() {
         const val RIM_TOP_LIT = 0x38FFFFFF // white 22%
         const val RIM_SIDE_LIT = 0x17FFFFFF
         const val PANEL_EDGE = 0x0FFFFFFF // white 6%, the settings panel's left edge
-        const val HELP_URL = "https://github.com/aradhyas8/Plume_Launcher#home-button-on-android-13-and-newer"
+        const val HELP_URL = "https://github.com/aradhyas8/Plume_Launcher#android-13-and-newer"
         const val TOGGLE_ON = "\u0000on" // row values drawn as a switch instead of text
         const val TOGGLE_OFF = "\u0000off"
         const val BANNER_DIM = 0.3f // black laid over a colour banner at rest, so the selected one stands out
