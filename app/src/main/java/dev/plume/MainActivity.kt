@@ -6120,10 +6120,25 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Only the columns [readPrograms] reads. A null projection makes the TV provider select every column Android
+     * knows, split_id included (added in Android 12); some TVs upgraded to 12 (Philips 2019 OLEDs) never added it to
+     * watch_next_programs, so the whole query failed and Continue Watching stayed empty.
+     * weight exists only for preview programs; watch_next_type and the engagement time only for Watch Next.
+     */
+    private fun programColumns(uri: Uri): Array<String> {
+        val common = arrayOf("browsable", "title", "package_name", "season_display_number", "episode_display_number",
+            "duration_millis", "last_playback_position_millis", "thumbnail_uri", "poster_art_uri", "poster_art_aspect_ratio",
+            "type", "intent_uri")
+        return if (uri.pathSegments.firstOrNull() == TvContract.WatchNextPrograms.CONTENT_URI.pathSegments.first())
+            common + arrayOf("watch_next_type", "last_engagement_time_utc_millis")
+        else common + "weight"
+    }
+
     /** Pairs of (sort key, item), see [watchSortKey]; a [group] is a channel, its rows sorted by [channelSortKey] and [byWeight]. */
     private fun readPrograms(uri: Uri, hidden: Set<String>, group: String? = null): List<Pair<Long, Prog>> {
         val out = ArrayList<Triple<Long, Long, Prog>>()
-        val cursor = contentResolver.query(uri, null, null, null, null)
+        val cursor = contentResolver.query(uri, programColumns(uri), null, null, null)
         if (cursor == null) android.util.Log.w("Plume", "no TV provider answer for $uri") // provider hidden from us or missing
         cursor?.use { c ->
             fun str(col: String) = c.getColumnIndex(col).let { if (it < 0 || c.isNull(it)) null else c.getString(it) }
