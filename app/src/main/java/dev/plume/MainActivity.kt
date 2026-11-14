@@ -424,7 +424,7 @@ class MainActivity : Activity() {
         // broadcast cannot leave the home screen empty. Do not read prefs, files or the cache yet.
         registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_UNLOCKED))
         if (!getSystemService(UserManager::class.java).isUserUnlocked) {
-            setContentView(R.layout.activity_main)
+            setContentView(View(this).apply { setBackgroundColor(Color.BLACK) })
             return
         }
         ready = true
