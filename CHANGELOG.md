@@ -49,6 +49,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Add a TMDB key to find more show artwork. Select **Send key from phone** to scan a QR code.
 - Plume uses 1080p wallpapers on Hisense lushan TVs to prevent a black background.
 - Top icons use a smaller, lighter shadow over wallpapers.
+- Continue Watching shows Watch Next on Philips TVs with Android 12. Before, the row stayed empty (#265).
 
 ## 1.7.1
 
