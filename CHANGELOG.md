@@ -22,6 +22,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - With no captured screen, a window shows the app's Continue Watching picture.
 - Hold OK on a window to remove it from the list, or select **Clear all**.
 - Choose a date or time format in **Clock & weather**. Select a preset or enter a custom format with a preview.
+- **Faster Home on Fire TV.** Plume uses an alarm to open sooner after you press Home. This needs the `WRITE_SECURE_SETTINGS` grant. Plume restores the previous alarm setting when you turn its Home button off.
 
 - Fire TV: Settings opened from Plume stays open on slow TVs. Before, Plume came back in front of it in under a second (#227).
 - Shows row: when you change sources, the source name, show titles, details and posters slide in the direction of the button you push. Cards keep their positions. The row has one title with dots that show which source is on screen.

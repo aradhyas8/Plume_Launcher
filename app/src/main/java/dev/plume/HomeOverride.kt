@@ -37,6 +37,7 @@ class HomeOverride : AccessibilityService() {
                 addDataScheme("package")
             })
         }
+        HomeAlarm.engage(this)
     }
 
     /**
@@ -59,6 +60,7 @@ class HomeOverride : AccessibilityService() {
         pendingHome = null
         handler.removeCallbacks(finishCapture)
         RecentPreviews.trim() // the saved pictures stay for the next time the service runs
+        HomeAlarm.release(this)
         if (listening) {
             listening = false
             unregisterReceiver(packageReceiver)
@@ -226,8 +228,9 @@ class HomeOverride : AccessibilityService() {
     // Marked as Home so the setup check can tell it from Plume being opened from the apps list.
     private fun goHome(recents: Boolean = false) {
         if (packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SUSPENDED != 0) return
-        super.startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            .putExtra(Remap.OPEN_RECENT_APPS, recents).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val home = Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            .putExtra(Remap.OPEN_RECENT_APPS, recents).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (!HomeAlarm.start(this, home)) super.startActivity(home)
     }
 
     override fun onInterrupt() {}
