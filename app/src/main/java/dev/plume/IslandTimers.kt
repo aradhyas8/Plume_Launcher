@@ -169,7 +169,7 @@ internal object IslandTimers : IslandSource {
                 out += IslandItem(
                     key = "timer", kind = IslandKind.TIMER, title = islandClock(left),
                     sub = c.getString(if (running) R.string.isl_timer_sub else R.string.isl_timer_sub_paused, length),
-                    icon = R.drawable.ms_timer, progress = islFraction(left, total), ticks = running,
+                    icon = R.drawable.ms_timer, progress = islFraction(left, total), tick = if (running) 1000L else 0L,
                     since = p.getLong(T_START, 0L),
                     actions = listOf(
                         IslandAction(label = c.getString(R.string.isl_timer_plus1), description = c.getString(R.string.isl_timer_add_minute)) {
@@ -203,7 +203,7 @@ internal object IslandTimers : IslandSource {
                 key = "stopwatch", kind = IslandKind.STOPWATCH,
                 title = islandClock(islElapsed(p.getLong(W_BASE, 0L), p.getLong(W_SHOWN, 0L), running, now), countdown = false),
                 sub = c.getString(if (running) R.string.isl_timer_stopwatch else R.string.isl_timer_paused),
-                icon = R.drawable.ic_isl_stopwatch, ticks = running, since = p.getLong(W_START, 0L),
+                icon = R.drawable.ic_isl_stopwatch, tick = if (running) 1000L else 0L, since = p.getLong(W_START, 0L),
                 actions = listOf(
                     IslandAction(R.drawable.ic_isl_replay, description = c.getString(R.string.isl_timer_reset)) { zeroStopwatch(c) },
                     pauseOrResume(c, running, { pauseStopwatch(c) }, { resumeStopwatch(c) }),
@@ -220,7 +220,7 @@ internal object IslandTimers : IslandSource {
                 key = "sleep", kind = IslandKind.SLEEP,
                 title = c.getString(if (left >= MINUTE) R.string.isl_timer_sleep_min else R.string.isl_timer_sleep_s, islSleepCount(left)),
                 sub = c.getString(R.string.isl_timer_sleep_sub), icon = R.drawable.ms_bedtime,
-                progress = islFraction(left, sleepEnd - start), ticks = true, since = start,
+                progress = islFraction(left, sleepEnd - start), tick = if (left < 70_000L) 1000L else 30_000L, // minutes, then seconds since = start,
                 actions = listOf(
                     IslandAction(label = c.getString(R.string.isl_timer_plus15), description = c.getString(R.string.isl_timer_add_15)) {
                         extendSleep(c, 15 * MINUTE)

@@ -39,6 +39,13 @@
     <string name="isl_sports">Sports</string>
     <string name="help_isl_sports">Live scores and kick-off times of your teams. Scores come from ESPN.</string>
     <string name="isl_teams">Your teams</string>
+    <string name="help_isl_games_now">Live games, and games that start within 3 hours. Pick one to show it on the island until it ends.</string>
+    <string name="isl_games_none">No games now or in the next 3 hours.</string>
+    <string name="isl_pinned">On the island</string>
+    <string name="isl_n_pinned">%d on the island</string>
+    <string name="isl_leagues">Leagues</string>
+    <string name="help_isl_leagues">A whole league\'s games, only while they are live or about to start.</string>
+    <string name="isl_today">Today</string>
     <string name="help_isl_teams">Pick a league, then your teams.</string>
     <string name="isl_teams_loading">Loading teams…</string>
     <string name="isl_teams_failed">Couldn\'t load teams. Check the internet and try again.</string>
@@ -52,10 +59,28 @@
     <string name="isl_wx_needs_place">Needs the weather location (Clock &amp; weather).</string>
     <string name="isl_update_row">Plume updates</string>
     <string name="help_isl_update">How far an update of Plume is.</string>
+    <string name="isl_dream_row">On the screensaver</string>
+    <string name="help_isl_dream">The song, a live game or a timer, in a corner of the Gallery screensaver.</string>
     <string name="isl_net_row">Internet</string>
     <string name="help_isl_net">When the internet goes, and when it comes back.</string>
     <string name="isl_bt_row">Bluetooth</string>
     <string name="help_isl_bt">Headphones and controllers connecting, and a controller\'s low battery. Android asks to allow Bluetooth.</string>
+    <string name="isl_custom">Other length…</string>
+    <string name="isl_custom_hint">Minutes</string>
+    <string name="isl_start">Start</string>
+    <string name="isl_games_now">Games now</string>
+    <string name="isl_menu_hide">Hide this</string>
+    <string name="isl_menu_mute">Turn off alerts from %1$s</string>
+    <string name="isl_menu_unfollow">Stop following</string>
+    <string name="isl_menu_wx_off">Turn off this weather note</string>
+    <string name="isl_menu_settings">Island settings</string>
+    <string name="isl_access_card_title">Music and alerts on the island</string>
+    <string name="isl_access_card_body">Allow notification access, and the island shows what plays in Spotify and other apps, with calls and doorbell alerts. Plume sends nothing anywhere.</string>
+    <string name="isl_access_give">Give access</string>
+    <string name="isl_net_captive">Sign-in needed</string>
+    <string name="isl_net_captive_sub">This Wi-Fi asks you to sign in on a web page</string>
+    <string name="isl_net_noint">Connected, no internet</string>
+    <string name="isl_net_wifi">Wi-Fi</string>
     <string name="isl_net_down">No internet</string>
     <string name="isl_net_down_sub">Apps and streams can\'t load</string>
     <string name="isl_net_back">Back online</string>
@@ -85,6 +110,20 @@
     <string name="isl_sports_desc_score">%1$s %2$s, %3$s %4$s, %5$s</string>
     <!-- Read aloud: "Pacers at 76ers, Today 7:30 PM". -->
     <string name="isl_sports_desc_pre">%1$s at %2$s, %3$s</string>
+    <!-- The sport folders of the leagues list: Sport › League. "Football" is soccer. -->
+    <string name="isl_sports_group_american_football">American football</string>
+    <string name="isl_sports_group_basketball">Basketball</string>
+    <string name="isl_sports_group_baseball">Baseball</string>
+    <string name="isl_sports_group_hockey">Ice hockey</string>
+    <string name="isl_sports_group_football">Football</string>
+    <string name="isl_sports_group_cricket">Cricket</string>
+    <string name="isl_sports_group_motorsport">Motorsport</string>
+    <string name="isl_sports_group_tennis">Tennis</string>
+    <string name="isl_sports_group_golf">Golf</string>
+    <string name="isl_sports_group_fighting">Fighting</string>
+    <!-- Shown after the hold menu's unfollow: "Removed IND at PHI", "Unfollowed 76ers", "Unfollowed NBA". -->
+    <string name="isl_sports_unpinned">Removed %1$s</string>
+    <string name="isl_sports_unfollowed">Unfollowed %1$s</string>
 
     <!-- Timers -->
     <!-- The island's timer, stopwatch and sleep timer: see IslandTimers. -->

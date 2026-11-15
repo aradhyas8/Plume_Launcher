@@ -1,6 +1,7 @@
 package dev.plume
 
 import android.app.Activity
+import android.content.ComponentName
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
@@ -8,15 +9,30 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Typeface
+import android.media.MediaMetadata
+import android.media.session.MediaController
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.service.dreams.DreamService
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.Executors
@@ -58,13 +74,118 @@ internal fun paintingsReady(c: Context) = PAINTING_FILES.all { File(paintingsDir
  */
 class GalleryDream : DreamService() {
     private lateinit var playback: GalleryPlayback
+    private val ui = Handler(Looper.getMainLooper())
+    private val refresh = Runnable { tick() }
+
+    // The island's "now" line in the bottom corner; null when the user turned the island or its screensaver line off.
+    private var line: LinearLayout? = null
+    private lateinit var art: ImageView
+    private lateinit var title: TextView
+    private lateinit var sub: TextView
+    private var shownKey: String? = null
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         isInteractive = true // we handle keys ourselves (see dispatchKeyEvent)
         isFullscreen = true
         playback = GalleryPlayback(this)
-        setContentView(playback.view)
+        val prefs = getSharedPreferences("home", MODE_PRIVATE)
+        if (!prefs.getBoolean("isl_on", true) || !prefs.getBoolean("isl_dream", true)) {
+            setContentView(playback.view)
+            return
+        }
+        IslandTimers.init(this)
+        val dp = resources.displayMetrics.density
+        // The same white and soft shadow as the painting's caption: the line never paints a box over the picture.
+        fun text(sp: Float, a: Float) = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setShadowLayer(12f, 0f, 2f, 0x99000000.toInt())
+            setSingleLine()
+            alpha = a
+        }
+        art = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(v: View, o: Outline) = o.setOval(0, 0, v.width, v.height)
+            }
+            clipToOutline = true
+        }
+        title = text(15f, 1f)
+        sub = text(13f, 0.8f)
+        val l = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            alpha = 0f
+            addView(art, LinearLayout.LayoutParams((24 * dp).toInt(), (24 * dp).toInt()).apply { marginEnd = (10 * dp).toInt() })
+            addView(title)
+            addView(sub, LinearLayout.LayoutParams(-2, -2).apply { marginStart = (6 * dp).toInt() })
+        }
+        line = l
+        // The caption sits 96 px in from the bottom left of the 1080p picture, so the line keeps the same margin on the right.
+        val m = (96 * resources.displayMetrics.heightPixels / 1080f).toInt()
+        setContentView(FrameLayout(this).apply {
+            addView(playback.view)
+            addView(l, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(m, m, m, m) })
+        })
+        ui.post(refresh)
+    }
+
+    private fun tick() {
+        render(nowItem())
+        ui.postDelayed(refresh, NOW_MS)
+    }
+
+    /**
+     * What is going on now, ranked as the island ranks it: the song only while it plays (a paused one is not "now"),
+     * else a live or pinned game, else a running timer. Sports keep their games only while the home screen polls, so
+     * during a long dream they can be empty; the dream does not start polling, because the line must not use the network.
+     */
+    private fun nowItem(): IslandItem? {
+        val now = System.currentTimeMillis()
+        val sessions = try {
+            (getSystemService(MEDIA_SESSION_SERVICE) as MediaSessionManager).getActiveSessions(ComponentName(this, MediaListener::class.java))
+        } catch (e: SecurityException) { // no notification access: no music
+            emptyList<MediaController>()
+        }
+        fun name(c: MediaController) = c.metadata
+            ?.let { it.getString(MediaMetadata.METADATA_KEY_TITLE) ?: it.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) }
+            ?.takeIf { it.isNotBlank() }
+        fun playing(c: MediaController) = c.playbackState?.state == PlaybackState.STATE_PLAYING
+        val music = islandPick(sessions, ::playing) { name(it) != null }?.takeIf(::playing)?.let { c ->
+            val m = c.metadata
+            val who = m?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+                ?: appLabel(this, c.packageName)
+            val pic = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                ?: m?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+            IslandItem("media", IslandKind.MEDIA, name(c)!!, who, image = pic, since = now)
+        }
+        return islandArrange(listOfNotNull(music) + IslandSports.items(now) + IslandTimers.items(now), now).firstOrNull()
+    }
+
+    /**
+     * Shows [item], or nothing. A new thing fades the old one out and itself in; the same thing (a timer counting
+     * down, a new score) only updates its text, so the line does not blink at every refresh.
+     */
+    private fun render(item: IslandItem?) {
+        val l = line ?: return
+        val fill = {
+            if (item != null) {
+                art.setImageBitmap(item.image)
+                art.visibility = if (item.image != null) View.VISIBLE else View.GONE
+                title.text = item.title
+                sub.text = item.sub?.let { "· $it" }
+                sub.visibility = if (item.sub.isNullOrEmpty()) View.GONE else View.VISIBLE
+            }
+        }
+        if (item?.key == shownKey) return fill()
+        shownKey = item?.key
+        l.animate().cancel()
+        // A line already hidden (the first one) does not wait out a full fade before it shows.
+        l.animate().alpha(0f).setDuration((l.alpha * FADE_MS).toLong()).withEndAction {
+            fill()
+            if (item != null) l.animate().alpha(1f).setDuration(FADE_MS)
+        }
     }
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
@@ -79,9 +200,21 @@ class GalleryDream : DreamService() {
         return true
     }
 
+    override fun onDreamingStopped() {
+        ui.removeCallbacks(refresh)
+        super.onDreamingStopped()
+    }
+
     override fun onDetachedFromWindow() {
+        ui.removeCallbacks(refresh)
+        line?.animate()?.cancel()
         playback.release()
         super.onDetachedFromWindow()
+    }
+
+    private companion object {
+        const val NOW_MS = 5_000L
+        const val FADE_MS = 400L
     }
 }
 

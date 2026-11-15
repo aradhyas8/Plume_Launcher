@@ -8,48 +8,86 @@ import org.json.JSONObject
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.Callable
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 /**
- * The island's sports source: the games of the teams the user follows, from ESPN's public site API (no key, no
- * account). The home screen calls [start] while it is shown and [stop] when it leaves; each poll asks one scoreboard
- * per league that has a followed team, and how soon the next poll comes depends on how close the games are (see
- * [sportsPollMs]). The settings page lists [LEAGUES], fetches a league's [teams] and calls [follow] and [unfollow].
- * Nothing about the user goes out: the requests carry only the league in the path and a generic User-Agent.
+ * The island's sports source, from ESPN's public site API (no key, no account). Three things put a game on the
+ * island: a game the user pinned from "Games now" ([gamesNow], [pinGame]), a game of a followed team ([follow]), and
+ * a live or about-to-start game of a followed league ([followLeague]). The home screen calls [start] while it is
+ * shown and [stop] when it leaves; each poll asks one scoreboard per league that any of the three needs, and how soon
+ * the next poll comes depends on how close the games are (see [sportsPollMs]). The settings call [start] again after
+ * every change. Nothing about the user goes out: the requests carry only the league and dates in the URL and a
+ * generic User-Agent.
  */
 internal object IslandSports : IslandSource {
-    /** A league the settings can offer. [query] is added to its scoreboard request. */
-    class League(val sport: String, val league: String, val name: String, val query: String = "")
+    /**
+     * A league the settings can offer, in the sport folder [group] (a string resource). [query] is added to its
+     * scoreboard request. [teams] is false for the leagues with no teams list (races, tennis, golf, fights, cricket):
+     * they have no Teams page, and their scoreboard is asked without dates, because it holds one event that lasts
+     * days (a race weekend, a tournament) or, for cricket, every series on now, and a date filter drops those.
+     */
+    class League(val sport: String, val league: String, val name: String, val group: Int, val query: String = "", val teams: Boolean = true) {
+        /** "sport/league", the same as [SportsGame.league]. */
+        val key get() = "$sport/$league"
+        internal val entry get() = "$sport|$league"
+    }
 
     data class Team(val id: String, val name: String, val abbreviation: String, val logo: String?)
 
-    // The league names are proper names, so they stay plain constants rather than translated resources. Cricket is
-    // left out: ESPN has no teams list for it ("League not found"), and its scoreboard is empty outside the season.
+    /** A game for the "Games now" page: [title] is the live score or "IND at PHI · 7:30 PM". */
+    data class NowGame(
+        val sport: String, val league: String, val leagueName: String, val eventId: String, val title: String,
+        val awayLogo: String?, val homeLogo: String?, val live: Boolean, val start: Long,
+    )
+
+    // The league names are proper names, so they stay plain constants rather than translated resources. ESPN has no
+    // cricket list of all series, but its score panel ("scorepanel") holds every match on now, so "Cricket" is that.
     val LEAGUES = listOf(
-        League("football", "nfl", "NFL"),
-        League("basketball", "nba", "NBA"),
-        League("basketball", "wnba", "WNBA"),
-        League("baseball", "mlb", "MLB"),
-        League("hockey", "nhl", "NHL"),
-        League("soccer", "usa.1", "MLS"),
-        League("soccer", "eng.1", "Premier League"),
-        League("soccer", "esp.1", "La Liga"),
-        League("soccer", "ger.1", "Bundesliga"),
-        League("soccer", "ita.1", "Serie A"),
-        League("soccer", "fra.1", "Ligue 1"),
-        League("soccer", "uefa.champions", "Champions League"),
+        League("football", "nfl", "NFL", R.string.isl_sports_group_american_football),
         // Without groups=80 the college scoreboard has only the ranked games. ponytail: a game between two teams
         // outside the top division (FBS) still does not show; ask for groups=81 too if someone follows such a team.
-        League("football", "college-football", "College Football", "groups=80"),
+        League("football", "college-football", "College Football", R.string.isl_sports_group_american_football, "groups=80"),
+        League("basketball", "nba", "NBA", R.string.isl_sports_group_basketball),
+        League("basketball", "wnba", "WNBA", R.string.isl_sports_group_basketball),
+        // Without groups=50 the scoreboard has only a few featured games, not all of Division I.
+        League("basketball", "mens-college-basketball", "College Basketball", R.string.isl_sports_group_basketball, "groups=50"),
+        League("baseball", "mlb", "MLB", R.string.isl_sports_group_baseball),
+        League("hockey", "nhl", "NHL", R.string.isl_sports_group_hockey),
+        League("soccer", "eng.1", "Premier League", R.string.isl_sports_group_football),
+        League("soccer", "esp.1", "La Liga", R.string.isl_sports_group_football),
+        League("soccer", "ger.1", "Bundesliga", R.string.isl_sports_group_football),
+        League("soccer", "ita.1", "Serie A", R.string.isl_sports_group_football),
+        League("soccer", "fra.1", "Ligue 1", R.string.isl_sports_group_football),
+        League("soccer", "ned.1", "Eredivisie", R.string.isl_sports_group_football),
+        League("soccer", "usa.1", "MLS", R.string.isl_sports_group_football),
+        League("soccer", "mex.1", "Liga MX", R.string.isl_sports_group_football),
+        League("soccer", "ksa.1", "Saudi Pro League", R.string.isl_sports_group_football),
+        League("soccer", "uefa.champions", "Champions League", R.string.isl_sports_group_football),
+        League("soccer", "uefa.europa", "Europa League", R.string.isl_sports_group_football),
+        League("cricket", "8048", "IPL", R.string.isl_sports_group_cricket, teams = false),
+        League("cricket", "8044", "Big Bash League", R.string.isl_sports_group_cricket, teams = false),
+        League("cricket", PANEL, "Cricket", R.string.isl_sports_group_cricket, teams = false),
+        League("racing", "f1", "Formula 1", R.string.isl_sports_group_motorsport, teams = false),
+        League("tennis", "atp", "ATP", R.string.isl_sports_group_tennis, teams = false),
+        League("tennis", "wta", "WTA", R.string.isl_sports_group_tennis, teams = false),
+        League("golf", "pga", "PGA Tour", R.string.isl_sports_group_golf, teams = false),
+        League("mma", "ufc", "UFC", R.string.isl_sports_group_fighting, teams = false),
     )
 
     const val PREF_ON = "isl_sports"
     const val PREF_TEAMS = "isl_teams"
+    const val PREF_LEAGUES = "isl_leagues"
+    const val PREF_GAMES = "isl_games"
 
     private const val BASE = "https://site.api.espn.com/apis/site/v2/sports"
+    private const val PANEL = "scorepanel"
     private const val PEEK_MS = 5_000L
+    private const val NOW_CACHE_MS = 60_000L
 
     private val main = Handler(Looper.getMainLooper())
     private val io by lazy { Executors.newSingleThreadScheduledExecutor() }
@@ -59,34 +97,91 @@ internal object IslandSports : IslandSource {
     // second chain of polls.
     @Volatile private var generation = 0
 
-    /** A game as the island last saw it, with when it peeks and when it goes, kept across polls. */
-    private class Shown(val game: SportsGame, val peekUntil: Long, val until: Long)
+    /**
+     * A game as the island last saw it: why it shows ([source], see [sportsSource]), when its score last changed,
+     * when it peeks and when it goes, kept across polls.
+     */
+    private class Shown(val game: SportsGame, val source: Int, val changed: Long, val peekUntil: Long, val until: Long)
 
     @Volatile private var shown: List<Shown> = emptyList()
+    // The last good scoreboard of each league, by "sport/league", so the Teams page can put today's teams first.
+    private val lastBoard = ConcurrentHashMap<String, List<SportsGame>>()
+    @Volatile private var nowCache: Pair<Long, List<NowGame>>? = null
 
-    // ---------- followed teams (for the settings page; no network) ----------
+    // ---------- what the user follows (for the settings pages; no network) ----------
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("home", Context.MODE_PRIVATE)
 
-    fun followed(ctx: Context): List<FollowedTeam> =
-        prefs(ctx).getStringSet(PREF_TEAMS, null).orEmpty().mapNotNull(FollowedTeam::parse).sortedBy { it.name }
+    private fun stored(ctx: Context, key: String) = prefs(ctx).getStringSet(key, null).orEmpty()
+
+    // The set getStringSet returns must not be changed in place, so the edit works on a copy.
+    private fun edit(ctx: Context, key: String, change: (MutableSet<String>) -> Unit) {
+        val copy = HashSet(stored(ctx, key))
+        change(copy)
+        prefs(ctx).edit().putStringSet(key, copy).apply()
+    }
+
+    fun followed(ctx: Context): List<FollowedTeam> = stored(ctx, PREF_TEAMS).mapNotNull(FollowedTeam::parse).sortedBy { it.name }
 
     fun follow(ctx: Context, sport: String, league: String, team: Team) {
         val entry = FollowedTeam(sport, league, team.id, team.abbreviation, team.name).entry
-        editTeams(ctx) { set -> set.removeAll { FollowedTeam.parse(it)?.same(sport, league, team.id) == true }; set += entry }
+        edit(ctx, PREF_TEAMS) { set -> set.removeAll { FollowedTeam.parse(it)?.same(sport, league, team.id) == true }; set += entry }
     }
 
     fun unfollow(ctx: Context, sport: String, league: String, teamId: String) =
-        editTeams(ctx) { set -> set.removeAll { FollowedTeam.parse(it)?.same(sport, league, teamId) == true } }
+        edit(ctx, PREF_TEAMS) { set -> set.removeAll { FollowedTeam.parse(it)?.same(sport, league, teamId) == true } }
 
-    // The set getStringSet returns must not be changed in place, so the edit works on a copy.
-    private fun editTeams(ctx: Context, change: (MutableSet<String>) -> Unit) {
-        val set = HashSet(prefs(ctx).getStringSet(PREF_TEAMS, null).orEmpty())
-        change(set)
-        prefs(ctx).edit().putStringSet(PREF_TEAMS, set).apply()
+    /** The followed leagues, in [LEAGUES] order. Stored as "sport|league". */
+    fun followedLeagues(ctx: Context): List<League> = stored(ctx, PREF_LEAGUES).let { set -> LEAGUES.filter { it.entry in set } }
+
+    fun followLeague(ctx: Context, l: League) = edit(ctx, PREF_LEAGUES) { it += l.entry }
+
+    fun unfollowLeague(ctx: Context, l: League) = edit(ctx, PREF_LEAGUES) { it -= l.entry }
+
+    fun pinned(ctx: Context): List<PinnedGame> = stored(ctx, PREF_GAMES).mapNotNull(PinnedGame::parse)
+
+    /**
+     * Pins a game from [gamesNow]. The pin goes by itself two hours after the game's final; when the island never
+     * sees a final (the TV was off), it goes eight hours after the start, or after the pin for an event that started
+     * days ago (golf, a Test match).
+     */
+    fun pinGame(ctx: Context, g: NowGame) {
+        val entry = PinnedGame(g.sport, g.league, g.eventId, maxOf(g.start, System.currentTimeMillis()) + 8 * HOUR).entry
+        edit(ctx, PREF_GAMES) { set -> set.removeAll { PinnedGame.parse(it)?.eventId == g.eventId }; set += entry }
     }
 
-    /** A league's teams by name, for the settings page. [done] runs on the main thread, with an empty list on failure. */
+    fun unpinGame(ctx: Context, eventId: String) =
+        edit(ctx, PREF_GAMES) { set -> set.removeAll { PinnedGame.parse(it)?.eventId == eventId } }
+
+    /**
+     * The hold menu's "unfollow" for the island item [itemKey] ("sports:<eventId>"): unpins the game when it is
+     * pinned, else unfollows the followed teams playing in it, else unfollows its league. Returns what it did, for a
+     * toast, or null when the game is not one the island shows.
+     */
+    fun unfollowFor(ctx: Context, itemKey: String): String? {
+        val id = itemKey.removePrefix("sports:")
+        val g = shown.firstOrNull { it.game.id == id }?.game ?: return null
+        if (pinned(ctx).any { it.eventId == id }) {
+            unpinGame(ctx, id)
+            return ctx.getString(R.string.isl_sports_unpinned, label(ctx, g))
+        }
+        val (sport, league) = g.league.split('/', limit = 2)
+        val teams = followed(ctx).filter { it.sport == sport && it.league == league && (it.teamId == g.away?.id || it.teamId == g.home?.id) }
+        if (teams.isNotEmpty()) {
+            teams.forEach { unfollow(ctx, sport, league, it.teamId) }
+            return ctx.getString(R.string.isl_sports_unfollowed, teams.joinToString(", ") { it.name })
+        }
+        val l = followedLeagues(ctx).firstOrNull { it.key == g.league } ?: return null
+        unfollowLeague(ctx, l)
+        return ctx.getString(R.string.isl_sports_unfollowed, l.name)
+    }
+
+    // ---------- settings lists (network, off the main thread) ----------
+
+    /**
+     * A league's teams for the Teams page: the teams that play today first, then by name. [done] runs on the main
+     * thread, with an empty list on failure. [playingToday] then says which ones play today, so the page can mark them.
+     */
     fun teams(sport: String, league: String, done: (List<Team>) -> Unit) {
         // Its own thread, so the list does not wait behind a slow poll.
         Thread {
@@ -94,16 +189,53 @@ internal object IslandSports : IslandSource {
                 // The default page holds only 50 teams; college football has over 700.
                 val teams = islandJson("$BASE/$sport/$league/teams?limit=1000").getJSONArray("sports").getJSONObject(0)
                     .getJSONArray("leagues").getJSONObject(0).getJSONArray("teams")
-                (0 until teams.length()).mapNotNull { i ->
+                val all = (0 until teams.length()).mapNotNull { i ->
                     val t = teams.optJSONObject(i)?.optJSONObject("team") ?: return@mapNotNull null
                     val id = t.optString("id").ifEmpty { return@mapNotNull null }
                     Team(id, t.optString("displayName"), t.optString("abbreviation"),
                         t.optJSONArray("logos")?.optJSONObject(0)?.optString("href")?.ifEmpty { null })
-                }.sortedBy { it.name }
+                }
+                // A league nobody follows has no scoreboard yet; one more request here gives the page today's teams.
+                if (!lastBoard.containsKey("$sport/$league")) LEAGUES.firstOrNull { it.key == "$sport/$league" }?.let { fetch(it, System.currentTimeMillis()) }
+                val today = playingToday(sport, league)
+                all.sortedWith(compareBy<Team>({ it.id !in today }, { it.name }))
             } catch (e: Exception) {
                 android.util.Log.w("Plume", "sports teams $sport/$league failed ($e)")
                 emptyList()
             }
+            main.post { done(list) }
+        }.start()
+    }
+
+    /** The ids of the league's teams that play today (local time), from its last scoreboard. No network. */
+    fun playingToday(sport: String, league: String): Set<String> =
+        sportsPlayingToday(lastBoard["$sport/$league"].orEmpty(), System.currentTimeMillis(), ZoneId.systemDefault())
+
+    /**
+     * Every game of every league that is live or starts within three hours, live first, then by start time. [done]
+     * runs on the main thread; a league that fails is left out. The list is kept for a minute, so going back and
+     * forth on the page does not ask ESPN again.
+     */
+    fun gamesNow(ctx: Context, done: (List<NowGame>) -> Unit) {
+        nowCache?.takeIf { System.currentTimeMillis() - it.first < NOW_CACHE_MS }?.let { cached -> main.post { done(cached.second) }; return }
+        Thread {
+            val now = System.currentTimeMillis()
+            // A few leagues at a time: one by one, 26 leagues take too long; all at once is a burst of requests.
+            val pool = Executors.newFixedThreadPool(6)
+            val jobs = LEAGUES.map { l -> l to pool.submit(Callable { fetch(l, now).orEmpty() }) }
+            pool.shutdown()
+            val list = jobs.flatMap { (l, job) ->
+                job.get().filter { sportsNow(it, now) }.map { g ->
+                    val live = g.state == "in"
+                    val title = when {
+                        !live -> "${label(ctx, g)} · ${clock(ctx, g.start)}"
+                        g.name != null -> "${g.name} · ${g.shortDetail}"
+                        else -> sportsScore(g)
+                    }
+                    NowGame(l.sport, l.league, l.name, g.id, title, g.away?.logo ?: g.logo, g.home?.logo, live, g.start)
+                }
+            }.distinctBy { it.eventId }.sortedWith(compareBy<NowGame>({ !it.live }, { it.start }))
+            nowCache = now to list
             main.post { done(list) }
         }.start()
     }
@@ -129,59 +261,99 @@ internal object IslandSports : IslandSource {
         val ctx = app ?: return
         val now = System.currentTimeMillis()
         val before = items(now)
-        val teams = if (prefs(ctx).getBoolean(PREF_ON, true)) followed(ctx) else emptyList()
+        val on = prefs(ctx).getBoolean(PREF_ON, true)
+        val teams = if (on) followed(ctx) else emptyList()
+        val leagues = if (on) followedLeagues(ctx).map { it.key }.toSet() else emptySet()
+        val pins = if (on) pinned(ctx) else emptyList()
+        val teamIds = teams.map { "${it.sport}/${it.league}/${it.teamId}" }.toSet()
+        val pinIds = pins.map { it.eventId }.toSet()
+        val needed = (teams.map { "${it.sport}/${it.league}" } + leagues + pins.map { "${it.sport}/${it.league}" }).distinct()
         val old = shown.associateBy { it.game.id }
-        val games = teams.groupBy { it.sport to it.league }.flatMap { (key, list) ->
-            val (sport, league) = key
-            val ids = list.map { it.teamId }.toSet()
-            val query = LEAGUES.firstOrNull { it.sport == sport && it.league == league }?.query.orEmpty()
+        // One fetch per league, whether teams, the league itself or pins asked for it.
+        val games = needed.flatMap { key ->
+            val (sport, league) = key.split('/', limit = 2)
+            val l = LEAGUES.firstOrNull { it.key == key } ?: League(sport, league, league, 0)
             // When a request fails the league keeps the games it had, so one network hiccup does not blank a live game.
-            val fresh = scoreboard(sport, league, query) ?: shown.map { it.game }.filter { it.league == "$sport/$league" }
-            fresh.filter { it.away.id in ids || it.home.id in ids }
+            fetch(l, now) ?: shown.map { it.game }.filter { it.league == key }
         }.distinctBy { it.id }
-        shown = games.map { g ->
+        val picked = games.mapNotNull { g ->
+            val team = "${g.league}/${g.away?.id}" in teamIds || "${g.league}/${g.home?.id}" in teamIds
+            val source = sportsSource(g, g.id in pinIds, team, g.league in leagues, now) ?: return@mapNotNull null
             val o = old[g.id]
-            val peek = if (sportsScored(o?.game, g)) now + PEEK_MS else o?.peekUntil ?: 0L
+            // Only pinned games and followed teams open the island on a goal; a followed league's games stay quiet.
+            // Cricket shows by name and its score moves every ball, so it would open the island on every poll.
+            val scored = g.name == null && sportsScored(o?.game, g)
+            val peek = if (scored && source != SPORTS_LEAGUE) now + PEEK_MS else o?.peekUntil ?: 0L
             // A final result keeps the end time it got when it was first seen final.
             val until = when {
                 g.state != "post" -> Long.MAX_VALUE
                 o != null && o.game.state == "post" -> o.until
                 else -> sportsFinalUntil(now, g.start, o?.game?.state == "in")
             }
-            Shown(g, peek, until)
+            Shown(g, source, if (scored) now else o?.changed ?: g.start, peek, until)
         }
+        shown = picked
+        // A pin goes two hours after its final, or at its own end time when the island never saw a final.
+        val gone = pins.filter { p -> now >= minOf(p.until, picked.firstOrNull { it.game.id == p.eventId }?.until ?: Long.MAX_VALUE) }
+            .map { it.eventId }.toSet()
+        if (gone.isNotEmpty()) edit(ctx, PREF_GAMES) { set -> set.removeAll { PinnedGame.parse(it)?.eventId in gone } }
         if (items(now) != before) Island.changed()
+        // A followed league's game counts for the poll interval before it shows, so it appears 30 minutes ahead on time.
+        val watch = games.filter { it.league in leagues } + picked.map { it.game }
         // With nothing followed (or sports off) there is nothing to wait for; the settings call start() again.
-        if (teams.isNotEmpty() && gen == generation) task = io.schedule(Runnable { poll(gen) }, sportsPollMs(games, now), TimeUnit.MILLISECONDS)
+        if (needed.isNotEmpty() && gen == generation) task = io.schedule(Runnable { poll(gen) }, sportsPollMs(watch, now), TimeUnit.MILLISECONDS)
     }
 
-    private fun scoreboard(sport: String, league: String, query: String): List<SportsGame>? = try {
-        val events = islandJson("$BASE/$sport/$league/scoreboard" + if (query.isEmpty()) "" else "?$query").optJSONArray("events")
-        if (events == null) emptyList() else (0 until events.length()).mapNotNull { game("$sport/$league", events.optJSONObject(it)) }
+    /** A league's games around now, or null when a request fails. Also keeps them as the league's [lastBoard]. */
+    private fun fetch(l: League, now: Long): List<SportsGame>? = try {
+        val urls = when {
+            l.league == PANEL -> listOf("$BASE/${l.sport}/$PANEL")
+            l.teams -> sportsDays(now).map { "$BASE/${l.key}/scoreboard" + sportsQuery(l.query, it) }
+            else -> listOf("$BASE/${l.key}/scoreboard" + sportsQuery(l.query, null))
+        }
+        urls.flatMap { url ->
+            val j = islandJson(url)
+            // The cricket panel holds one scoreboard per series under "scores"; a league's scoreboard is one.
+            val boards = j.optJSONArray("scores")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } } ?: listOf(j)
+            boards.flatMap { b ->
+                val logo = b.optJSONArray("leagues")?.optJSONObject(0)?.optJSONArray("logos")?.optJSONObject(0)?.optString("href")?.ifEmpty { null }
+                val events = b.optJSONArray("events")
+                if (events == null) emptyList() else (0 until events.length()).mapNotNull { game(l, events.optJSONObject(it), logo) }
+            }
+        }.distinctBy { it.id }.also { lastBoard[l.key] = it }
     } catch (e: Exception) {
-        android.util.Log.w("Plume", "sports scoreboard $sport/$league failed ($e)")
+        android.util.Log.w("Plume", "sports scoreboard ${l.key} failed ($e)")
         null
     }
 
-    private fun game(league: String, e: JSONObject?): SportsGame? {
+    private fun game(l: League, e: JSONObject?, leagueLogo: String?): SportsGame? {
         e ?: return null
-        val sides = e.optJSONArray("competitions")?.optJSONObject(0)?.optJSONArray("competitors") ?: return null
+        val c = e.optJSONArray("competitions")?.optJSONObject(0)
+        val sides = c?.optJSONArray("competitors")
         var away: SportsSide? = null
         var home: SportsSide? = null
-        for (i in 0 until sides.length()) {
-            val s = sides.optJSONObject(i) ?: continue
+        for (i in 0 until (sides?.length() ?: 0)) {
+            val s = sides?.optJSONObject(i) ?: continue
+            // Racers, players and fighters are athletes, not teams; those events show by name.
             val t = s.optJSONObject("team") ?: continue
             val side = SportsSide(t.optString("id"), t.optString("abbreviation"),
                 t.optString("shortDisplayName").ifEmpty { t.optString("displayName") }, s.optString("score"),
                 t.optString("logo").ifEmpty { null })
             if (s.optString("homeAway") == "home") home = side else away = side
         }
-        val type = e.optJSONObject("status")?.optJSONObject("type") ?: return null
-        return SportsGame(e.optString("id"), league, sportsTime(e.optString("date")), type.optString("state"),
-            type.optBoolean("completed"), type.optString("shortDetail"), type.optString("detail"),
-            away ?: return null, home ?: return null)
+        val status = e.optJSONObject("status")
+        val type = status?.optJSONObject("type") ?: return null
+        // Cricket scores ("339 & 169/7 (58 ov)") are too long for the pill, and races, tournaments and fights have no
+        // two teams, so those show by name with ESPN's summary ("Zimbabwe lead by 291 runs") or status ("Lap 34/71").
+        // A golf event's own status has no detail; its round ("Round 3") is on the competition.
+        val named = l.sport == "cricket" || away == null || home == null
+        val cType = c?.optJSONObject("status")?.optJSONObject("type")
+        fun text(k: String) = (if (named) status?.optString("summary").orEmpty() else "").ifEmpty { type.optString(k) }
+            .ifEmpty { cType?.optString(k).orEmpty() }.ifEmpty { type.optString("description") }
+        return SportsGame(e.optString("id").ifEmpty { return null }, l.key, sportsTime(e.optString("date")), type.optString("state"),
+            type.optBoolean("completed"), text("shortDetail"), text("detail"), away, home,
+            if (named) e.optString("shortName").ifEmpty { e.optString("name") }.ifEmpty { return null } else null, leagueLogo)
     }
-
 
     // ---------- items ----------
 
@@ -193,31 +365,42 @@ internal object IslandSports : IslandSource {
     private fun item(ctx: Context, s: Shown, now: Long): IslandItem? {
         val g = s.game
         val key = "sports:" + g.id
+        val live = g.state == "in"
+        // A followed league's live game ranks with the upcoming games, so it never pushes a timer or the user's own
+        // teams out of the pill.
+        val kind = if (live && s.source != SPORTS_LEAGUE) IslandKind.SPORTS_LIVE else IslandKind.SPORTS
+        val since = sportsSince(s.source, live, if (g.state == "pre") -g.start else s.changed)
+        val away = g.away?.logo ?: g.logo
+        val home = g.home?.logo
         return when {
             g.state == "pre" && sportsSoon(g.start, now) -> {
                 val zone = ZoneId.systemDefault()
                 val tomorrow = Instant.ofEpochMilli(g.start).atZone(zone).toLocalDate() != Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
                 val sub = ctx.getString(if (tomorrow) R.string.isl_sports_tomorrow else R.string.isl_sports_today, clock(ctx, g.start))
-                IslandItem(key, IslandKind.SPORTS, ctx.getString(R.string.isl_sports_at, g.away.abbreviation, g.home.abbreviation),
-                    sub, mono = false, imageUri = g.away.logo, image2Uri = g.home.logo, since = g.start,
-                    description = ctx.getString(R.string.isl_sports_desc_pre, g.away.name, g.home.name, sub))
+                IslandItem(key = key, kind = kind, title = label(ctx, g), sub = sub, mono = false, imageUri = away,
+                    image2Uri = home, since = since,
+                    description = g.name?.let { "$it, $sub" } ?: ctx.getString(R.string.isl_sports_desc_pre, g.away?.name, g.home?.name, sub))
             }
-            g.state == "in" -> IslandItem(key, IslandKind.SPORTS_LIVE, sportsScore(g), sportsDetail(g.shortDetail),
-                mono = false, imageUri = g.away.logo, image2Uri = g.home.logo, since = g.start, peekUntil = s.peekUntil,
-                description = describe(ctx, g, sportsDetail(g.detail)))
+            live -> IslandItem(key = key, kind = kind, title = g.name ?: sportsScore(g),
+                sub = if (g.name != null) g.shortDetail else sportsDetail(g.shortDetail), mono = false, imageUri = away,
+                image2Uri = home, since = since, peekUntil = s.peekUntil,
+                description = describe(ctx, g, if (g.name != null) g.detail else sportsDetail(g.detail)))
             // A postponed or cancelled game is "post" but not completed; it has no result to show.
             g.state == "post" && g.completed -> {
-                val final = ctx.getString(R.string.isl_sports_final)
-                IslandItem(key, IslandKind.SPORTS, sportsScore(g), final, mono = false, imageUri = g.away.logo,
-                    image2Uri = g.home.logo, since = g.start, until = s.until, peekUntil = s.peekUntil,
+                val final = if (g.name != null) g.shortDetail else ctx.getString(R.string.isl_sports_final)
+                IslandItem(key = key, kind = kind, title = g.name ?: sportsScore(g), sub = final, mono = false,
+                    imageUri = away, image2Uri = home, since = since, until = s.until, peekUntil = s.peekUntil,
                     description = describe(ctx, g, final))
             }
             else -> null
         }
     }
 
-    private fun describe(ctx: Context, g: SportsGame, state: String) = ctx.getString(R.string.isl_sports_desc_score,
-        g.away.name, g.away.score.ifEmpty { "0" }, g.home.name, g.home.score.ifEmpty { "0" }, state)
+    /** "IND at PHI", or the event's name when it shows by name. */
+    private fun label(ctx: Context, g: SportsGame) = g.name ?: ctx.getString(R.string.isl_sports_at, g.away?.abbreviation, g.home?.abbreviation)
+
+    private fun describe(ctx: Context, g: SportsGame, state: String) = g.name?.let { "$it, $state" } ?: ctx.getString(R.string.isl_sports_desc_score,
+        g.away?.name, g.away?.score.orEmpty().ifEmpty { "0" }, g.home?.name, g.home?.score.orEmpty().ifEmpty { "0" }, state)
 
     // The launcher's own time format when the user set one, else the TV's 12 or 24 hour setting.
     private fun clock(ctx: Context, time: Long): String {
@@ -231,6 +414,11 @@ internal object IslandSports : IslandSource {
 
 private const val MINUTE = 60_000L
 private const val HOUR = 60 * MINUTE
+
+/** Why a game shows, best first: the user pinned it, a followed team plays, or its league is followed. */
+internal const val SPORTS_PIN = 0
+internal const val SPORTS_TEAM = 1
+internal const val SPORTS_LEAGUE = 2
 
 /** One followed team, stored as "sport|league|teamId|abbreviation|name" so the settings can list it offline. */
 internal data class FollowedTeam(val sport: String, val league: String, val teamId: String, val abbreviation: String, val name: String) {
@@ -247,17 +435,83 @@ internal data class FollowedTeam(val sport: String, val league: String, val team
     }
 }
 
+/** One pinned game, stored as "sport|league|eventId|untilMillis"; [until] is when the pin goes at the latest. */
+internal data class PinnedGame(val sport: String, val league: String, val eventId: String, val until: Long) {
+    val entry get() = "$sport|$league|$eventId|$until"
+
+    companion object {
+        fun parse(entry: String): PinnedGame? {
+            val p = entry.split('|')
+            val until = p.getOrNull(3)?.toLongOrNull() ?: return null
+            return if (p.size == 4 && p[2].isNotEmpty()) PinnedGame(p[0], p[1], p[2], until) else null
+        }
+    }
+}
+
 internal data class SportsSide(val id: String, val abbreviation: String, val name: String, val score: String, val logo: String?)
 
-/** A game from a scoreboard. [league] is "sport/league"; [state] is ESPN's "pre", "in" or "post"; [start] is wall-clock ms. */
+/**
+ * A game from a scoreboard. [league] is "sport/league"; [state] is ESPN's "pre", "in" or "post"; [start] is wall-clock
+ * ms. An event with a [name] (a race, a tournament, a fight, a cricket match) shows by that name and its
+ * [shortDetail] instead of a score; [away] and [home] may then be missing, and [logo] is the league's picture.
+ */
 internal data class SportsGame(
     val id: String, val league: String, val start: Long, val state: String, val completed: Boolean,
-    val shortDetail: String, val detail: String, val away: SportsSide, val home: SportsSide,
+    val shortDetail: String, val detail: String, val away: SportsSide?, val home: SportsSide?,
+    val name: String? = null, val logo: String? = null,
 )
 
 /** ESPN's "2026-11-15T18:00Z" (no seconds) as wall-clock ms, or 0 when it does not read. */
 internal fun sportsTime(iso: String): Long =
     try { OffsetDateTime.parse(iso).toInstant().toEpochMilli() } catch (e: Exception) { 0L }
+
+// ESPN's scoreboard days are US Eastern days.
+private val espnZone = ZoneId.of("America/New_York")
+
+/**
+ * The scoreboard days to ask for: the ESPN days of eight hours ago and six hours ahead, so a long game that started
+ * before ESPN's midnight and a game soon after it both come back, wherever the TV is. ESPN refuses a date range
+ * ("dates=20261114-20261116" is an error for every team league), so each day is its own request: one most of the
+ * day, two in the hours around ESPN's midnight. Without dates a football league returns its next matchday, days away.
+ */
+internal fun sportsDays(now: Long): List<String> = listOf(now - 8 * HOUR, now + 6 * HOUR)
+    .map { Instant.ofEpochMilli(it).atZone(espnZone).toLocalDate().format(DateTimeFormatter.BASIC_ISO_DATE) }.distinct()
+
+/** The scoreboard query: the league's own [query] ("groups=80") and the [day], joined with "&". */
+internal fun sportsQuery(query: String, day: String?): String =
+    listOfNotNull(query.ifEmpty { null }, day?.let { "dates=$it" }).joinToString("&").let { if (it.isEmpty()) "" else "?$it" }
+
+/**
+ * Why [g] shows ([SPORTS_PIN], [SPORTS_TEAM] or [SPORTS_LEAGUE]), or null when it does not. A followed league shows
+ * only its games that are live or start within 30 minutes; a league has too many games to show them all day.
+ */
+internal fun sportsSource(g: SportsGame, pinned: Boolean, team: Boolean, league: Boolean, now: Long): Int? = when {
+    pinned -> SPORTS_PIN
+    team -> SPORTS_TEAM
+    league && (g.state == "in" || g.state == "pre" && g.start - now <= 30 * MINUTE) -> SPORTS_LEAGUE
+    else -> null
+}
+
+// Wider than any wall-clock time, so the source and live steps of sportsSince never overlap.
+private const val SINCE_STEP = 10_000_000_000_000L
+
+/**
+ * The item's since, which the island sorts newest first among items of the same kind: pinned games before followed
+ * teams before followed leagues, live games before the rest, and then the larger [order] first. [order] is the time
+ * of the last score change for a game that is on or over, and minus the start for a game to come, so the next one
+ * comes first.
+ */
+internal fun sportsSince(source: Int, live: Boolean, order: Long) = order - source * 2 * SINCE_STEP - if (live) 0L else SINCE_STEP
+
+/** A game for "Games now": live, or starting within three hours (or late by less than an hour). */
+internal fun sportsNow(g: SportsGame, now: Long) = g.state == "in" || g.state == "pre" && g.start - now in -HOUR..3 * HOUR
+
+/** The ids of the teams with a game today in [zone], or on now (a game that started late yesterday). */
+internal fun sportsPlayingToday(games: List<SportsGame>, now: Long, zone: ZoneId): Set<String> {
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    return games.filter { it.state == "in" || Instant.ofEpochMilli(it.start).atZone(zone).toLocalDate() == today }
+        .flatMap { listOfNotNull(it.away?.id, it.home?.id) }.toSet()
+}
 
 /** How long to wait before the next poll: soon while a game is on, less often the further away the games are. */
 internal fun sportsPollMs(games: List<SportsGame>, now: Long): Long = when {
@@ -271,7 +525,7 @@ internal fun sportsSoon(start: Long, now: Long) = start - now <= 6 * HOUR
 
 /** Away on the left and home on the right, like the logos: "IND 39 – 37 PHI". */
 internal fun sportsScore(g: SportsGame) =
-    "${g.away.abbreviation} ${g.away.score.ifEmpty { "0" }} – ${g.home.score.ifEmpty { "0" }} ${g.home.abbreviation}"
+    "${g.away?.abbreviation} ${g.away?.score.orEmpty().ifEmpty { "0" }} – ${g.home?.score.orEmpty().ifEmpty { "0" }} ${g.home?.abbreviation}"
 
 /**
  * "9:00 - 2nd" reads better period first: "2nd · 9:00" (in the last minute basketball's clock is "34.5"). Anything
@@ -286,7 +540,7 @@ private val clockText = Regex("\\d+(:\\d\\d)?(\\.\\d+)?")
 
 /** The score moved since the last poll of a game that was on, so the island opens for a moment to show it. */
 internal fun sportsScored(old: SportsGame?, new: SportsGame) =
-    old != null && old.state == "in" && (old.away.score != new.away.score || old.home.score != new.home.score)
+    old != null && old.state == "in" && (old.away?.score != new.away?.score || old.home?.score != new.home?.score)
 
 /**
  * When a final result goes: two hours after the island first saw it final. A game first seen already over (the TV

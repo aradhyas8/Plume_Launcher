@@ -72,7 +72,10 @@ internal object IslandAlerts : IslandSource {
 
         val call = n.category == Notification.CATEGORY_CALL
         val privacy = prefs.getString("isl_alert_privacy", "app") ?: "app"
-        val label = appLabel(ctx, pkg) ?: pkg
+        // Android 11+ hides most apps from Plume, but each notification carries its app's info: name and icon come
+        // from there first, so an alert never shows a bare package name.
+        val info = noteApp(ex)
+        val label = info?.let { ctx.packageManager.getApplicationLabel(it).toString() } ?: appLabel(ctx, pkg) ?: pkg
         val (shownTitle, sub) = islandAlertText(privacy, call, label, title, text,
             ctx.getString(R.string.isl_alert_call), ctx.getString(R.string.isl_alert_new)) ?: return removed(sbn.key)
 
@@ -80,7 +83,7 @@ internal object IslandAlerts : IslandSource {
         val post = sbn.postTime.takeIf { it > 0 } ?: now
         val full = privacy == "full"
         val picture = if (full) bigPicture(ex) ?: largeIcon(ctx, n) else null
-        val image = picture ?: appIcon(ctx, pkg)
+        val image = picture ?: appIcon(ctx, info, pkg)
         // Reply actions need a keyboard the island does not have, so an alert keeps only the plain buttons.
         val actions = (n.actions ?: emptyArray())
             .filter { it.actionIntent != null && !it.title.isNullOrBlank() && (call || it.remoteInputs.isNullOrEmpty()) }
@@ -119,7 +122,14 @@ internal object IslandAlerts : IslandSource {
 
     private fun largeIcon(ctx: Context, n: Notification): Bitmap? = try { n.getLargeIcon()?.loadDrawable(ctx)?.let(::toBitmap) } catch (_: Exception) { null }
 
-    private fun appIcon(ctx: Context, pkg: String): Bitmap? = try { toBitmap(ctx.packageManager.getApplicationIcon(pkg)) } catch (_: Exception) { null }
+    private fun appIcon(ctx: Context, info: android.content.pm.ApplicationInfo?, pkg: String): Bitmap? = try {
+        toBitmap(if (info != null) ctx.packageManager.getApplicationIcon(info) else ctx.packageManager.getApplicationIcon(pkg))
+    } catch (_: Exception) { null }
+
+    /** The posting app's info, which Android puts in every notification's extras ("android.appInfo"). */
+    @Suppress("DEPRECATION")
+    private fun noteApp(ex: android.os.Bundle?): android.content.pm.ApplicationInfo? =
+        try { ex?.getParcelable<android.os.Parcelable>("android.appInfo") as? android.content.pm.ApplicationInfo } catch (_: Exception) { null }
 
     /** Adaptive and vector icons have no bitmap of their own, so they are drawn once at a size the island can use. */
     private fun toBitmap(d: Drawable): Bitmap? {

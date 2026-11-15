@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.ZoneId
 
 class IslandSportsTest {
     private val min = 60_000L
@@ -50,4 +51,53 @@ class IslandSportsTest {
     }
     @Test fun pipeInNameIsKept() = assertEquals("A/B", FollowedTeam.parse(FollowedTeam("s", "l", "1", "AB", "A|B").entry)?.name)
     @Test fun brokenEntryIsSkipped() = assertNull(FollowedTeam.parse("basketball|nba"))
+
+    @Test fun pinnedEntryRoundTrips() {
+        val p = PinnedGame("soccer", "eng.1", "401", 1_000L)
+        assertEquals(p, PinnedGame.parse(p.entry))
+    }
+    @Test fun pinWithoutEndIsSkipped() = assertNull(PinnedGame.parse("soccer|eng.1|401|soon"))
+
+    // 2026-11-15T18:00Z is 1 PM in New York: eight hours back and six ahead are both 15 November there.
+    private val noonNy = 1_794_765_600_000L
+    @Test fun middayAsksOneDay() = assertEquals(listOf("20261115"), sportsDays(noonNy))
+    @Test fun lateEveningAsksTomorrowToo() = assertEquals(listOf("20261115", "20261116"), sportsDays(noonNy + 9 * hour))
+    @Test fun earlyMorningAsksYesterdayToo() = assertEquals(listOf("20261114", "20261115"), sportsDays(noonNy - 7 * hour))
+
+    @Test fun datesJoinLeagueQuery() = assertEquals("?groups=80&dates=20261115", sportsQuery("groups=80", "20261115"))
+    @Test fun datesAlone() = assertEquals("?dates=20261115", sportsQuery("", "20261115"))
+    @Test fun noQueryNoMark() = assertEquals("", sportsQuery("", null))
+
+    @Test fun pinBeatsTeamBeatsLeague() {
+        assertEquals(SPORTS_PIN, sportsSource(game("pre", start = 5 * hour), pinned = true, team = true, league = true, now = 0L))
+        assertEquals(SPORTS_TEAM, sportsSource(game("pre", start = 5 * hour), pinned = false, team = true, league = true, now = 0L))
+    }
+    @Test fun leagueShowsLive() = assertEquals(SPORTS_LEAGUE, sportsSource(game("in"), false, false, true, 0L))
+    @Test fun leagueShowsThirtyMinutesAhead() = assertEquals(SPORTS_LEAGUE, sportsSource(game("pre", start = 30 * min), false, false, true, 0L))
+    @Test fun leagueHidesLaterGame() = assertNull(sportsSource(game("pre", start = 31 * min), false, false, true, 0L))
+    @Test fun leagueHidesFinal() = assertNull(sportsSource(game("post"), false, false, true, 0L))
+    @Test fun unfollowedGameHidden() = assertNull(sportsSource(game("in"), false, false, false, 0L))
+
+    @Test fun sinceOrdersSourceThenLiveThenChange() {
+        val order = listOf(
+            sportsSince(SPORTS_PIN, true, 2_000L), sportsSince(SPORTS_PIN, true, 1_000L), sportsSince(SPORTS_PIN, false, 3_000L),
+            sportsSince(SPORTS_TEAM, true, 3_000L), sportsSince(SPORTS_TEAM, false, -noonNy), sportsSince(SPORTS_LEAGUE, true, noonNy),
+        )
+        assertEquals(order, order.sortedDescending())
+    }
+    @Test fun soonerUpcomingFirst() = assertTrue(sportsSince(SPORTS_TEAM, false, -noonNy) > sportsSince(SPORTS_TEAM, false, -(noonNy + hour)))
+
+    @Test fun liveIsNow() = assertTrue(sportsNow(game("in", start = -5 * hour), 0L))
+    @Test fun withinThreeHoursIsNow() = assertTrue(sportsNow(game("pre", start = 3 * hour), 0L))
+    @Test fun laterIsNotNow() = assertFalse(sportsNow(game("pre", start = 3 * hour + 1), 0L))
+    @Test fun finalIsNotNow() = assertFalse(sportsNow(game("post"), 0L))
+
+    @Test fun playingTodayIsLocalDay() {
+        val utc = ZoneId.of("UTC")
+        val today = game("pre", start = noonNy + 5 * hour) // 23:00 UTC, still 15 November
+        val tomorrow = game("pre", start = noonNy + 7 * hour).copy(away = SportsSide("1", "A", "A", "", null), home = SportsSide("2", "B", "B", "", null))
+        assertEquals(setOf("11", "20"), sportsPlayingToday(listOf(today, tomorrow), noonNy, utc))
+    }
+    @Test fun liveFromYesterdayPlaysToday() = assertEquals(setOf("11", "20"), sportsPlayingToday(listOf(game("in", start = 0L)), noonNy, ZoneId.of("UTC")))
+
 }

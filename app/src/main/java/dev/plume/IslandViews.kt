@@ -44,8 +44,10 @@ internal class EqBars @JvmOverloads constructor(context: Context, attrs: Attribu
         duration = 2400
         repeatCount = ValueAnimator.INFINITE
         interpolator = LinearInterpolator()
-        addUpdateListener { invalidate() }
+        // 20 redraws a second: the bars stay smooth to the eye, and a slow TV is not redrawing them every frame.
+        addUpdateListener { if (it.currentPlayTime - drawnAt !in 0L until 50L) { drawnAt = it.currentPlayTime; invalidate() } }
     }
+    private var drawnAt = -100L
     var color = 0xFFFFFFFF.toInt()
         set(v) { if (field != v) { field = v; invalidate() } }
     var playing = false

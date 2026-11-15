@@ -192,7 +192,7 @@ internal object IslandWeather : IslandSource {
         return IslandItem(
             "wx:rain", IslandKind.WEATHER, title, sub,
             icon = if (e.snow) R.drawable.ms_weather_snowy_fill else R.drawable.ms_rainy_fill, mono = true,
-            ticks = true, since = seenAt, until = e.at, peekUntil = seenAt + 6_000L,
+            tick = 60_000L, since = seenAt, until = e.at, peekUntil = seenAt + 6_000L,
         )
     }
 

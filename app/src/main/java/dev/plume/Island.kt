@@ -28,9 +28,10 @@ internal class IslandAction(val icon: Int = 0, val label: String? = null, val de
  * One thing to show. Times are wall-clock milliseconds (System.currentTimeMillis()).
  * [key] is stable while the thing lasts: the same key is the same item, updated. [icon] is a drawable for the round
  * picture when there is no [image] or [imageUri]; [mono] tints it with the island's ink. [image2Uri] is a second
- * picture shown at the end of the pill (the other team's logo). [progress] (0..1) draws the bar. [ticks]: the text
- * changes every second (a timer), so the island asks again each second while it is shown. Before [peekUntil] the
- * island opens by itself to show the item, without taking focus. After [until] the item is gone.
+ * picture shown at the end of the pill (the other team's logo). [progress] (0..1) draws the bar. [tick]: how often the
+ * text changes, in ms (a timer: 1000; "Rain in 20 min": 60000; 0: never), so the island asks again that often while it
+ * is shown, and no more. Before [peekUntil] the island opens by itself to show the item, without taking focus. After
+ * [until] the item is gone.
  */
 internal data class IslandItem(
     val key: String,
@@ -43,7 +44,7 @@ internal data class IslandItem(
     val imageUri: String? = null,
     val image2Uri: String? = null,
     val progress: Float? = null,
-    val ticks: Boolean = false,
+    val tick: Long = 0L,
     val since: Long = 0L,
     val until: Long = Long.MAX_VALUE,
     val peekUntil: Long = 0L,
@@ -69,6 +70,13 @@ internal fun islandClock(ms: Long, countdown: Boolean = true): String {
     val s = (ms.coerceAtLeast(0L) + if (countdown) 999 else 0) / 1000
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
 }
+
+/** The island's sizes and choices, shared by its view and its settings. */
+internal const val ISLAND_ROUND = 24 // dp; the pill is 36 high, so it stays a full pill, and the open card is softly round
+internal const val ISLAND_IDLE_MS = 5 * 60_000L // paused this long, the pill steps aside
+internal val ISLAND_TIMERS = listOf(1, 3, 5, 10, 15, 20, 30, 45, 60) // minutes the timer menu offers
+internal val ISLAND_SLEEP = listOf(15, 30, 45, 60, 90, 120) // and the sleep timer
+internal val ISLAND_IDLES = listOf(60_000L, ISLAND_IDLE_MS, 0L) // "Hide music when paused"; 0 is Never
 
 /** An app's name, or null when it is gone or hidden from Plume. */
 internal fun appLabel(ctx: Context, pkg: String): String? = try {
