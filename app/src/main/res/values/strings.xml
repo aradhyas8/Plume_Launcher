@@ -444,4 +444,7 @@
     <string name="time_format_tokens">Use HH for 24-hour time, h and a for 12-hour time, and mm for minutes.</string>
     <string name="clock_format_preview">Preview: %1$s</string>
     <string name="clock_format_invalid">Use a valid pattern, for example %1$s.</string>
+    <string name="media_previous">Previous</string>
+    <string name="media_play_pause">Play or pause</string>
+    <string name="media_next">Next</string>
 </resources>

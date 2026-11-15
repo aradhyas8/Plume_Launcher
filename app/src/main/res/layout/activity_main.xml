@@ -41,6 +41,13 @@
         <!-- Bottom is a little more than the top: the last text line's box includes space under the letters,
              so this makes the visible gap below Continue Watching match the gap above the clock. -->
 
+        <!-- The top bar, with the media island centred on the screen over it. -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -171,6 +178,95 @@
                 android:src="@drawable/ic_power"
                 android:visibility="gone" />
         </LinearLayout>
+
+        <!-- Media island: what is playing. A pill at rest; selected, it opens to show the artist and the controls. -->
+        <LinearLayout
+            android:id="@+id/island"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:gravity="center_vertical"
+            android:minHeight="36dp"
+            android:orientation="horizontal"
+            android:paddingStart="6dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="6dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/islandArt"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:importantForAccessibility="no"
+                android:scaleType="centerCrop" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/islandTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxWidth="260dp"
+                    android:maxLines="1"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/islandArtist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.75"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif"
+                    android:maxWidth="260dp"
+                    android:maxLines="1"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/islandControls"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="18dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/islandPrev"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:contentDescription="@string/media_previous"
+                    android:padding="4dp"
+                    android:src="@drawable/ic_skip_previous" />
+
+                <ImageView
+                    android:id="@+id/islandPlay"
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:contentDescription="@string/media_play_pause"
+                    android:padding="4dp"
+                    android:src="@drawable/ic_pause" />
+
+                <ImageView
+                    android:id="@+id/islandNext"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:contentDescription="@string/media_next"
+                    android:padding="4dp"
+                    android:src="@drawable/ic_skip_next" />
+            </LinearLayout>
+        </LinearLayout>
+        </FrameLayout>
 
         <View
             android:layout_width="match_parent"

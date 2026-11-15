@@ -48,6 +48,10 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.TransitionDrawable
+import android.media.MediaMetadata
+import android.media.session.MediaController
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.media.tv.TvContract
 import android.media.tv.TvInputInfo
 import android.media.tv.TvInputManager
@@ -502,6 +506,7 @@ class MainActivity : Activity() {
             setOnClickListener { action() }
             setOnLongClickListener { if (!holdFired) fireHold(this); true } // hold OK: move, hide or add icons
         }
+        setUpIsland()
         if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false) || fakeSetup(intent)) {
             // An explicit drawer request takes priority over setup and update cards.
         } else if (prefs.getBoolean("reopen_settings", false)) {
@@ -543,6 +548,7 @@ class MainActivity : Activity() {
             return
         }
         resumed = true
+        mediaStart()
         val recentAppsRequested = intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false)
         val allAppsRequested = intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || recentAppsRequested
         if (currentWallpaper().startsWith("video:")) videoWallpaper.resume()
@@ -615,6 +621,7 @@ class MainActivity : Activity() {
     override fun onPause() {
         if (ready) {
             resumed = false
+            mediaStop()
             videoWallpaper.pause()
             findViewById<ImageView>(R.id.wallpaper).alpha = 1f
             ui.removeCallbacks(refreshIfDirty)
@@ -1378,6 +1385,7 @@ class MainActivity : Activity() {
             renderApps()
             watchKey = null
             showWatchNext(Cards(cardSources, cardCurrent, watchList))
+            styleIsland()
         }
         showPanelGlass()
     }
@@ -4315,11 +4323,19 @@ class MainActivity : Activity() {
             else alive(lastCard) ?: (watchRow.getChildAt(0) as? ViewGroup)?.getChildAt(0)
         val top = alive(lastTop) ?: findViewById(R.id.launcherSettings)
         val title = watchTitle.takeIf { it.isFocusable && it.visibility == View.VISIBLE }
+        val isle = island.takeIf { it.visibility == View.VISIBLE }
         return when {
+            v === island -> when (key) { // Left and Right pick a control; past the last one, the top bar's icons
+                KeyEvent.KEYCODE_DPAD_DOWN -> apps ?: cards ?: v
+                KeyEvent.KEYCODE_DPAD_UP -> v
+                KeyEvent.KEYCODE_DPAD_LEFT -> v.also { if (islandSel > 0) { islandSel--; showIsland() } }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (islandSel < 2) v.also { islandSel++; showIsland() } else findViewById(shownTop().first())
+                else -> null
+            }
             v.parent === wifi.parent -> when (key) { // top bar
                 KeyEvent.KEYCODE_DPAD_DOWN -> apps ?: cards ?: v // the apps row can be empty (all hidden)
                 KeyEvent.KEYCODE_DPAD_UP -> v
-                KeyEvent.KEYCODE_DPAD_LEFT -> if (v.id == shownTop().first()) v else null
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (v.id == shownTop().first()) isle ?: v else null
                 KeyEvent.KEYCODE_DPAD_RIGHT -> if (v.id == shownTop().last()) v else null
                 else -> null
             }
@@ -6679,6 +6695,120 @@ class MainActivity : Activity() {
         } else {
             contentResolver.openInputStream(Uri.parse(uri)) ?: throw IOException("no stream for $uri")
         }
+
+    // ---------- media island ----------
+    // What another app plays (Spotify, YouTube Music, a podcast), in a glass pill at the top centre. Selected, it
+    // opens: bigger art, the artist and Previous, Play/Pause, Next, which Left and Right pick and OK presses.
+    // Reading other apps' sessions needs notification access (see MediaListener); without it the island stays hidden.
+    private val island by lazy { findViewById<LinearLayout>(R.id.island) }
+    private val islandArt by lazy { findViewById<ImageView>(R.id.islandArt) }
+    private val islandControls by lazy { listOf<ImageView>(findViewById(R.id.islandPrev), findViewById(R.id.islandPlay), findViewById(R.id.islandNext)) }
+    private var islandSel = 1 // the control Left/Right picked: 0 previous, 1 play/pause, 2 next
+    private var media: MediaController? = null
+    private val mediaSessions by lazy { getSystemService(MediaSessionManager::class.java) }
+    private val mediaAccess by lazy { ComponentName(this, MediaListener::class.java) }
+    private val sessionsChanged = MediaSessionManager.OnActiveSessionsChangedListener { pickMedia(it.orEmpty()) }
+    private val mediaChanged = object : MediaController.Callback() {
+        override fun onMetadataChanged(m: MediaMetadata?) = refreshMedia()
+        override fun onPlaybackStateChanged(s: PlaybackState?) = refreshMedia()
+        override fun onSessionDestroyed() = refreshMedia()
+    }
+
+    private fun setUpIsland() {
+        islandArt.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, dp(6).toFloat())
+        }
+        islandArt.clipToOutline = true
+        styleIsland()
+        island.setOnClickListener {
+            val c = media?.transportControls ?: return@setOnClickListener
+            when (islandSel) {
+                0 -> c.skipToPrevious()
+                2 -> c.skipToNext()
+                else -> if (mediaPlaying(media)) c.pause() else c.play()
+            }
+        }
+    }
+
+    /** The island is a glass tile like the app tiles, so it follows the Glass style and the theme. It opens instead of growing. */
+    private fun styleIsland() {
+        style(island, dp(18), card = true, lift = 1f) { focused ->
+            if (focused) { lastTop = island; islandSel = 1 }
+            android.transition.TransitionManager.beginDelayedTransition(island.parent as ViewGroup,
+                android.transition.ChangeBounds().setDuration(220).setInterpolator(DECELERATE))
+            val size = dp(if (focused) 48 else 24)
+            islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
+            findViewById<View>(R.id.islandArtist).visibility = if (focused) View.VISIBLE else View.GONE
+            findViewById<View>(R.id.islandControls).visibility = if (focused) View.VISIBLE else View.GONE
+            glass.kick(320) // the blur under it follows the new size
+            showIsland()
+        }
+        showIsland()
+    }
+
+    private fun mediaStart() {
+        try {
+            mediaSessions.addOnActiveSessionsChangedListener(sessionsChanged, mediaAccess, ui)
+        } catch (e: SecurityException) {
+            // No notification access: refreshMedia finds nothing and hides the island.
+        }
+        refreshMedia()
+    }
+
+    private fun mediaStop() {
+        mediaSessions.removeOnActiveSessionsChangedListener(sessionsChanged)
+        media?.unregisterCallback(mediaChanged)
+        media = null
+    }
+
+    private fun refreshMedia() = pickMedia(try { mediaSessions.getActiveSessions(mediaAccess) } catch (e: SecurityException) { emptyList() })
+
+    private fun pickMedia(list: List<MediaController>) {
+        val pick = islandPick(list, ::mediaPlaying) { mediaTitle(it.metadata) != null }
+        if (pick?.sessionToken != media?.sessionToken) {
+            media?.unregisterCallback(mediaChanged)
+            media = pick
+            pick?.registerCallback(mediaChanged, ui)
+        }
+        showIsland()
+    }
+
+    private fun mediaPlaying(c: MediaController?) = c?.playbackState?.state.let { it == PlaybackState.STATE_PLAYING || it == PlaybackState.STATE_BUFFERING }
+
+    private fun mediaTitle(m: MediaMetadata?) = (m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE))?.takeIf { it.isNotBlank() }
+
+    private fun showIsland() {
+        val c = media
+        val m = c?.metadata
+        val title = mediaTitle(m)
+        if (c == null || m == null || title == null) {
+            if (island.isFocused) findViewById<View>(shownTop().first()).requestFocus()
+            if (lastTop === island) lastTop = null
+            island.visibility = View.GONE
+            return
+        }
+        findViewById<TextView>(R.id.islandTitle).apply { text = title; setTextColor(fg) }
+        val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(c.packageName, 0)).toString() } catch (e: Exception) { null }
+        val who = m.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+            ?: m.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
+        findViewById<TextView>(R.id.islandArtist).apply { text = listOfNotNull(who, app).joinToString("  ·  "); setTextColor(fg) }
+        val art = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: m.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+        val icon = if (art != null) null else try { packageManager.getApplicationIcon(c.packageName) } catch (e: Exception) { null }
+        when {
+            art != null -> { islandArt.clearColorFilter(); islandArt.setImageBitmap(art) }
+            icon != null -> { islandArt.clearColorFilter(); islandArt.setImageDrawable(icon) }
+            else -> { islandArt.setImageResource(R.drawable.ic_music_note); islandArt.setColorFilter(fg) }
+        }
+        islandControls[1].setImageResource(if (mediaPlaying(c)) R.drawable.ic_pause else R.drawable.ic_play)
+        islandControls.forEachIndexed { i, b ->
+            b.setColorFilter(fg)
+            val on = i == islandSel
+            b.alpha = if (on) 1f else 0.45f
+            b.animate().scaleX(if (on) 1.2f else 1f).scaleY(if (on) 1.2f else 1f).setDuration(120).start()
+        }
+        island.visibility = View.VISIBLE
+    }
 
     // ---------- shared view bits ----------
 
