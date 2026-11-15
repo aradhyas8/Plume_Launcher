@@ -11,3 +11,10 @@ class MediaListener : NotificationListenerService()
 /** Which session the island shows: the first one playing, else the first with a title (a paused song). */
 internal fun <T> islandPick(sessions: List<T>, playing: (T) -> Boolean, titled: (T) -> Boolean): T? =
     sessions.firstOrNull { playing(it) && titled(it) } ?: sessions.firstOrNull(titled)
+
+/** Where the track is now: the session reports a [position] at [updatedAt]; playing, it has moved on since at [speed]. */
+internal fun islandPosition(position: Long, updatedAt: Long, now: Long, speed: Float, playing: Boolean, length: Long): Long =
+    (position + if (playing && updatedAt > 0) ((now - updatedAt) * speed).toLong() else 0L).coerceIn(0L, length)
+
+/** "3:07" */
+internal fun islandTime(ms: Long) = "%d:%02d".format(ms / 60000, ms / 1000 % 60)

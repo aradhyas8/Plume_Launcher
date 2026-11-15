@@ -4329,7 +4329,7 @@ class MainActivity : Activity() {
                 KeyEvent.KEYCODE_DPAD_DOWN -> apps ?: cards ?: v
                 KeyEvent.KEYCODE_DPAD_UP -> v
                 KeyEvent.KEYCODE_DPAD_LEFT -> v.also { if (islandSel > 0) { islandSel--; showIsland() } }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> if (islandSel < 2) v.also { islandSel++; showIsland() } else findViewById(shownTop().first())
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (islandSel < 2) v.also { islandSel++; showIsland() } else findViewById<View>(shownTop().first())
                 else -> null
             }
             v.parent === wifi.parent -> when (key) { // top bar
@@ -4689,7 +4689,7 @@ class MainActivity : Activity() {
         v.alpha = 1f
         appsTitle.visibility = View.GONE
         if (save) saveTopOrder(topLive) else applyTopBar(topBefore)
-        (if (v.visibility == View.VISIBLE) v else findViewById(shownTop().first())).requestFocus() // an added icon is gone again after Back
+        (if (v.visibility == View.VISIBLE) v else findViewById<View>(shownTop().first())).requestFocus() // an added icon is gone again after Back
     }
 
     private fun topMoveKey(e: KeyEvent, confirm: Boolean): Boolean {
@@ -6697,10 +6697,13 @@ class MainActivity : Activity() {
         }
 
     // ---------- media island ----------
-    // What another app plays (Spotify, YouTube Music, a podcast), in a glass pill at the top centre. Selected, it
-    // opens: bigger art, the artist and Previous, Play/Pause, Next, which Left and Right pick and OK presses.
-    // Reading other apps' sessions needs notification access (see MediaListener); without it the island stays hidden.
-    private val island by lazy { findViewById<LinearLayout>(R.id.island) }
+    // What another app plays (Spotify, YouTube Music, a podcast). At rest a glass pill at the top centre, like a tile.
+    // Selected, it opens down into a frosted card: bigger art, the artist, the time played and Previous, Play/Pause,
+    // Next, which Left and Right pick and OK presses. Reading other apps' sessions needs notification access (see
+    // MediaListener); without it, or with nothing playing, the island stays hidden.
+    private val island by lazy { findViewById<FrameLayout>(R.id.island) }
+    private val islandFrost by lazy { findViewById<GlassBox>(R.id.islandFrost) }
+    private val islandBody by lazy { findViewById<LinearLayout>(R.id.islandBody) }
     private val islandArt by lazy { findViewById<ImageView>(R.id.islandArt) }
     private val islandControls by lazy { listOf<ImageView>(findViewById(R.id.islandPrev), findViewById(R.id.islandPlay), findViewById(R.id.islandNext)) }
     private var islandSel = 1 // the control Left/Right picked: 0 previous, 1 play/pause, 2 next
@@ -6713,10 +6716,16 @@ class MainActivity : Activity() {
         override fun onPlaybackStateChanged(s: PlaybackState?) = refreshMedia()
         override fun onSessionDestroyed() = refreshMedia()
     }
+    private val islandTick = object : Runnable { // the time played, while the island is open
+        override fun run() {
+            showProgress()
+            if (island.isFocused) ui.postDelayed(this, 1000)
+        }
+    }
 
     private fun setUpIsland() {
         islandArt.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, dp(6).toFloat())
+            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, v.width / 6f)
         }
         islandArt.clipToOutline = true
         styleIsland()
@@ -6730,19 +6739,42 @@ class MainActivity : Activity() {
         }
     }
 
-    /** The island is a glass tile like the app tiles, so it follows the Glass style and the theme. It opens instead of growing. */
+    /** At rest a glass tile like the app tiles (it follows the Glass style and the theme); open, a frosted card. */
     private fun styleIsland() {
-        style(island, dp(18), card = true, lift = 1f) { focused ->
-            if (focused) { lastTop = island; islandSel = 1 }
-            android.transition.TransitionManager.beginDelayedTransition(island.parent as ViewGroup,
-                android.transition.ChangeBounds().setDuration(220).setInterpolator(DECELERATE))
-            val size = dp(if (focused) 48 else 24)
-            islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
-            findViewById<View>(R.id.islandArtist).visibility = if (focused) View.VISIBLE else View.GONE
-            findViewById<View>(R.id.islandControls).visibility = if (focused) View.VISIBLE else View.GONE
-            glass.kick(320) // the blur under it follows the new size
-            showIsland()
+        styleGlass(islandFrost.glass, dp(18).toFloat())
+        style(island, dp(18), card = true, lift = 1f, rise = false) { focused -> openIsland(focused) }
+        showIsland()
+    }
+
+    private fun openIsland(open: Boolean) {
+        if (open) { lastTop = island; islandSel = 1 }
+        android.transition.TransitionManager.beginDelayedTransition(island.parent as ViewGroup, android.transition.TransitionSet()
+            .addTransition(android.transition.ChangeBounds())
+            .addTransition(android.transition.Fade(android.transition.Fade.IN).setStartDelay(90))
+            .setOrdering(android.transition.TransitionSet.ORDERING_TOGETHER)
+            .setDuration(240).setInterpolator(DECELERATE))
+        islandBody.layoutParams = islandBody.layoutParams.apply { width = if (open) dp(420) else ViewGroup.LayoutParams.WRAP_CONTENT }
+        if (open) islandBody.setPadding(dp(16), dp(16), dp(16), dp(12)) else islandBody.setPadding(dp(6), dp(6), dp(16), dp(6))
+        val size = dp(if (open) 64 else 24)
+        islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
+        findViewById<View>(R.id.islandText).let { t ->
+            (t.layoutParams as LinearLayout.LayoutParams).marginStart = dp(if (open) 14 else 10)
+            t.requestLayout()
         }
+        findViewById<TextView>(R.id.islandTitle).apply {
+            textSize = if (open) 17f else 14f
+            maxWidth = dp(if (open) 300 else 260)
+        }
+        findViewById<View>(R.id.islandArtist).visibility = if (open) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.islandMore).visibility = if (open) View.VISIBLE else View.GONE
+        // The card hangs over the screen: its extra height is taken back by the margin, so the rows below never move.
+        island.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        (island.layoutParams as FrameLayout.LayoutParams).bottomMargin = -(island.measuredHeight - dp(36)).coerceAtLeast(0)
+        island.requestLayout()
+        islandFrost.animate().alpha(if (open) 1f else 0f).setDuration(200).start()
+        glass.kick(360) // the blur under it follows the new size
+        ui.removeCallbacks(islandTick)
+        if (open) islandTick.run()
         showIsland()
     }
 
@@ -6759,6 +6791,7 @@ class MainActivity : Activity() {
         mediaSessions.removeOnActiveSessionsChangedListener(sessionsChanged)
         media?.unregisterCallback(mediaChanged)
         media = null
+        ui.removeCallbacks(islandTick)
     }
 
     private fun refreshMedia() = pickMedia(try { mediaSessions.getActiveSessions(mediaAccess) } catch (e: SecurityException) { emptyList() })
@@ -6804,10 +6837,30 @@ class MainActivity : Activity() {
         islandControls.forEachIndexed { i, b ->
             b.setColorFilter(fg)
             val on = i == islandSel
-            b.alpha = if (on) 1f else 0.45f
-            b.animate().scaleX(if (on) 1.2f else 1f).scaleY(if (on) 1.2f else 1f).setDuration(120).start()
+            // The picked control sits on a soft disc of the text colour, like a lit top bar icon; no ring.
+            b.background = if (on) GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(fg and 0xFFFFFF or 0x26000000) } else null
+            b.alpha = if (on) 1f else 0.6f
+            b.animate().scaleX(if (on) 1.08f else 1f).scaleY(if (on) 1.08f else 1f).setDuration(140).setInterpolator(DECELERATE).start()
         }
+        showProgress()
         island.visibility = View.VISIBLE
+    }
+
+    private fun showProgress() {
+        val c = media ?: return
+        val s = c.playbackState
+        val length = c.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        val bar = findViewById<android.widget.ProgressBar>(R.id.islandProgress)
+        val times = findViewById<View>(R.id.islandTimes)
+        if (s == null || length <= 0L) { bar.visibility = View.GONE; times.visibility = View.GONE; return }
+        val at = islandPosition(s.position, s.lastPositionUpdateTime, android.os.SystemClock.elapsedRealtime(), s.playbackSpeed, mediaPlaying(c), length)
+        bar.visibility = View.VISIBLE
+        times.visibility = View.VISIBLE
+        bar.progressTintList = android.content.res.ColorStateList.valueOf(fg)
+        bar.progressBackgroundTintList = android.content.res.ColorStateList.valueOf(fg and 0xFFFFFF or 0x40000000)
+        bar.progress = (at * 1000 / length).toInt()
+        findViewById<TextView>(R.id.islandElapsed).apply { text = islandTime(at); setTextColor(fg) }
+        findViewById<TextView>(R.id.islandLeft).apply { text = "-" + islandTime(length - at); setTextColor(fg) }
     }
 
     // ---------- shared view bits ----------
@@ -6817,7 +6870,7 @@ class MainActivity : Activity() {
      * top sheen; dark mode brightens the glass gradient instead (a white sheen would haze it grey).
      * Only transform/alpha/colour change, so it stays on the GPU and costs no re-layout.
      */
-    private fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, frost: Boolean = true, onFocus: ((Boolean) -> Unit)? = null) {
+    private fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, frost: Boolean = true, rise: Boolean = true, onFocus: ((Boolean) -> Unit)? = null) {
         fun gradient(colors: IntArray) = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, colors).apply {
             cornerRadius = radius.toFloat()
             setDither(true)
@@ -6845,7 +6898,7 @@ class MainActivity : Activity() {
             val grow = if (focused && v.width > 0) minOf(lift, 1 + dp(GRID_GAP) * 1.2f / v.width) else 1f
             v.animate()
                 .scaleX(grow).scaleY(grow)
-                .translationY(if (focused) -maxOf(v.height * 0.06f, dp(4).toFloat()) else 0f)
+                .translationY(if (focused && rise) -maxOf(v.height * 0.06f, dp(4).toFloat()) else 0f)
                 .translationZ(if (focused) dp(14).toFloat() else 0f)
                 .setDuration(160).setInterpolator(DECELERATE).start()
             onFocus?.invoke(focused)

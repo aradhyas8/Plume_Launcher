@@ -13,4 +13,9 @@ class IslandPickTest {
     @Test fun pausedWithTitleWhenNothingPlays() = assertEquals("a", pick(S("a", false, true), S("b", false, false)))
     @Test fun playingWithoutTitleIsSkipped() = assertEquals("b", pick(S("a", true, false), S("b", false, true)))
     @Test fun noneWithoutTitles() = assertNull(pick(S("a", true, false)))
+
+    @Test fun playingMovesOnSinceTheUpdate() = assertEquals(15_000L, islandPosition(10_000, 1_000, 6_000, 1f, true, 200_000))
+    @Test fun pausedStaysPut() = assertEquals(10_000L, islandPosition(10_000, 1_000, 6_000, 1f, false, 200_000))
+    @Test fun neverPastTheEnd() = assertEquals(200_000L, islandPosition(199_000, 1_000, 60_000, 1f, true, 200_000))
+    @Test fun timeReads() = assertEquals("3:07", islandTime(187_400))
 }
