@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A game that has not started: the away team, then the home team, like the logos in the pill. -->
+    <string name="isl_sports_at">%1$s at %2$s</string>
+    <string name="isl_sports_today">Today %1$s</string>
+    <string name="isl_sports_tomorrow">Tomorrow %1$s</string>
+    <string name="isl_sports_final">Final</string>
+    <!-- Read aloud: "Pacers 39, 76ers 37, 2nd Quarter · 9:00". -->
+    <string name="isl_sports_desc_score">%1$s %2$s, %3$s %4$s, %5$s</string>
+    <!-- Read aloud: "Pacers at 76ers, Today 7:30 PM". -->
+    <string name="isl_sports_desc_pre">%1$s at %2$s, %3$s</string>
+</resources>

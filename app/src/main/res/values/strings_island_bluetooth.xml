@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="isl_bt_connected">%1$s connected</string>
+    <string name="isl_bt_disconnected">%1$s disconnected</string>
+    <string name="isl_bt_battery">Battery %1$d%%</string>
+    <string name="isl_bt_percent">%1$d%%</string>
+    <string name="isl_bt_device">Bluetooth device</string>
+    <string name="isl_bt_pad_low">Controller battery low</string>
+</resources>

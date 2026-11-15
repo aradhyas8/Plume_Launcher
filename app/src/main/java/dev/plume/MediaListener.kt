@@ -1,12 +1,24 @@
 package dev.plume
 
 import android.service.notification.NotificationListenerService
+import android.service.notification.NotificationListenerService.RankingMap
+import android.service.notification.StatusBarNotification
 
 /**
- * Does nothing itself. Android only lets an app read other apps' media sessions (what the media island shows) while
- * the user has given it notification access, and that access is given to a listener like this one.
+ * Android only lets an app read other apps' media sessions (what the media island shows) while the user has given it
+ * notification access, and that access is given to a listener like this one. It hears every notification
+ * anyway, so it hands them to [IslandAlerts], which decides which few the island shows.
  */
-class MediaListener : NotificationListenerService()
+class MediaListener : NotificationListenerService() {
+    override fun onListenerConnected() = IslandAlerts.connected(this, this)
+
+    override fun onListenerDisconnected() = IslandAlerts.disconnected()
+
+    override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap?) =
+        IslandAlerts.posted(this, sbn, rankingMap, currentInterruptionFilter)
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) = IslandAlerts.removed(sbn.key)
+}
 
 /** Which session the island shows: the first one playing, else the first with a title (a paused song). */
 internal fun <T> islandPick(sessions: List<T>, playing: (T) -> Boolean, titled: (T) -> Boolean): T? =
