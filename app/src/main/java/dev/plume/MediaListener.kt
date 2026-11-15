@@ -18,3 +18,6 @@ internal fun islandPosition(position: Long, updatedAt: Long, now: Long, speed: F
 
 /** "3:07" */
 internal fun islandTime(ms: Long) = "%d:%02d".format(ms / 60000, ms / 1000 % 60)
+
+/** The island steps aside when its track has been paused for [idleMs] ([pausedAt] 0: playing); never while it is selected. */
+internal fun islandIdle(pausedAt: Long, now: Long, idleMs: Long, selected: Boolean) = !selected && pausedAt > 0 && now - pausedAt >= idleMs

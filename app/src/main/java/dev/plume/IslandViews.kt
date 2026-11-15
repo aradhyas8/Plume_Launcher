@@ -63,13 +63,14 @@ internal class EqBars @JvmOverloads constructor(context: Context, attrs: Attribu
 
     override fun onDraw(c: Canvas) {
         paint.color = color
-        val w = width / 5f
+        val w = width / 6f
+        val gap = (width - 3 * w) / 2
         val t = anim.animatedValue as Float
         for (i in 0..2) {
             // Paused, the bars stand still at three heights: three equal dots would read as a "more" menu.
             val f = if (playing) 0.3f + 0.7f * abs(sin(2 * PI * (t * SPEED[i] + PHASE[i]))).toFloat() else REST[i]
             val h = maxOf(w, height * f)
-            val x = i * 2 * w
+            val x = i * (w + gap)
             rect.set(x, (height - h) / 2, x + w, (height + h) / 2)
             c.drawRoundRect(rect, w / 2, w / 2, paint)
         }

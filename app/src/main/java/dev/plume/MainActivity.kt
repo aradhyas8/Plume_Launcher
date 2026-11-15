@@ -6698,15 +6698,23 @@ class MainActivity : Activity() {
         }
 
     // ---------- media island ----------
-    // What another app plays (Spotify, YouTube Music, a podcast). At rest a glass pill at the top centre, like a tile.
-    // Selected, it opens down into a frosted card: bigger art, the artist, the time played and Previous, Play/Pause,
-    // Next, which Left and Right pick and OK presses. Reading other apps' sessions needs notification access (see
-    // MediaListener); without it, or with nothing playing, the island stays hidden.
+    // What another app plays (Spotify, YouTube Music, a podcast), in a glass tile at the top centre: the same tile as
+    // the app row, so it follows its Glass style and theme. At rest a compact pill: round art, the title and bars in the
+    // art's colour. Selected, it opens down: bigger art, the title on up to two lines, the artist, the app's mark, the
+    // time played and Previous, Play/Pause, Next, which Left and Right pick and OK presses. Reading other apps' sessions
+    // needs notification access (see MediaListener); without it, with nothing playing, or paused for a while, it hides.
     private val island by lazy { findViewById<LinearLayout>(R.id.island) }
+    private val islandTop by lazy { findViewById<View>(R.id.islandTop) }
+    private val islandMore by lazy { findViewById<View>(R.id.islandMore) }
     private val islandArt by lazy { findViewById<ImageView>(R.id.islandArt) }
     private val islandControls by lazy { listOf<ImageView>(findViewById(R.id.islandPrev), findViewById(R.id.islandPlay), findViewById(R.id.islandNext)) }
+    private var islandOpen = false // the shape the island has now; focus can be ahead of it while the content fades
     private var islandInk = 0 // the ink showIsland picked, for the progress between its calls
     private var islandSel = 1 // the control Left/Right picked: 0 previous, 1 play/pause, 2 next
+    private var pausedAt = 0L // when the shown track paused (elapsedRealtime), 0 while it plays
+    private var artUri: String? = null // the full-size art asked for, and what came back
+    private var artSharp: Bitmap? = null
+    private var artTone: Pair<Bitmap, Int>? = null // the art's mean colour, worked out once per picture
     private var media: MediaController? = null
     private val mediaSessions by lazy { getSystemService(MediaSessionManager::class.java) }
     private val mediaAccess by lazy { ComponentName(this, MediaListener::class.java) }
@@ -6722,13 +6730,14 @@ class MainActivity : Activity() {
             if (island.isFocused) ui.postDelayed(this, 1000)
         }
     }
+    private val islandIdleCheck = Runnable { showIsland() }
 
     private fun setUpIsland() {
+        // Corners that follow the tile's: a circle in the pill, a soft square in the open tile.
         islandArt.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, v.width / 6f)
+            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, if (v.width < dp(40)) v.width / 2f else dp(10).toFloat())
         }
         islandArt.clipToOutline = true
-        findViewById<View>(R.id.islandApp).apply { outlineProvider = islandArt.outlineProvider; clipToOutline = true }
         styleIsland()
         island.setOnClickListener {
             val c = media?.transportControls ?: return@setOnClickListener
@@ -6746,40 +6755,53 @@ class MainActivity : Activity() {
         showIsland()
     }
 
+    /**
+     * The content fades out, the tile changes shape, the new content fades in: the shape moves, the content never
+     * stretches. A quick Up and Down lands on the last state asked for.
+     */
     private fun openIsland(open: Boolean) {
         if (open) { lastTop = island; islandSel = 1 }
-        android.transition.TransitionManager.beginDelayedTransition(island.parent as ViewGroup, android.transition.TransitionSet()
-            .addTransition(android.transition.ChangeBounds())
-            .addTransition(android.transition.Fade(android.transition.Fade.IN).setStartDelay(100))
-            .setOrdering(android.transition.TransitionSet.ORDERING_TOGETHER)
-            .setDuration(260).setInterpolator(DECELERATE))
-        island.layoutParams.width = if (open) dp(400) else ViewGroup.LayoutParams.WRAP_CONTENT
-        if (open) island.setPadding(dp(18), dp(18), dp(18), dp(14)) else island.setPadding(dp(5), dp(5), dp(14), dp(5))
-        findViewById<View>(R.id.islandTop).layoutParams.width = if (open) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
-        val size = dp(if (open) 68 else 26)
-        islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
-        findViewById<View>(R.id.islandText).layoutParams = (findViewById<View>(R.id.islandText).layoutParams as LinearLayout.LayoutParams).apply {
-            marginStart = dp(if (open) 16 else 10)
-            width = if (open) 0 else ViewGroup.LayoutParams.WRAP_CONTENT
-            weight = if (open) 1f else 0f
-        }
-        findViewById<TextView>(R.id.islandTitle).apply {
-            textSize = if (open) 18f else 13f
-            maxWidth = dp(if (open) 400 else 200)
-        }
-        findViewById<View>(R.id.islandArtist).visibility = if (open) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.islandEq).visibility = if (open) View.GONE else View.VISIBLE
-        findViewById<View>(R.id.islandApp).visibility = if (open) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.islandMore).visibility = if (open) View.VISIBLE else View.GONE
-        // The card hangs over the screen: its extra height is taken back by the margin, so the rows below never move.
-        island.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        (island.layoutParams as FrameLayout.LayoutParams).bottomMargin = -(island.measuredHeight - dp(36)).coerceAtLeast(0)
-        island.requestLayout()
-        glass.kick(400) // the blur under it follows the new size
         ui.removeCallbacks(islandTick)
         if (open) islandTick.run()
+        for (v in listOf(islandTop, islandMore)) v.animate().cancel()
+        islandMore.animate().alpha(0f).setStartDelay(0).setDuration(90).start()
+        islandTop.animate().alpha(0f).setStartDelay(0).setDuration(90).withEndAction { if (island.isFocused == open) reshapeIsland(open) }.start()
+    }
+
+    private fun reshapeIsland(open: Boolean) {
+        if (islandOpen != open) {
+            islandOpen = open
+            android.transition.TransitionManager.beginDelayedTransition(island.parent as ViewGroup,
+                android.transition.ChangeBounds().setDuration(280).setInterpolator(DECELERATE))
+            island.layoutParams.width = if (open) dp(400) else ViewGroup.LayoutParams.WRAP_CONTENT
+            if (open) island.setPadding(dp(18), dp(18), dp(18), dp(14)) else island.setPadding(dp(5), dp(5), dp(14), dp(5))
+            islandTop.layoutParams.width = if (open) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
+            val size = dp(if (open) 68 else 26)
+            islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
+            findViewById<View>(R.id.islandText).layoutParams = (findViewById<View>(R.id.islandText).layoutParams as LinearLayout.LayoutParams).apply {
+                marginStart = dp(if (open) 16 else 10)
+                width = if (open) 0 else ViewGroup.LayoutParams.WRAP_CONTENT
+                weight = if (open) 1f else 0f
+            }
+            findViewById<TextView>(R.id.islandTitle).apply {
+                textSize = if (open) 18f else 13f
+                maxLines = if (open) 2 else 1
+                maxWidth = dp(if (open) 400 else 170)
+            }
+            findViewById<View>(R.id.islandArtist).visibility = if (open) View.VISIBLE else View.GONE
+            findViewById<View>(R.id.islandEq).visibility = if (open) View.GONE else View.VISIBLE
+            findViewById<View>(R.id.islandApp).visibility = if (open) View.VISIBLE else View.GONE
+            islandMore.visibility = if (open) View.VISIBLE else View.GONE
+            // The tile hangs over the screen: its extra height is taken back by the margin, so the rows below never move.
+            island.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+            (island.layoutParams as FrameLayout.LayoutParams).bottomMargin = -(island.measuredHeight - dp(36)).coerceAtLeast(0)
+            island.requestLayout()
+            glass.kick(500) // the glass under it follows the new size
+            ui.postDelayed(islandIdleCheck, 320) // the ink again, measured over the new size once the move ends
+        }
+        islandTop.animate().alpha(1f).setStartDelay(170).setDuration(180).withEndAction(null).start()
+        islandMore.animate().alpha(1f).setStartDelay(210).setDuration(180).start()
         showIsland()
-        ui.postDelayed({ showIsland() }, 300) // the ink again, measured over the new size once the move ends
     }
 
     private fun mediaStart() {
@@ -6796,6 +6818,7 @@ class MainActivity : Activity() {
         media?.unregisterCallback(mediaChanged)
         media = null
         ui.removeCallbacks(islandTick)
+        ui.removeCallbacks(islandIdleCheck)
     }
 
     private fun refreshMedia() = pickMedia(try { mediaSessions.getActiveSessions(mediaAccess) } catch (e: SecurityException) { emptyList() })
@@ -6805,6 +6828,7 @@ class MainActivity : Activity() {
         if (pick?.sessionToken != media?.sessionToken) {
             media?.unregisterCallback(mediaChanged)
             media = pick
+            pausedAt = 0L
             pick?.registerCallback(mediaChanged, ui)
         }
         showIsland()
@@ -6814,12 +6838,47 @@ class MainActivity : Activity() {
 
     private fun mediaTitle(m: MediaMetadata?) = (m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE))?.takeIf { it.isNotBlank() }
 
+    /** The picture to show: the full-size art when the app gives its address (loaded once), else the session's bitmap. */
+    private fun islandArtwork(m: MediaMetadata): Bitmap? {
+        val uri = listOf(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, MediaMetadata.METADATA_KEY_ART_URI, MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
+            .firstNotNullOfOrNull { m.getString(it)?.takeIf { u -> u.startsWith("http") || u.startsWith("content") || u.startsWith("android.resource") } }
+        if (uri != artUri) {
+            artUri = uri
+            artSharp = uri?.let { posters.get(it) }
+            if (uri != null && artSharp == null) posterIo.execute {
+                val b = try { decode(uri, dp(68), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } ?: return@execute
+                posters.put(uri, b)
+                ui.post { if (artUri == uri && !isDestroyed) { artSharp = b; showIsland() } }
+            }
+        }
+        return artSharp ?: m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: m.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+    }
+
+    /** The art's mean colour, or null when its pixels can't be read (a hardware bitmap). */
+    private fun artTone(b: Bitmap): Int? {
+        artTone?.takeIf { it.first === b }?.let { return it.second }
+        return try {
+            val small = Bitmap.createScaledBitmap(b, 8, 8, true)
+            val px = IntArray(64).also { small.getPixels(it, 0, 8, 0, 0, 8, 8) }
+            meanColour(px).also { artTone = b to it }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun showIsland() {
+        if (isDestroyed) return // a delayed refresh after a theme change rebuilt the screen
         val c = media
         val m = c?.metadata
         val title = mediaTitle(m)
-        if (c == null || m == null || title == null) {
-            if (island.isFocused) findViewById<View>(shownTop().first()).requestFocus()
+        val playing = mediaPlaying(c)
+        val now = android.os.SystemClock.elapsedRealtime()
+        pausedAt = if (playing) 0L else pausedAt.takeIf { it > 0 } ?: now
+        ui.removeCallbacks(islandIdleCheck)
+        if (c != null && !playing) ui.postDelayed(islandIdleCheck, (pausedAt + ISLAND_IDLE_MS - now).coerceAtLeast(1000))
+        if (c == null || m == null || title == null || islandIdle(pausedAt, now, ISLAND_IDLE_MS, island.isFocused)) {
+            if (island.isFocused) findViewById<View?>(shownTop().first())?.requestFocus()
             if (lastTop === island) lastTop = null
             island.visibility = View.GONE
             return
@@ -6832,24 +6891,30 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.islandTitle).apply { text = title; inked() }
         val who = m.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
             ?: m.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
-        val appIcon = try { packageManager.getApplicationIcon(c.packageName) } catch (e: Exception) { null }
         findViewById<TextView>(R.id.islandArtist).apply { text = who.orEmpty(); inked() }
-        findViewById<ImageView>(R.id.islandApp).setImageDrawable(appIcon)
-        val art = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m.getBitmap(MediaMetadata.METADATA_KEY_ART)
-            ?: m.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-        when {
-            art != null -> { islandArt.clearColorFilter(); islandArt.setImageBitmap(art) }
-            appIcon != null -> { islandArt.clearColorFilter(); islandArt.setImageDrawable(appIcon) }
-            else -> { islandArt.setImageResource(R.drawable.ic_music_note); islandArt.setColorFilter(fg) }
+        // The app's mark as the Shows row shows it: a plain mark in the text's ink, or its brand colour with Colour on.
+        val logo = LOGOS[c.packageName]?.takeIf { !it.second }
+        findViewById<ImageView>(R.id.islandApp).setImageDrawable(
+            if (logo != null) getDrawable(logo.first)!!.mutate().apply { setTint(BRAND_COLOURS[c.packageName]?.takeIf { cwColour() } ?: pillInk) }
+            else sourceIcon(c.packageName))
+        val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(c.packageName, 0)).toString() } catch (e: Exception) { null }
+        island.contentDescription = listOfNotNull(title, who, app).joinToString(", ")
+        val art = islandArtwork(m)
+        if (art != null) { islandArt.clearColorFilter(); islandArt.setImageBitmap(art) }
+        else { islandArt.setImageResource(R.drawable.ic_music_note); islandArt.setColorFilter(pillInk) }
+        // The bars take the art's colour, pale on a light ink and deep on a dark one, so they read on the same glass.
+        val light = android.graphics.Color.luminance(pillInk) > 0.5f
+        findViewById<EqBars>(R.id.islandEq).apply {
+            color = art?.let { artTone(it) }?.let { vivid(it, dark = !light) } ?: pillInk
+            this.playing = playing
         }
-        findViewById<EqBars>(R.id.islandEq).apply { color = pillInk; playing = mediaPlaying(c) }
-        islandControls[1].setImageResource(if (mediaPlaying(c)) R.drawable.ic_pause else R.drawable.ic_play)
+        islandControls[1].setImageResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play)
         islandControls.forEachIndexed { i, b ->
             b.setColorFilter(pillInk)
             val on = i == islandSel
-            // The picked control sits on a soft disc of the text colour, like a lit top bar icon: no ring, no growth.
+            // The picked control sits on a soft disc of the ink, like a lit top bar icon: no ring, no growth.
             b.background = if (on) GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(pillInk and 0xFFFFFF or 0x2E000000) } else null
-            b.alpha = if (on) 1f else 0.7f
+            b.alpha = if (on) 1f else 0.75f
         }
         islandInk = pillInk
         showProgress()
@@ -6988,6 +7053,7 @@ class MainActivity : Activity() {
 
     private companion object {
         const val ISLAND_ROUND = 24 // dp; the pill is 36 high, so it stays a full pill, and the open card is softly round
+        const val ISLAND_IDLE_MS = 5 * 60_000L // paused this long, the pill steps aside
         var fakeDevice: String? = null // debug builds: see fakeSetup()
         var fakeSdk = 0
         const val TV_LISTINGS = "android.permission.READ_TV_LISTINGS"
