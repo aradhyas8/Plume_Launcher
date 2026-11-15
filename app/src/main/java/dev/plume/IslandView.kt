@@ -764,7 +764,13 @@ internal class IslandView(private val a: MainActivity) {
 
     /** Once, when the island could show music and alerts but has no access: say why, and open the screen that gives it. */
     fun MainActivity.askIslandAccess() {
-        if (!on("isl_on") || prefs.getBoolean("isl_access_asked", false) || listenerOn() || !homeSetUp() || setupDialog?.isShowing == true) return
+        if (!on("isl_on") || !homeSetUp() || setupDialog?.isShowing == true) return
+        // A bar set up before the island has no island icon: say once where timers and Games now are.
+        if (R.id.timerButton !in shownTop() && !prefs.getBoolean("isl_tip", false) && (prefs.getBoolean("isl_access_asked", false) || listenerOn())) {
+            prefs.edit().putBoolean("isl_tip", true).apply()
+            return toast(getString(R.string.isl_tip), long = true)
+        }
+        if (prefs.getBoolean("isl_access_asked", false) || listenerOn()) return
         prefs.edit().putBoolean("isl_access_asked", true).apply()
         homePopup(0, getString(R.string.isl_access_card_title), getString(R.string.isl_access_card_body), null,
             getString(R.string.isl_access_give) to { setupDialog?.dismiss(); openListenerAccess() },
@@ -790,4 +796,15 @@ internal class IslandView(private val a: MainActivity) {
     fun started() = a.islandStarted()
     fun askAccess() = a.askIslandAccess()
     fun customTimer() = a.editTimer()
+
+    /** A logo from an address into [into], from the island's cache or fetched once; 24 dp, for settings rows. */
+    fun logo(url: String, into: ImageView) {
+        into.tag = url
+        into.scaleType = ImageView.ScaleType.FIT_CENTER
+        islandImages[url]?.let { return into.setImageBitmap(it) }
+        a.posterIo.execute {
+            val b = try { a.decode(url, a.dp(48), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } ?: return@execute
+            a.ui.post { islandImages[url] = b; if (into.tag == url) into.setImageBitmap(b) }
+        }
+    }
 }

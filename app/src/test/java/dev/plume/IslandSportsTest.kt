@@ -100,4 +100,10 @@ class IslandSportsTest {
     }
     @Test fun liveFromYesterdayPlaysToday() = assertEquals(setOf("11", "20"), sportsPlayingToday(listOf(game("in", start = 0L)), noonNy, ZoneId.of("UTC")))
 
+
+    @Test fun liveTeamGameComesFirst() = assertEquals(listOf(0, 1, 2, 2), listOf(
+        sportsNowRank(true, false, "2nd · 1:28"), sportsNowRank(true, true, "Round 3"),
+        sportsNowRank(true, true, "Round 3 - Suspended"), sportsNowRank(false, false, null)))
+    @Test fun sponsorGoes() = assertEquals("Austin Championship", sportsShortName("Austin Championship pres. by Compliance Solutions"))
+    @Test fun plainNameStays() = assertEquals("Brazilian Grand Prix", sportsShortName("Brazilian Grand Prix"))
 }

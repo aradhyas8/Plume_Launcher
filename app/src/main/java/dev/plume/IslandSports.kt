@@ -42,7 +42,7 @@ internal object IslandSports : IslandSource {
     /** A game for the "Games now" page: [title] is the live score or "IND at PHI · 7:30 PM". */
     data class NowGame(
         val sport: String, val league: String, val leagueName: String, val eventId: String, val title: String,
-        val awayLogo: String?, val homeLogo: String?, val live: Boolean, val start: Long,
+        val awayLogo: String?, val homeLogo: String?, val live: Boolean, val start: Long, val rank: Int = 2,
     )
 
     // The league names are proper names, so they stay plain constants rather than translated resources. ESPN has no
@@ -232,9 +232,10 @@ internal object IslandSports : IslandSource {
                         g.name != null -> "${g.name} · ${g.shortDetail}"
                         else -> sportsScore(g)
                     }
-                    NowGame(l.sport, l.league, l.name, g.id, title, g.away?.logo ?: g.logo, g.home?.logo, live, g.start)
+                    NowGame(l.sport, l.league, l.name, g.id, title, g.away?.logo ?: g.logo, g.home?.logo, live, g.start,
+                        sportsNowRank(live, g.name != null || l.sport == "cricket", g.shortDetail))
                 }
-            }.distinctBy { it.eventId }.sortedWith(compareBy<NowGame>({ !it.live }, { it.start }))
+            }.distinctBy { it.eventId }.sortedWith(compareBy<NowGame>({ it.rank }, { it.start }))
             nowCache = now to list
             main.post { done(list) }
         }.start()
@@ -352,7 +353,7 @@ internal object IslandSports : IslandSource {
             .ifEmpty { cType?.optString(k).orEmpty() }.ifEmpty { type.optString("description") }
         return SportsGame(e.optString("id").ifEmpty { return null }, l.key, sportsTime(e.optString("date")), type.optString("state"),
             type.optBoolean("completed"), text("shortDetail"), text("detail"), away, home,
-            if (named) e.optString("shortName").ifEmpty { e.optString("name") }.ifEmpty { return null } else null, leagueLogo)
+            if (named) sportsShortName(e.optString("shortName").ifEmpty { e.optString("name") }).ifEmpty { return null } else null, leagueLogo)
     }
 
     // ---------- items ----------
@@ -549,3 +550,18 @@ internal fun sportsScored(old: SportsGame?, new: SportsGame) =
  */
 internal fun sportsFinalUntil(seenFinal: Long, start: Long, sawLive: Boolean) =
     (if (sawLive) seenFinal else minOf(seenFinal, start + 4 * HOUR)) + 2 * HOUR
+
+/**
+ * Where a game goes in Games now: a live match between two teams first (the thing most people look for), then live
+ * events that last for hours or days (golf, a race weekend, cricket), then what starts soon. A suspended or delayed
+ * event is not really on, so it waits with the upcoming ones.
+ */
+internal fun sportsNowRank(live: Boolean, longEvent: Boolean, detail: String?): Int = when {
+    !live || detail?.contains("Suspend", true) == true || detail?.contains("Delay", true) == true -> 2
+    longEvent -> 1
+    else -> 0
+}
+
+/** An event's name without its sponsor ("Austin Championship pres. by X" is the Austin Championship). */
+internal fun sportsShortName(name: String): String =
+    name.replace(Regex("""\s+(pres\.|presented|powered|sponsored)\s+by\s+.*$""", RegexOption.IGNORE_CASE), "").trim()

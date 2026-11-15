@@ -3206,7 +3206,7 @@ class MainActivity : Activity() {
                 isl.show()
                 pickGamesNow(i, list)
             }
-        }, focus, crumb = crumb) { renderSettings(R.string.isl_games_now) }
+        }, focus, styles = list.map { RowStyle(logo = it.awayLogo ?: it.homeLogo) }, crumb = crumb) { renderSettings(R.string.isl_games_now) }
     }
 
     /** Sport folders (Football, Basketball, Motorsport…), so no list is long. [teams]: the way to Teams, else to Leagues. */
@@ -3266,7 +3266,8 @@ class MainActivity : Activity() {
                 IslandSports.start(this)
                 pickTeams(l, i, list, back)
             }
-        }, focus, steps = list.indices.map { i -> { d: Int -> jump(i, d) } }, crumb = getString(R.string.isl_teams), back = back)
+        }, focus, steps = list.indices.map { i -> { d: Int -> jump(i, d) } }, styles = list.map { RowStyle(logo = it.logo) },
+            crumb = getString(R.string.isl_teams), back = back)
     }
 
     private fun clockFormatRow(title: Int, format: ClockFormat) = page(getString(title),
@@ -3627,7 +3628,7 @@ class MainActivity : Activity() {
     internal class RowStyle(val icon: Int? = null, val sub: String? = null, val choices: List<Pair<String, Int?>>? = null,
                            val thumb: Pair<String, Boolean>? = null, val help: String? = null, val area: Int? = null,
                            val art: String? = null, val ext: Boolean = false, val header: Boolean = false, val hero: Boolean = false,
-                           val dim: String? = null)
+                           val dim: String? = null, val logo: String? = null)
 
     // Settings colours, one set for each surface (dark or light, solid or glass). Over glass the text is a little
     // stronger and has a soft shadow, as the wallpaper's colour shows through the panel. Focus is always the brightest.
@@ -3702,7 +3703,8 @@ class MainActivity : Activity() {
         val restyle = mutableListOf<(Boolean) -> Unit>()
         val name = label(title, 16f).apply { setTextColor(restInk()); panelShadow() }
         val sub = style?.sub?.let { label(it, 13f).apply { setTextColor(valueInk()); panelShadow() } }
-        val iconView = style?.icon?.let { icon(it, 24, iconInk(false)) }
+        // A team's or an event's logo, fetched once and kept (see IslandView.logo); else the row's icon.
+        val iconView = style?.logo?.let { url -> ImageView(this).apply { isl.logo(url, this) } } ?: style?.icon?.let { icon(it, 24, iconInk(false)) }
         val line = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -3768,7 +3770,7 @@ class MainActivity : Activity() {
                     interpolator = DECELERATE
                     addUpdateListener { a -> name.setTextColor(a.animatedValue as Int) }
                 }.start()
-                iconView?.let { v -> style.icon?.let { v.setImageResource(if (focused) filled(it) else it) }; v.setColorFilter(iconInk(focused)) }
+                if (style?.logo == null) iconView?.let { v -> style?.icon?.let { v.setImageResource(if (focused) filled(it) else it) }; v.setColorFilter(iconInk(focused)) }
                 sub?.setTextColor(valueInk(focused))
                 restyle.forEach { it(focused) }
             }
@@ -4777,8 +4779,8 @@ class MainActivity : Activity() {
     /** The icons the bar shows, in order: the saved list, or all of them. Plume settings is always on it. */
     private fun topOrder(): List<Int> {
         val all = TOP_KEYS.values.toList()
-        // Power and the timer are not on the bar until someone adds them.
-        return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - "power" - "timer", "plume"))
+        // Power is not on the bar until someone adds it.
+        return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - "power", "plume"))
     }
 
     private fun hasSources() = sources.isNotEmpty() || cvteSourcePanel != null

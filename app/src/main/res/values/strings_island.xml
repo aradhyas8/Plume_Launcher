@@ -69,6 +69,7 @@
     <string name="isl_custom_hint">Minutes</string>
     <string name="isl_start">Start</string>
     <string name="isl_games_now">Games now</string>
+    <string name="isl_tip">Timers and Games now are on the island icon. To add it: hold OK on a top-bar icon, then select Add icon.</string>
     <string name="isl_menu_hide">Hide this</string>
     <string name="isl_menu_mute">Turn off alerts from %1$s</string>
     <string name="isl_menu_unfollow">Stop following</string>
