@@ -180,8 +180,8 @@
         </LinearLayout>
 
         <!-- Media island: what is playing. A compact glass pill at rest (art, title, moving bars); selected, it
-             opens down into a card with bigger art, the artist, the app's icon, the time played and the controls. -->
-        <dev.plume.GlassBox
+             opens down into a bigger tile with bigger art, the artist, the app's icon, the time played and the controls. -->
+        <LinearLayout
             android:id="@+id/island"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -345,7 +345,7 @@
                             android:src="@drawable/ic_skip_next" />
                     </LinearLayout>
                 </LinearLayout>
-        </dev.plume.GlassBox>
+        </LinearLayout>
         </FrameLayout>
 
         <View

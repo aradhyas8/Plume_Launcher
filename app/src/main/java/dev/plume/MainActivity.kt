@@ -6702,10 +6702,10 @@ class MainActivity : Activity() {
     // Selected, it opens down into a frosted card: bigger art, the artist, the time played and Previous, Play/Pause,
     // Next, which Left and Right pick and OK presses. Reading other apps' sessions needs notification access (see
     // MediaListener); without it, or with nothing playing, the island stays hidden.
-    private val island by lazy { findViewById<GlassBox>(R.id.island) }
+    private val island by lazy { findViewById<LinearLayout>(R.id.island) }
     private val islandArt by lazy { findViewById<ImageView>(R.id.islandArt) }
     private val islandControls by lazy { listOf<ImageView>(findViewById(R.id.islandPrev), findViewById(R.id.islandPlay), findViewById(R.id.islandNext)) }
-    private var islandFrost: android.animation.ValueAnimator? = null // the frost fading in as the island opens
+    private var islandInk = 0 // the ink showIsland picked, for the progress between its calls
     private var islandSel = 1 // the control Left/Right picked: 0 previous, 1 play/pause, 2 next
     private var media: MediaController? = null
     private val mediaSessions by lazy { getSystemService(MediaSessionManager::class.java) }
@@ -6729,7 +6729,6 @@ class MainActivity : Activity() {
         }
         islandArt.clipToOutline = true
         findViewById<View>(R.id.islandApp).apply { outlineProvider = islandArt.outlineProvider; clipToOutline = true }
-        island.frost = 0f // the frost is the open card's; at rest the pill is a tile
         styleIsland()
         island.setOnClickListener {
             val c = media?.transportControls ?: return@setOnClickListener
@@ -6741,9 +6740,8 @@ class MainActivity : Activity() {
         }
     }
 
-    /** At rest a glass tile like the app tiles (it follows the Glass style and the theme); open, a glass card. */
+    /** A glass tile like the app row's, open or not: the same Glass style, theme, tint and focus light. */
     private fun styleIsland() {
-        styleGlass(island.glass, dp(ISLAND_ROUND).toFloat())
         style(island, dp(ISLAND_ROUND), card = true, lift = 1f, rise = false) { focused -> openIsland(focused) }
         showIsland()
     }
@@ -6777,16 +6775,11 @@ class MainActivity : Activity() {
         island.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
         (island.layoutParams as FrameLayout.LayoutParams).bottomMargin = -(island.measuredHeight - dp(36)).coerceAtLeast(0)
         island.requestLayout()
-        islandFrost?.cancel()
-        islandFrost = android.animation.ValueAnimator.ofFloat(island.frost, if (open) 1f else 0f).apply {
-            duration = 220
-            addUpdateListener { island.frost = it.animatedValue as Float }
-            start()
-        }
         glass.kick(400) // the blur under it follows the new size
         ui.removeCallbacks(islandTick)
         if (open) islandTick.run()
         showIsland()
+        ui.postDelayed({ showIsland() }, 300) // the ink again, measured over the new size once the move ends
     }
 
     private fun mediaStart() {
@@ -6831,19 +6824,16 @@ class MainActivity : Activity() {
             island.visibility = View.GONE
             return
         }
-        // Open, the text sits on the card's frost and takes the theme's colour. At rest the pill is thin glass over the
-        // picture, so it takes the top bar icons' ink (fitted to the wallpaper there) and their shadow; a solid tile
-        // (Glass off) keeps the theme's colour.
-        val open = island.isFocused
-        val pillInk = if (!open && glassActive()) iconInk else fg
-        findViewById<TextView>(R.id.islandTitle).apply {
-            text = title
-            if (open || !glassActive()) { setShadowLayer(0f, 0f, 0f, 0); setTextColor(fg) } else ink(this, iconInk)
-        }
+        // The island is glass over the picture, open or not, so its text, bars and buttons take the ink fitted to the
+        // wallpaper behind it, with the top bar's shadow. A solid tile (Glass off) keeps the theme's colour.
+        val glassy = glassActive()
+        val pillInk = if (!glassy) fg else if (island.isShown && island.width > 0) inkBehind(listOf(island)) else iconInk
+        fun TextView.inked() = if (glassy) ink(this, pillInk) else { setShadowLayer(0f, 0f, 0f, 0); setTextColor(fg) }
+        findViewById<TextView>(R.id.islandTitle).apply { text = title; inked() }
         val who = m.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
             ?: m.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
         val appIcon = try { packageManager.getApplicationIcon(c.packageName) } catch (e: Exception) { null }
-        findViewById<TextView>(R.id.islandArtist).apply { text = who.orEmpty(); setTextColor(fg) }
+        findViewById<TextView>(R.id.islandArtist).apply { text = who.orEmpty(); inked() }
         findViewById<ImageView>(R.id.islandApp).setImageDrawable(appIcon)
         val art = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: m.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
@@ -6855,12 +6845,13 @@ class MainActivity : Activity() {
         findViewById<EqBars>(R.id.islandEq).apply { color = pillInk; playing = mediaPlaying(c) }
         islandControls[1].setImageResource(if (mediaPlaying(c)) R.drawable.ic_pause else R.drawable.ic_play)
         islandControls.forEachIndexed { i, b ->
-            b.setColorFilter(fg)
+            b.setColorFilter(pillInk)
             val on = i == islandSel
             // The picked control sits on a soft disc of the text colour, like a lit top bar icon: no ring, no growth.
-            b.background = if (on) GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(fg and 0xFFFFFF or 0x24000000) } else null
+            b.background = if (on) GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(pillInk and 0xFFFFFF or 0x2E000000) } else null
             b.alpha = if (on) 1f else 0.7f
         }
+        islandInk = pillInk
         showProgress()
         island.visibility = View.VISIBLE
     }
@@ -6873,9 +6864,9 @@ class MainActivity : Activity() {
         if (s == null || length <= 0L) { times.visibility = View.GONE; return }
         val at = islandPosition(s.position, s.lastPositionUpdateTime, android.os.SystemClock.elapsedRealtime(), s.playbackSpeed, mediaPlaying(c), length)
         times.visibility = View.VISIBLE
-        findViewById<IslandBar>(R.id.islandProgress).apply { color = fg; fraction = at.toFloat() / length }
-        findViewById<TextView>(R.id.islandElapsed).apply { text = islandTime(at); setTextColor(fg) }
-        findViewById<TextView>(R.id.islandLeft).apply { text = "-" + islandTime(length - at); setTextColor(fg) }
+        findViewById<IslandBar>(R.id.islandProgress).apply { color = islandInk; fraction = at.toFloat() / length }
+        findViewById<TextView>(R.id.islandElapsed).apply { text = islandTime(at); setTextColor(islandInk) }
+        findViewById<TextView>(R.id.islandLeft).apply { text = "-" + islandTime(length - at); setTextColor(islandInk) }
     }
 
     // ---------- shared view bits ----------
