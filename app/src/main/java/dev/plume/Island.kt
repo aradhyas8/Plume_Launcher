@@ -1,8 +1,12 @@
 package dev.plume
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * The island's shared model. Each source (music, timers, alerts, sports, weather, system) turns what it knows into
@@ -64,6 +68,30 @@ internal fun islandPeek(items: List<IslandItem>, now: Long): IslandItem? =
 internal fun islandClock(ms: Long, countdown: Boolean = true): String {
     val s = (ms.coerceAtLeast(0L) + if (countdown) 999 else 0) / 1000
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** An app's name, or null when it is gone or hidden from Plume. */
+internal fun appLabel(ctx: Context, pkg: String): String? = try {
+    ctx.packageManager.run { getApplicationLabel(getApplicationInfo(pkg, 0)).toString() }
+} catch (e: Exception) {
+    null
+}
+
+/**
+ * JSON from the island's web sources (scores, weather), on the calling thread. Only a generic User-Agent goes with
+ * the request: no account, no device id.
+ */
+internal fun islandJson(url: String): JSONObject {
+    val c = (URL(url).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 5000
+        readTimeout = 5000
+        setRequestProperty("User-Agent", "tvhome-island")
+    }
+    return try {
+        JSONObject(c.inputStream.use { it.readBytes().decodeToString() })
+    } finally {
+        c.disconnect()
+    }
 }
 
 /**

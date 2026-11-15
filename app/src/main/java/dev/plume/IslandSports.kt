@@ -5,8 +5,6 @@ import android.os.Handler
 import android.os.Looper
 import android.text.format.DateFormat
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -94,7 +92,7 @@ internal object IslandSports : IslandSource {
         Thread {
             val list = try {
                 // The default page holds only 50 teams; college football has over 700.
-                val teams = getJson("$BASE/$sport/$league/teams?limit=1000").getJSONArray("sports").getJSONObject(0)
+                val teams = islandJson("$BASE/$sport/$league/teams?limit=1000").getJSONArray("sports").getJSONObject(0)
                     .getJSONArray("leagues").getJSONObject(0).getJSONArray("teams")
                 (0 until teams.length()).mapNotNull { i ->
                     val t = teams.optJSONObject(i)?.optJSONObject("team") ?: return@mapNotNull null
@@ -158,7 +156,7 @@ internal object IslandSports : IslandSource {
     }
 
     private fun scoreboard(sport: String, league: String, query: String): List<SportsGame>? = try {
-        val events = getJson("$BASE/$sport/$league/scoreboard" + if (query.isEmpty()) "" else "?$query").optJSONArray("events")
+        val events = islandJson("$BASE/$sport/$league/scoreboard" + if (query.isEmpty()) "" else "?$query").optJSONArray("events")
         if (events == null) emptyList() else (0 until events.length()).mapNotNull { game("$sport/$league", events.optJSONObject(it)) }
     } catch (e: Exception) {
         android.util.Log.w("Plume", "sports scoreboard $sport/$league failed ($e)")
@@ -184,19 +182,6 @@ internal object IslandSports : IslandSource {
             away ?: return null, home ?: return null)
     }
 
-    // Only the generic User-Agent goes with the request: no account, no device id, no location.
-    private fun getJson(url: String): JSONObject {
-        val c = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 5000
-            readTimeout = 5000
-            setRequestProperty("User-Agent", "tvhome-island")
-        }
-        return try {
-            JSONObject(c.inputStream.use { it.readBytes().decodeToString() })
-        } finally {
-            c.disconnect()
-        }
-    }
 
     // ---------- items ----------
 

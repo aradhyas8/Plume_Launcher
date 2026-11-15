@@ -72,7 +72,7 @@ internal object IslandAlerts : IslandSource {
 
         val call = n.category == Notification.CATEGORY_CALL
         val privacy = prefs.getString("isl_alert_privacy", "app") ?: "app"
-        val label = appLabel(ctx, pkg)
+        val label = appLabel(ctx, pkg) ?: pkg
         val (shownTitle, sub) = islandAlertText(privacy, call, label, title, text,
             ctx.getString(R.string.isl_alert_call), ctx.getString(R.string.isl_alert_new)) ?: return removed(sbn.key)
 
@@ -113,10 +113,6 @@ internal object IslandAlerts : IslandSource {
     @Synchronized fun removed(key: String) {
         if (shown.remove(key) != null) Island.changed()
     }
-
-    private fun appLabel(ctx: Context, pkg: String): String = try {
-        ctx.packageManager.run { getApplicationLabel(getApplicationInfo(pkg, 0)).toString() }
-    } catch (_: Exception) { pkg }
 
     @Suppress("DEPRECATION")
     private fun bigPicture(ex: android.os.Bundle?): Bitmap? = try { ex?.getParcelable<android.os.Parcelable>(Notification.EXTRA_PICTURE) as? Bitmap } catch (_: Exception) { null }

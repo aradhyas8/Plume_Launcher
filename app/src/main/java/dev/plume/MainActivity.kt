@@ -3172,8 +3172,7 @@ class MainActivity : Activity() {
     private fun pickAlertApps() {
         val seen = prefs.getStringSet("isl_alert_seen", emptySet())!!
         if (seen.isEmpty()) return toast(getString(R.string.isl_alert_apps_none))
-        val label = { pkg: String -> try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: Exception) { pkg } }
-        toggles(getString(R.string.isl_alert_apps), seen.map { label(it) to it }.sortedBy { it.first.lowercase() }, "isl_alert_off",
+        toggles(getString(R.string.isl_alert_apps), seen.map { (appLabel(this, it) ?: it) to it }.sortedBy { it.first.lowercase() }, "isl_alert_off",
             getString(R.string.on), getString(R.string.off)) { showIsland(); renderSettings(R.string.isl_alert_apps) }
     }
 
@@ -6106,16 +6105,6 @@ class MainActivity : Activity() {
     }
 
     /** The same WMO codes as icons. Clear and partly cloudy have a night version. */
-    private fun weatherIcon(code: Int, day: Boolean) = when (code) {
-        0 -> if (day) R.drawable.ms_light_mode_fill else R.drawable.ms_dark_mode_fill
-        1, 2 -> if (day) R.drawable.ms_partly_cloudy_day_fill else R.drawable.ms_partly_cloudy_night_fill
-        45, 48 -> R.drawable.ms_foggy_fill
-        in 51..67, in 80..82 -> R.drawable.ms_rainy_fill
-        in 71..77, 85, 86 -> R.drawable.ms_weather_snowy_fill
-        in 95..99 -> R.drawable.ms_thunderstorm_fill
-        else -> R.drawable.ms_cloud_fill
-    }
-
     /** WMO weather codes, as Open-Meteo reports them. */
     private fun weatherWord(code: Int) = when (code) {
         0 -> getString(R.string.wx_clear)
@@ -7033,7 +7022,7 @@ class MainActivity : Activity() {
         val who = m.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
             ?: m.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
         val art = islandArtwork(m)
-        val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(c.packageName, 0)).toString() } catch (e: Exception) { null }
+        val app = appLabel(this, c.packageName)
         val can = c.playbackState?.actions ?: 0L
         val t = c.transportControls
         // An app that names no actions gets all three; one that names them gets only what it can do.

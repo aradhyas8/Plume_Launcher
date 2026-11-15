@@ -62,4 +62,78 @@
     <string name="isl_update_title">Updating Plume</string>
     <string name="isl_update_progress">%1$s · %2$d%%</string>
     <string name="isl_update_installing">Installing…</string>
+
+    <!-- Alerts -->
+    <string name="isl_alert_new">New notification</string>
+    <string name="isl_alert_call">Incoming call</string>
+
+    <!-- Bluetooth -->
+    <string name="isl_bt_connected">%1$s connected</string>
+    <string name="isl_bt_disconnected">%1$s disconnected</string>
+    <string name="isl_bt_battery">Battery %1$d%%</string>
+    <string name="isl_bt_percent">%1$d%%</string>
+    <string name="isl_bt_device">Bluetooth device</string>
+    <string name="isl_bt_pad_low">Controller battery low</string>
+
+    <!-- Sports -->
+    <!-- A game that has not started: the away team, then the home team, like the logos in the pill. -->
+    <string name="isl_sports_at">%1$s at %2$s</string>
+    <string name="isl_sports_today">Today %1$s</string>
+    <string name="isl_sports_tomorrow">Tomorrow %1$s</string>
+    <string name="isl_sports_final">Final</string>
+    <!-- Read aloud: "Pacers 39, 76ers 37, 2nd Quarter · 9:00". -->
+    <string name="isl_sports_desc_score">%1$s %2$s, %3$s %4$s, %5$s</string>
+    <!-- Read aloud: "Pacers at 76ers, Today 7:30 PM". -->
+    <string name="isl_sports_desc_pre">%1$s at %2$s, %3$s</string>
+
+    <!-- Timers -->
+    <!-- The island's timer, stopwatch and sleep timer: see IslandTimers. -->
+    <string name="isl_timer_sub">Timer · %s</string>
+    <string name="isl_timer_sub_paused">Paused · %s timer</string>
+    <string name="isl_timer_minutes">%d min</string>
+    <string name="isl_timer_done">Time\'s up</string>
+    <string name="isl_timer_done_sub">%s timer</string>
+    <string name="isl_timer_toast">Timer done</string>
+    <string name="isl_timer_stopwatch">Stopwatch</string>
+    <string name="isl_timer_paused">Paused</string>
+    <string name="isl_timer_sleep_min">Music stops in %d min</string>
+    <string name="isl_timer_sleep_s">Music stops in %d s</string>
+    <string name="isl_timer_sleep_sub">Sleep timer</string>
+    <string name="isl_timer_sleep_toast">Sleep timer: music paused</string>
+    <string name="isl_timer_plus1">+1</string>
+    <string name="isl_timer_plus15">+15</string>
+
+    <!-- Spoken by screen readers for the island's buttons. -->
+    <string name="isl_timer_add_minute">Add 1 minute</string>
+    <string name="isl_timer_add_15">Add 15 minutes</string>
+    <string name="isl_timer_again">Start a 1 minute timer</string>
+    <string name="isl_timer_pause">Pause</string>
+    <string name="isl_timer_resume">Resume</string>
+    <string name="isl_timer_stop">Stop</string>
+    <string name="isl_timer_dismiss">Dismiss</string>
+    <string name="isl_timer_reset">Reset</string>
+    <string name="isl_timer_cancel_sleep">Cancel sleep timer</string>
+
+    <!-- Weather -->
+    <string name="isl_wx_rain_in">Rain in %d min</string>
+    <string name="isl_wx_snow_in">Snow in %d min</string>
+    <string name="isl_wx_rain_stops">Rain stops in %d min</string>
+    <string name="isl_wx_snow_stops">Snow stops in %d min</string>
+    <string name="isl_wx_light_rain">Light rain</string>
+    <string name="isl_wx_moderate_rain">Moderate rain</string>
+    <string name="isl_wx_heavy_rain">Heavy rain</string>
+    <string name="isl_wx_light_snow">Light snow</string>
+    <string name="isl_wx_moderate_snow">Moderate snow</string>
+    <string name="isl_wx_heavy_snow">Heavy snow</string>
+    <!-- "Light rain until 3:45 PM": the intensity, then the time it ends. -->
+    <string name="isl_wx_until">%1$s until %2$s</string>
+    <!-- Tomorrow's lowest, then highest temperature. -->
+    <string name="isl_wx_tomorrow">Tomorrow %1$d° / %2$d°</string>
+    <string name="isl_wx_rain_likely">Rain likely · %d%%</string>
+    <string name="isl_wx_snow_likely">Snow likely · %d%%</string>
+    <string name="isl_wx_showers">Showers</string>
+    <string name="isl_wx_colder">Much colder tomorrow</string>
+    <string name="isl_wx_warmer">Much warmer tomorrow</string>
+    <!-- Tomorrow's highest temperature, then today's. -->
+    <string name="isl_wx_max_today">Max %1$d°, today %2$d°</string>
 </resources>

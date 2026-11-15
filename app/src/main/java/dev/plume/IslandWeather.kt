@@ -7,8 +7,6 @@ import android.os.Looper
 import android.text.format.DateFormat
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.Executors
@@ -99,15 +97,9 @@ internal object IslandWeather : IslandSource {
         // days start at the place's midnight.
         val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
             "&minutely_15=precipitation,snowfall&forecast_minutely_15=12" +
-            "&hourly=temperature_2m,precipitation_probability,weather_code" +
             "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
             "&timezone=auto&forecast_days=2&timeformat=unixtime" + if (f) "&temperature_unit=fahrenheit" else ""
-        val text = (URL(url).openConnection() as HttpURLConnection).run {
-            connectTimeout = 5000
-            readTimeout = 5000
-            try { inputStream.use { it.readBytes().decodeToString() } } finally { disconnect() }
-        }
-        val j = JSONObject(text)
+        val j = islandJson(url)
         val m = j.getJSONObject("minutely_15")
         val d = j.getJSONObject("daily")
         fun JSONArray.times() = List(length()) { getLong(it) * 1000 }
@@ -153,7 +145,7 @@ internal object IslandWeather : IslandSource {
             out += IslandItem(
                 "wx:tomorrow", IslandKind.WEATHER,
                 ctx.getString(R.string.isl_wx_tomorrow, Math.round(f.min[t]).toInt(), Math.round(f.max[t]).toInt()),
-                sub, icon = icon(sky), mono = true, since = f.time, until = f.days[t],
+                sub, icon = weatherIcon(f.code[t], day = true), mono = true, since = f.time, until = f.days[t],
             )
         }
         val change = wxChange(f.max[today], f.max[t], f.fahrenheit)
@@ -165,7 +157,7 @@ internal object IslandWeather : IslandSource {
                 "wx:temp", IslandKind.WEATHER,
                 ctx.getString(if (change < 0) R.string.isl_wx_colder else R.string.isl_wx_warmer),
                 ctx.getString(R.string.isl_wx_max_today, Math.round(f.max[t]).toInt(), Math.round(f.max[today]).toInt()),
-                icon = icon(wxSky(f.code[t])), mono = true, since = f.time, until = end,
+                icon = weatherIcon(f.code[t], day = true), mono = true, since = f.time, until = end,
             )
         }
         return out
@@ -204,16 +196,6 @@ internal object IslandWeather : IslandSource {
         )
     }
 
-    /** The same icons as the top bar's weather (MainActivity.weatherIcon), always the day version: it is a forecast. */
-    private fun icon(sky: WxSky) = when (sky) {
-        WxSky.CLEAR -> R.drawable.ms_light_mode_fill
-        WxSky.PARTLY -> R.drawable.ms_partly_cloudy_day_fill
-        WxSky.FOG -> R.drawable.ms_foggy_fill
-        WxSky.DRIZZLE, WxSky.RAIN, WxSky.SHOWERS -> R.drawable.ms_rainy_fill
-        WxSky.SNOW -> R.drawable.ms_weather_snowy_fill
-        WxSky.THUNDER -> R.drawable.ms_thunderstorm_fill
-        WxSky.CLOUDY -> R.drawable.ms_cloud_fill
-    }
 
     private fun word(sky: WxSky) = when (sky) {
         WxSky.CLEAR -> R.string.wx_clear
@@ -302,4 +284,15 @@ internal fun wxSky(code: Int) = when (code) {
     in 80..82 -> WxSky.SHOWERS
     in 95..99 -> WxSky.THUNDER
     else -> WxSky.CLOUDY
+}
+
+/** A WMO weather code's icon, for the top bar's weather and the island's ([day]: the sun, else the moon). */
+internal fun weatherIcon(code: Int, day: Boolean) = when (code) {
+    0 -> if (day) R.drawable.ms_light_mode_fill else R.drawable.ms_dark_mode_fill
+    1, 2 -> if (day) R.drawable.ms_partly_cloudy_day_fill else R.drawable.ms_partly_cloudy_night_fill
+    45, 48 -> R.drawable.ms_foggy_fill
+    in 51..67, in 80..82 -> R.drawable.ms_rainy_fill
+    in 71..77, 85, 86 -> R.drawable.ms_weather_snowy_fill
+    in 95..99 -> R.drawable.ms_thunderstorm_fill
+    else -> R.drawable.ms_cloud_fill
 }
