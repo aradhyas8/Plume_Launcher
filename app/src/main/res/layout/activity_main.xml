@@ -179,33 +179,24 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <!-- Media island: what is playing. A glass pill at rest; selected, it opens down into a frosted card with
-             bigger art, the artist, the time played and the controls. -->
-        <FrameLayout
+        <!-- Media island: what is playing. A compact glass pill at rest (art, title, moving bars); selected, it
+             opens down into a card with bigger art, the artist, the app's icon, the time played and the controls. -->
+        <dev.plume.GlassBox
             android:id="@+id/island"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|center_horizontal"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="vertical"
+            android:paddingStart="5dp"
+            android:paddingTop="5dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="5dp"
             android:visibility="gone">
 
-            <dev.plume.GlassBox
-                android:id="@+id/islandFrost"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:alpha="0" />
-
-            <LinearLayout
-                android:id="@+id/islandBody"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minHeight="36dp"
-                android:orientation="vertical"
-                android:paddingStart="6dp"
-                android:paddingTop="6dp"
-                android:paddingEnd="16dp"
-                android:paddingBottom="6dp">
-
                 <LinearLayout
+                    android:id="@+id/islandTop"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
@@ -213,8 +204,8 @@
 
                     <ImageView
                         android:id="@+id/islandArt"
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
+                        android:layout_width="26dp"
+                        android:layout_height="26dp"
                         android:importantForAccessibility="no"
                         android:scaleType="centerCrop" />
 
@@ -231,22 +222,41 @@
                             android:layout_height="wrap_content"
                             android:ellipsize="end"
                             android:fontFamily="sans-serif-medium"
-                            android:maxWidth="260dp"
+                            android:includeFontPadding="false"
+                            android:maxWidth="200dp"
                             android:maxLines="1"
-                            android:textSize="14sp" />
+                            android:textSize="13sp" />
 
                         <TextView
                             android:id="@+id/islandArtist"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:alpha="0.75"
+                            android:layout_marginTop="6dp"
+                            android:alpha="0.7"
                             android:ellipsize="end"
                             android:fontFamily="sans-serif"
+                            android:includeFontPadding="false"
                             android:maxLines="1"
                             android:textSize="13sp"
                             android:visibility="gone" />
                     </LinearLayout>
+
+                    <dev.plume.EqBars
+                        android:id="@+id/islandEq"
+                        android:layout_width="13dp"
+                        android:layout_height="13dp"
+                        android:layout_marginStart="12dp" />
+
+                    <!-- The playing app's icon, in place of its name. Only while open. -->
+                    <ImageView
+                        android:id="@+id/islandApp"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="top"
+                        android:layout_marginStart="12dp"
+                        android:importantForAccessibility="no"
+                        android:scaleType="fitCenter"
+                        android:visibility="gone" />
                 </LinearLayout>
 
                 <!-- Only while open. -->
@@ -254,22 +264,17 @@
                     android:id="@+id/islandMore"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="16dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
                     android:orientation="vertical"
                     android:visibility="gone">
-
-                    <ProgressBar
-                        android:id="@+id/islandProgress"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="3dp"
-                        android:max="1000" />
 
                     <LinearLayout
                         android:id="@+id/islandTimes"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="5dp"
+                        android:gravity="center_vertical"
                         android:orientation="horizontal">
 
                         <TextView
@@ -279,11 +284,16 @@
                             android:alpha="0.7"
                             android:fontFamily="sans-serif"
                             android:fontFeatureSettings="tnum"
+                            android:includeFontPadding="false"
+                            android:minWidth="30dp"
                             android:textSize="11sp" />
 
-                        <View
+                        <dev.plume.IslandBar
+                            android:id="@+id/islandProgress"
                             android:layout_width="0dp"
-                            android:layout_height="0dp"
+                            android:layout_height="4dp"
+                            android:layout_marginStart="10dp"
+                            android:layout_marginEnd="10dp"
                             android:layout_weight="1" />
 
                         <TextView
@@ -293,6 +303,9 @@
                             android:alpha="0.7"
                             android:fontFamily="sans-serif"
                             android:fontFeatureSettings="tnum"
+                            android:gravity="end"
+                            android:includeFontPadding="false"
+                            android:minWidth="30dp"
                             android:textSize="11sp" />
                     </LinearLayout>
 
@@ -300,39 +313,39 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center_horizontal"
-                        android:layout_marginTop="2dp"
+                        android:layout_marginTop="10dp"
+                        android:clipChildren="false"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
                         <ImageView
                             android:id="@+id/islandPrev"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
+                            android:layout_width="44dp"
+                            android:layout_height="44dp"
                             android:contentDescription="@string/media_previous"
-                            android:padding="9dp"
+                            android:padding="10dp"
                             android:src="@drawable/ic_skip_previous" />
 
                         <ImageView
                             android:id="@+id/islandPlay"
-                            android:layout_width="48dp"
-                            android:layout_height="48dp"
-                            android:layout_marginStart="20dp"
-                            android:layout_marginEnd="20dp"
+                            android:layout_width="52dp"
+                            android:layout_height="52dp"
+                            android:layout_marginStart="22dp"
+                            android:layout_marginEnd="22dp"
                             android:contentDescription="@string/media_play_pause"
-                            android:padding="10dp"
+                            android:padding="11dp"
                             android:src="@drawable/ic_pause" />
 
                         <ImageView
                             android:id="@+id/islandNext"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
+                            android:layout_width="44dp"
+                            android:layout_height="44dp"
                             android:contentDescription="@string/media_next"
-                            android:padding="9dp"
+                            android:padding="10dp"
                             android:src="@drawable/ic_skip_next" />
                     </LinearLayout>
                 </LinearLayout>
-            </LinearLayout>
-        </FrameLayout>
+        </dev.plume.GlassBox>
         </FrameLayout>
 
         <View

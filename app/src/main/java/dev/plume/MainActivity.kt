@@ -1170,6 +1170,7 @@ class MainActivity : Activity() {
             is ProgressBar -> v.progressDrawable = progressBarDrawable(watchInk)
             is TextView -> if (v.tag == INK_MARK) v.compoundDrawablesRelative[0]?.setTint(watchInk)
         }
+        showIsland() // the pill at rest takes the top bar's ink
     }
 
     /**
@@ -6701,11 +6702,10 @@ class MainActivity : Activity() {
     // Selected, it opens down into a frosted card: bigger art, the artist, the time played and Previous, Play/Pause,
     // Next, which Left and Right pick and OK presses. Reading other apps' sessions needs notification access (see
     // MediaListener); without it, or with nothing playing, the island stays hidden.
-    private val island by lazy { findViewById<FrameLayout>(R.id.island) }
-    private val islandFrost by lazy { findViewById<GlassBox>(R.id.islandFrost) }
-    private val islandBody by lazy { findViewById<LinearLayout>(R.id.islandBody) }
+    private val island by lazy { findViewById<GlassBox>(R.id.island) }
     private val islandArt by lazy { findViewById<ImageView>(R.id.islandArt) }
     private val islandControls by lazy { listOf<ImageView>(findViewById(R.id.islandPrev), findViewById(R.id.islandPlay), findViewById(R.id.islandNext)) }
+    private var islandFrost: android.animation.ValueAnimator? = null // the frost fading in as the island opens
     private var islandSel = 1 // the control Left/Right picked: 0 previous, 1 play/pause, 2 next
     private var media: MediaController? = null
     private val mediaSessions by lazy { getSystemService(MediaSessionManager::class.java) }
@@ -6728,6 +6728,8 @@ class MainActivity : Activity() {
             override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, v.width / 6f)
         }
         islandArt.clipToOutline = true
+        findViewById<View>(R.id.islandApp).apply { outlineProvider = islandArt.outlineProvider; clipToOutline = true }
+        island.frost = 0f // the frost is the open card's; at rest the pill is a tile
         styleIsland()
         island.setOnClickListener {
             val c = media?.transportControls ?: return@setOnClickListener
@@ -6739,10 +6741,10 @@ class MainActivity : Activity() {
         }
     }
 
-    /** At rest a glass tile like the app tiles (it follows the Glass style and the theme); open, a frosted card. */
+    /** At rest a glass tile like the app tiles (it follows the Glass style and the theme); open, a glass card. */
     private fun styleIsland() {
-        styleGlass(islandFrost.glass, dp(18).toFloat())
-        style(island, dp(18), card = true, lift = 1f, rise = false) { focused -> openIsland(focused) }
+        styleGlass(island.glass, dp(ISLAND_ROUND).toFloat())
+        style(island, dp(ISLAND_ROUND), card = true, lift = 1f, rise = false) { focused -> openIsland(focused) }
         showIsland()
     }
 
@@ -6750,29 +6752,38 @@ class MainActivity : Activity() {
         if (open) { lastTop = island; islandSel = 1 }
         android.transition.TransitionManager.beginDelayedTransition(island.parent as ViewGroup, android.transition.TransitionSet()
             .addTransition(android.transition.ChangeBounds())
-            .addTransition(android.transition.Fade(android.transition.Fade.IN).setStartDelay(90))
+            .addTransition(android.transition.Fade(android.transition.Fade.IN).setStartDelay(100))
             .setOrdering(android.transition.TransitionSet.ORDERING_TOGETHER)
-            .setDuration(240).setInterpolator(DECELERATE))
-        islandBody.layoutParams = islandBody.layoutParams.apply { width = if (open) dp(420) else ViewGroup.LayoutParams.WRAP_CONTENT }
-        if (open) islandBody.setPadding(dp(16), dp(16), dp(16), dp(12)) else islandBody.setPadding(dp(6), dp(6), dp(16), dp(6))
-        val size = dp(if (open) 64 else 24)
+            .setDuration(260).setInterpolator(DECELERATE))
+        island.layoutParams.width = if (open) dp(400) else ViewGroup.LayoutParams.WRAP_CONTENT
+        if (open) island.setPadding(dp(18), dp(18), dp(18), dp(14)) else island.setPadding(dp(5), dp(5), dp(14), dp(5))
+        findViewById<View>(R.id.islandTop).layoutParams.width = if (open) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
+        val size = dp(if (open) 68 else 26)
         islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
-        findViewById<View>(R.id.islandText).let { t ->
-            (t.layoutParams as LinearLayout.LayoutParams).marginStart = dp(if (open) 14 else 10)
-            t.requestLayout()
+        findViewById<View>(R.id.islandText).layoutParams = (findViewById<View>(R.id.islandText).layoutParams as LinearLayout.LayoutParams).apply {
+            marginStart = dp(if (open) 16 else 10)
+            width = if (open) 0 else ViewGroup.LayoutParams.WRAP_CONTENT
+            weight = if (open) 1f else 0f
         }
         findViewById<TextView>(R.id.islandTitle).apply {
-            textSize = if (open) 17f else 14f
-            maxWidth = dp(if (open) 300 else 260)
+            textSize = if (open) 18f else 13f
+            maxWidth = dp(if (open) 400 else 200)
         }
         findViewById<View>(R.id.islandArtist).visibility = if (open) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.islandEq).visibility = if (open) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.islandApp).visibility = if (open) View.VISIBLE else View.GONE
         findViewById<View>(R.id.islandMore).visibility = if (open) View.VISIBLE else View.GONE
         // The card hangs over the screen: its extra height is taken back by the margin, so the rows below never move.
         island.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
         (island.layoutParams as FrameLayout.LayoutParams).bottomMargin = -(island.measuredHeight - dp(36)).coerceAtLeast(0)
         island.requestLayout()
-        islandFrost.animate().alpha(if (open) 1f else 0f).setDuration(200).start()
-        glass.kick(360) // the blur under it follows the new size
+        islandFrost?.cancel()
+        islandFrost = android.animation.ValueAnimator.ofFloat(island.frost, if (open) 1f else 0f).apply {
+            duration = 220
+            addUpdateListener { island.frost = it.animatedValue as Float }
+            start()
+        }
+        glass.kick(400) // the blur under it follows the new size
         ui.removeCallbacks(islandTick)
         if (open) islandTick.run()
         showIsland()
@@ -6820,27 +6831,35 @@ class MainActivity : Activity() {
             island.visibility = View.GONE
             return
         }
-        findViewById<TextView>(R.id.islandTitle).apply { text = title; setTextColor(fg) }
-        val app = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(c.packageName, 0)).toString() } catch (e: Exception) { null }
+        // Open, the text sits on the card's frost and takes the theme's colour. At rest the pill is thin glass over the
+        // picture, so it takes the top bar icons' ink (fitted to the wallpaper there) and their shadow; a solid tile
+        // (Glass off) keeps the theme's colour.
+        val open = island.isFocused
+        val pillInk = if (!open && glassActive()) iconInk else fg
+        findViewById<TextView>(R.id.islandTitle).apply {
+            text = title
+            if (open || !glassActive()) { setShadowLayer(0f, 0f, 0f, 0); setTextColor(fg) } else ink(this, iconInk)
+        }
         val who = m.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
             ?: m.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
-        findViewById<TextView>(R.id.islandArtist).apply { text = listOfNotNull(who, app).joinToString("  ·  "); setTextColor(fg) }
+        val appIcon = try { packageManager.getApplicationIcon(c.packageName) } catch (e: Exception) { null }
+        findViewById<TextView>(R.id.islandArtist).apply { text = who.orEmpty(); setTextColor(fg) }
+        findViewById<ImageView>(R.id.islandApp).setImageDrawable(appIcon)
         val art = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: m.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-        val icon = if (art != null) null else try { packageManager.getApplicationIcon(c.packageName) } catch (e: Exception) { null }
         when {
             art != null -> { islandArt.clearColorFilter(); islandArt.setImageBitmap(art) }
-            icon != null -> { islandArt.clearColorFilter(); islandArt.setImageDrawable(icon) }
+            appIcon != null -> { islandArt.clearColorFilter(); islandArt.setImageDrawable(appIcon) }
             else -> { islandArt.setImageResource(R.drawable.ic_music_note); islandArt.setColorFilter(fg) }
         }
+        findViewById<EqBars>(R.id.islandEq).apply { color = pillInk; playing = mediaPlaying(c) }
         islandControls[1].setImageResource(if (mediaPlaying(c)) R.drawable.ic_pause else R.drawable.ic_play)
         islandControls.forEachIndexed { i, b ->
             b.setColorFilter(fg)
             val on = i == islandSel
-            // The picked control sits on a soft disc of the text colour, like a lit top bar icon; no ring.
-            b.background = if (on) GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(fg and 0xFFFFFF or 0x26000000) } else null
-            b.alpha = if (on) 1f else 0.6f
-            b.animate().scaleX(if (on) 1.08f else 1f).scaleY(if (on) 1.08f else 1f).setDuration(140).setInterpolator(DECELERATE).start()
+            // The picked control sits on a soft disc of the text colour, like a lit top bar icon: no ring, no growth.
+            b.background = if (on) GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(fg and 0xFFFFFF or 0x24000000) } else null
+            b.alpha = if (on) 1f else 0.7f
         }
         showProgress()
         island.visibility = View.VISIBLE
@@ -6850,15 +6869,11 @@ class MainActivity : Activity() {
         val c = media ?: return
         val s = c.playbackState
         val length = c.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
-        val bar = findViewById<android.widget.ProgressBar>(R.id.islandProgress)
         val times = findViewById<View>(R.id.islandTimes)
-        if (s == null || length <= 0L) { bar.visibility = View.GONE; times.visibility = View.GONE; return }
+        if (s == null || length <= 0L) { times.visibility = View.GONE; return }
         val at = islandPosition(s.position, s.lastPositionUpdateTime, android.os.SystemClock.elapsedRealtime(), s.playbackSpeed, mediaPlaying(c), length)
-        bar.visibility = View.VISIBLE
         times.visibility = View.VISIBLE
-        bar.progressTintList = android.content.res.ColorStateList.valueOf(fg)
-        bar.progressBackgroundTintList = android.content.res.ColorStateList.valueOf(fg and 0xFFFFFF or 0x40000000)
-        bar.progress = (at * 1000 / length).toInt()
+        findViewById<IslandBar>(R.id.islandProgress).apply { color = fg; fraction = at.toFloat() / length }
         findViewById<TextView>(R.id.islandElapsed).apply { text = islandTime(at); setTextColor(fg) }
         findViewById<TextView>(R.id.islandLeft).apply { text = "-" + islandTime(length - at); setTextColor(fg) }
     }
@@ -6981,6 +6996,7 @@ class MainActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     private companion object {
+        const val ISLAND_ROUND = 24 // dp; the pill is 36 high, so it stays a full pill, and the open card is softly round
         var fakeDevice: String? = null // debug builds: see fakeSetup()
         var fakeSdk = 0
         const val TV_LISTINGS = "android.permission.READ_TV_LISTINGS"

@@ -860,14 +860,23 @@ internal class GlassDrawable(private val host: View) : android.graphics.drawable
 internal class GlassBox @JvmOverloads constructor(context: Context, attrs: android.util.AttributeSet? = null) : android.widget.LinearLayout(context, attrs) {
     val glass = GlassDrawable(this)
 
+    /** How much of the glass shows, 0 to 1: the media island fades it in as it opens. */
+    var frost = 1f
+        set(v) {
+            if (field != v) { field = v; invalidate() }
+        }
+
     init {
         setWillNotDraw(false)
     }
 
     override fun onDraw(c: Canvas) {
         // Glass off: the view still draws for its plain background, and an unstyled glass would paint solid black on it.
-        if (willNotDraw()) return
+        if (willNotDraw() || frost <= 0f) return
         glass.setBounds(0, 0, width, height)
+        if (frost >= 1f) return glass.draw(c)
+        val layer = c.saveLayerAlpha(0f, 0f, width.toFloat(), height.toFloat(), (frost * 255).toInt())
         glass.draw(c)
+        c.restoreToCount(layer)
     }
 }
