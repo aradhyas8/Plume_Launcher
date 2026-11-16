@@ -229,6 +229,7 @@ internal object IslandSports : IslandSource {
                     val live = g.state == "in"
                     val title = when {
                         !live -> "${label(ctx, g)} · ${clock(ctx, g.start)}"
+                        g.cricket -> cricketScore(g)
                         g.name != null -> "${g.name} · ${g.shortDetail}"
                         else -> sportsScore(g)
                     }
@@ -339,7 +340,7 @@ internal object IslandSports : IslandSource {
             val t = s.optJSONObject("team") ?: continue
             val side = SportsSide(t.optString("id"), t.optString("abbreviation"),
                 t.optString("shortDisplayName").ifEmpty { t.optString("displayName") }, s.optString("score"),
-                t.optString("logo").ifEmpty { null })
+                t.optString("logo").ifEmpty { null }, t.optString("color").ifEmpty { null })
             if (s.optString("homeAway") == "home") home = side else away = side
         }
         val status = e.optJSONObject("status")
@@ -353,7 +354,8 @@ internal object IslandSports : IslandSource {
             .ifEmpty { cType?.optString(k).orEmpty() }.ifEmpty { type.optString("description") }
         return SportsGame(e.optString("id").ifEmpty { return null }, l.key, sportsTime(e.optString("date")), type.optString("state"),
             type.optBoolean("completed"), text("shortDetail"), text("detail"), away, home,
-            if (named) sportsShortName(e.optString("shortName").ifEmpty { e.optString("name") }).ifEmpty { return null } else null, leagueLogo)
+            if (named) sportsShortName(e.optString("shortName").ifEmpty { e.optString("name") }).ifEmpty { return null } else null, leagueLogo,
+            cricket = l.sport == "cricket" && away != null && home != null)
     }
 
     // ---------- items ----------
@@ -373,24 +375,33 @@ internal object IslandSports : IslandSource {
         val since = sportsSince(s.source, live, if (g.state == "pre") -g.start else s.changed)
         val away = g.away?.logo ?: g.logo
         val home = g.home?.logo
+        // Many teams (most domestic cricket) have no logo at ESPN: a badge with the team's letters and colour stands in.
+        val badge = g.away?.badge
+        val badge2 = g.home?.badge
         return when {
             g.state == "pre" && sportsSoon(g.start, now) -> {
                 val zone = ZoneId.systemDefault()
                 val tomorrow = Instant.ofEpochMilli(g.start).atZone(zone).toLocalDate() != Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
                 val sub = ctx.getString(if (tomorrow) R.string.isl_sports_tomorrow else R.string.isl_sports_today, clock(ctx, g.start))
                 IslandItem(key = key, kind = kind, title = label(ctx, g), sub = sub, mono = false, imageUri = away,
-                    image2Uri = home, since = since,
+                    image2Uri = home, badge = badge, badge2 = badge2, since = since,
                     description = g.name?.let { "$it, $sub" } ?: ctx.getString(R.string.isl_sports_desc_pre, g.away?.name, g.home?.name, sub))
+            }
+            live && g.cricket -> {
+                val line = cricketLine(ctx, g)
+                IslandItem(key = key, kind = kind, title = cricketScore(g), sub = line, mono = false, imageUri = away,
+                    image2Uri = home, badge = badge, badge2 = badge2, since = since, peekUntil = s.peekUntil,
+                    description = "${g.away?.name} ${g.away?.score}, ${g.home?.name} ${g.home?.score}, $line")
             }
             live -> IslandItem(key = key, kind = kind, title = g.name ?: sportsScore(g),
                 sub = if (g.name != null) g.shortDetail else sportsDetail(g.shortDetail), mono = false, imageUri = away,
-                image2Uri = home, since = since, peekUntil = s.peekUntil,
+                image2Uri = home, badge = badge, badge2 = badge2, since = since, peekUntil = s.peekUntil,
                 description = describe(ctx, g, if (g.name != null) g.detail else sportsDetail(g.detail)))
             // A postponed or cancelled game is "post" but not completed; it has no result to show.
             g.state == "post" && g.completed -> {
                 val final = if (g.name != null) g.shortDetail else ctx.getString(R.string.isl_sports_final)
-                IslandItem(key = key, kind = kind, title = g.name ?: sportsScore(g), sub = final, mono = false,
-                    imageUri = away, image2Uri = home, since = since, until = s.until, peekUntil = s.peekUntil,
+                IslandItem(key = key, kind = kind, title = if (g.cricket) cricketScore(g) else g.name ?: sportsScore(g), sub = final,
+                    mono = false, imageUri = away, image2Uri = home, badge = badge, badge2 = badge2, since = since, until = s.until, peekUntil = s.peekUntil,
                     description = describe(ctx, g, final))
             }
             else -> null
@@ -399,6 +410,22 @@ internal object IslandSports : IslandSource {
 
     /** "IND at PHI", or the event's name when it shows by name. */
     private fun label(ctx: Context, g: SportsGame) = g.name ?: ctx.getString(R.string.isl_sports_at, g.away?.abbreviation, g.home?.abbreviation)
+
+    /**
+     * What is going on in a live cricket match, in words anyone can read: "ABT batting · 28.1 ov", then ESPN's
+     * summary when it says more ("Zimbabwe lead by 291 runs"). ESPN keeps "X won toss" as the summary for the whole
+     * match, so the toss shows only before the first ball.
+     */
+    private fun cricketLine(ctx: Context, g: SportsGame): String {
+        val c = cricketState(g)
+        return when {
+            c.batting != null -> listOfNotNull(
+                c.overs?.let { ctx.getString(R.string.isl_cricket_batting_overs, c.batting, it) } ?: ctx.getString(R.string.isl_cricket_batting, c.batting),
+                c.note).joinToString(" · ")
+            c.toss != null && !c.runs -> ctx.getString(R.string.isl_cricket_toss, c.toss)
+            else -> c.note ?: g.shortDetail
+        }
+    }
 
     private fun describe(ctx: Context, g: SportsGame, state: String) = g.name?.let { "$it, $state" } ?: ctx.getString(R.string.isl_sports_desc_score,
         g.away?.name, g.away?.score.orEmpty().ifEmpty { "0" }, g.home?.name, g.home?.score.orEmpty().ifEmpty { "0" }, state)
@@ -449,7 +476,11 @@ internal data class PinnedGame(val sport: String, val league: String, val eventI
     }
 }
 
-internal data class SportsSide(val id: String, val abbreviation: String, val name: String, val score: String, val logo: String?)
+internal data class SportsSide(val id: String, val abbreviation: String, val name: String, val score: String, val logo: String?,
+    val color: String? = null) {
+    /** "ABT|3f8108": the letters and colour for a badge when the logo is missing. */
+    val badge get() = abbreviation.takeIf { it.isNotEmpty() }?.let { "$it|${color.orEmpty()}" }
+}
 
 /**
  * A game from a scoreboard. [league] is "sport/league"; [state] is ESPN's "pre", "in" or "post"; [start] is wall-clock
@@ -460,6 +491,8 @@ internal data class SportsGame(
     val id: String, val league: String, val start: Long, val state: String, val completed: Boolean,
     val shortDetail: String, val detail: String, val away: SportsSide?, val home: SportsSide?,
     val name: String? = null, val logo: String? = null,
+    /** A cricket match between two teams: it shows both scores, not ESPN's summary. */
+    val cricket: Boolean = false,
 )
 
 /** ESPN's "2026-11-15T18:00Z" (no seconds) as wall-clock ms, or 0 when it does not read. */
@@ -565,3 +598,31 @@ internal fun sportsNowRank(live: Boolean, longEvent: Boolean, detail: String?): 
 /** An event's name without its sponsor ("Austin Championship pres. by X" is the Austin Championship). */
 internal fun sportsShortName(name: String): String =
     name.replace(Regex("""\s+(pres\.|presented|powered|sponsored)\s+by\s+.*$""", RegexOption.IGNORE_CASE), "").trim()
+
+// ---------- cricket ----------
+
+private val oversText = Regex("""\(([\d.]+) ov""")
+
+/** A cricket score without its overs: "339 & 169/7 (58 ov)" is "339 & 169/7". */
+internal fun cricketRuns(score: String) = score.replace(Regex("""\s*\([^)]*\)\s*$"""), "").trim()
+
+/** "ABT 118/4 · HYD-R 121"; a side that has not batted shows its letters only. */
+internal fun cricketScore(g: SportsGame) = listOfNotNull(g.away, g.home).joinToString(" · ") { s ->
+    cricketRuns(s.score).let { if (it.isEmpty()) s.abbreviation else "${s.abbreviation} $it" }
+}
+
+/**
+ * A live match as parts: who bats and their overs (the side whose score ends "(28.1 ov)"), who won the toss, and
+ * ESPN's summary when it says more than the toss or the status ([note]). [runs]: a side has scored.
+ */
+internal data class CricketState(val batting: String?, val overs: String?, val toss: String?, val note: String?, val runs: Boolean)
+
+internal fun cricketState(g: SportsGame): CricketState {
+    val sides = listOfNotNull(g.away, g.home)
+    val bat = sides.firstOrNull { oversText.containsMatchIn(it.score) }
+    val overs = bat?.let { oversText.find(it.score)?.groupValues?.get(1) }
+    val summary = g.shortDetail.trim()
+    val toss = Regex("""^(.+?) won (the )?toss""", RegexOption.IGNORE_CASE).find(summary)?.groupValues?.get(1)
+    val plain = toss != null || summary.isEmpty() || summary.equals("Live", true) || summary.startsWith("Starts", true)
+    return CricketState(bat?.abbreviation, overs, toss, summary.takeUnless { plain }, sides.any { cricketRuns(it.score).isNotEmpty() })
+}

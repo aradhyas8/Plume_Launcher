@@ -116,6 +116,9 @@ import java.util.Date
 import java.util.concurrent.Executors
 import org.json.JSONObject
 
+/** The open island is never narrower than this (dp): with less room beside the clock and the icons it opens below the bar. */
+private const val MIN_OPEN = 300
+
 /**
  * The island on the home screen: its view, its rows and keys, its menus, and the music it follows. It is written as
  * extensions of the home screen, so it uses the same helpers (the glass tile style, the ink, the settings pages)
@@ -159,6 +162,7 @@ internal class IslandView(private val a: MainActivity) {
     var netWhy = 0 // the string for what is wrong with the network, 0 when nothing is
     val islandImages = HashMap<String, Bitmap>() // pictures fetched from addresses (logos), by address
     val islandLoading = HashSet<String>()
+    val islandFailed = HashSet<String>() // addresses with no picture (ESPN has no logo for many teams): asked once only
 
     // Music: the session the island follows.
     var pausedAt = 0L // when the shown track paused (elapsedRealtime), 0 while it plays
@@ -418,7 +422,11 @@ internal class IslandView(private val a: MainActivity) {
         islandOpen = open
         android.transition.TransitionManager.beginDelayedTransition(island.parent as ViewGroup,
             android.transition.ChangeBounds().setDuration(280).setInterpolator(MainActivity.DECELERATE))
-        island.layoutParams.width = if (open) dp(400) else ViewGroup.LayoutParams.WRAP_CONTENT
+        val fit = if (open) islandOpenWidth() else 0
+        island.layoutParams.width = if (open) fit.coerceAtLeast(dp(MIN_OPEN)) else ViewGroup.LayoutParams.WRAP_CONTENT
+        // Too little room beside the clock and the icons: the open tile comes down below the top bar, not over it.
+        val below = open && fit < dp(MIN_OPEN)
+        (island.layoutParams as FrameLayout.LayoutParams).topMargin = if (below) (island.parent as View).height else 0
         if (open) island.setPadding(dp(18), dp(18), dp(18), dp(14)) else island.setPadding(dp(5), dp(5), dp(14), dp(5))
         islandTop.layoutParams.width = if (open) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
         val size = dp(if (open) 68 else 26)
@@ -436,8 +444,9 @@ internal class IslandView(private val a: MainActivity) {
         }
         bindIsland(item, open)
         // The tile hangs over the screen: its extra height is taken back by the margin, so the rows below never move.
-        island.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        (island.layoutParams as FrameLayout.LayoutParams).bottomMargin = -(island.measuredHeight - dp(36)).coerceAtLeast(0)
+        island.measure(View.MeasureSpec.makeMeasureSpec(island.layoutParams.width.coerceAtLeast(0),
+            if (open) View.MeasureSpec.EXACTLY else View.MeasureSpec.UNSPECIFIED), View.MeasureSpec.UNSPECIFIED)
+        islandHang()
         island.requestLayout()
         glass.kick(500) // the glass under it follows the new size
         islandChips.animate().alpha(1f).setStartDelay(170).setDuration(180).start()
@@ -446,18 +455,75 @@ internal class IslandView(private val a: MainActivity) {
         ui.postDelayed({ if (!isDestroyed) islandItem?.let { bindIsland(it, islandOpen) } }, 320) // the ink again, over the new size
     }
 
+    /** The tile hangs over the screen: its extra height (and any drop below the bar) is taken back, so nothing moves. */
+    fun MainActivity.islandHang() {
+        val lp = island.layoutParams as FrameLayout.LayoutParams
+        lp.bottomMargin = -(island.measuredHeight + lp.topMargin - dp(36)).coerceAtLeast(0)
+    }
+
+    /**
+     * The widest the open tile can be, centred, without covering the clock column or the first top bar icon: at most
+     * 400 dp. Measured on the screen, as the clock's text, the date and the icons the user picked all change it.
+     */
+    fun MainActivity.islandOpenWidth(): Int {
+        val bar = island.parent as View
+        if (bar.width == 0) return dp(400)
+        val at = IntArray(2)
+        bar.getLocationInWindow(at)
+        val mid = at[0] + bar.width / 2
+        val column = findViewById<View>(R.id.clock).parent as ViewGroup
+        var left = 0
+        for (i in 0 until column.childCount) column.getChildAt(i).takeIf { it.isShown }?.let { v ->
+            // A wrap-content child's right edge is where its text ends; the date row's last child ends the weather.
+            val end = if (v is ViewGroup && v.childCount > 0) v.getChildAt(v.childCount - 1) else v
+            end.getLocationInWindow(at)
+            left = maxOf(left, at[0] + end.width)
+        }
+        var right = Int.MAX_VALUE
+        for (id in shownTop()) findViewById<View?>(id)?.takeIf { it.isShown && it.width > 0 }?.let { v ->
+            v.getLocationInWindow(at)
+            right = minOf(right, at[0])
+        }
+        if (right == Int.MAX_VALUE) right = at[0] + bar.width
+        val half = minOf(mid - left, right - mid) - dp(16)
+        return minOf(dp(400), half * 2)
+    }
+
     /** A picture fetched from an address (a team logo), kept once it has come; null until then. */
     fun MainActivity.islandImage(uri: String?): Bitmap? {
         if (uri == null) return null
         islandImages[uri]?.let { return it }
+        if (uri in islandFailed) return null
         if (islandLoading.add(uri)) posterIo.execute {
             val b = try { decode(uri, dp(96), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null }
             ui.post {
                 islandLoading.remove(uri)
-                if (b != null && !isDestroyed) { islandImages[uri] = b; islandItem?.let { bindIsland(it, islandOpen) } }
+                if (b == null) islandFailed += uri
+                else if (!isDestroyed) { islandImages[uri] = b; islandItem?.let { bindIsland(it, islandOpen) } }
             }
         }
         return null
+    }
+
+    /** A team's picture: its logo once it has come, else a badge with its letters on its colour ("ABT|3f8108"). */
+    fun MainActivity.teamImage(uri: String?, badge: String?): Bitmap? = islandImage(uri) ?: badge?.let { spec ->
+        islandImages.getOrPut("badge:$spec") {
+            val (letters, hex) = spec.split('|', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+            val fill = hex.takeIf { it.length == 6 }?.let { Color.parseColor("#$it") } ?: 0xFF5F6B7A.toInt()
+            val size = dp(96)
+            Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { b ->
+                val c = Canvas(b)
+                c.drawCircle(size / 2f, size / 2f, size / 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fill })
+                val text = letters.take(4)
+                val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = if (Color.luminance(fill) > 0.6f) 0xFF1A1A1A.toInt() else Color.WHITE
+                    typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                    textSize = size * (if (text.length <= 2) 0.42f else if (text.length == 3) 0.34f else 0.27f)
+                }
+                c.drawText(text, size / 2f, size / 2f - (ink.descent() + ink.ascent()) / 2, ink)
+            }
+        }
     }
 
     /** Puts [item] on the tile in its [open] or resting form. */
@@ -477,10 +543,11 @@ internal class IslandView(private val a: MainActivity) {
         findViewById<TextView>(R.id.islandArtist).apply {
             text = item.sub.orEmpty()
             visibility = if (open && !item.sub.isNullOrEmpty()) View.VISIBLE else View.GONE
+            maxLines = 2 // a match's state ("ABT batting · 28.1 ov · Zimbabwe lead by 291 runs") can take two lines
             inked()
         }
         island.contentDescription = item.description ?: listOfNotNull(item.title, item.sub).joinToString(", ")
-        val picture = item.image ?: islandImage(item.imageUri)
+        val picture = item.image ?: teamImage(item.imageUri, item.badge)
         when {
             picture != null -> { islandArt.clearColorFilter(); islandArt.setImageBitmap(picture); islandArt.background = null; islandArt.setPadding(0, 0, 0, 0) }
             item.icon != 0 -> {
@@ -493,8 +560,9 @@ internal class IslandView(private val a: MainActivity) {
             }
             else -> islandArt.setImageDrawable(null)
         }
-        islandArt2.visibility = if (item.image2Uri != null) View.VISIBLE else View.GONE
-        islandArt2.setImageBitmap(islandImage(item.image2Uri))
+        val picture2 = teamImage(item.image2Uri, item.badge2)
+        islandArt2.visibility = if (picture2 != null) View.VISIBLE else View.GONE
+        islandArt2.setImageBitmap(picture2)
         // The music's mark as the Shows row shows it: a plain mark in the ink, or its brand colour with Colour on.
         val pkg = media?.packageName
         val logo = pkg?.let { MainActivity.LOGOS[it] }?.takeIf { !it.second }
@@ -573,8 +641,20 @@ internal class IslandView(private val a: MainActivity) {
                 fontFeatureSettings = "tnum"
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 if (glassActive()) ink(this, ink) else setTextColor(fg)
+            } else if (o.mark != null) TextView(this).apply {
+                // An icon alone says nothing ("a cloud?"): the mark carries its few characters ("2°/9°").
+                text = o.mark
+                textSize = 11f
+                gravity = Gravity.CENTER_VERTICAL
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                if (glassActive()) ink(this, ink) else setTextColor(fg)
+                compoundDrawablePadding = dp(3)
+                setCompoundDrawablesRelative(getDrawable(o.icon)?.mutate()?.apply {
+                    setBounds(0, 0, dp(16), dp(16))
+                    if (o.mono) setTint(if (glassActive()) ink else fg)
+                }, null, null, null)
             } else islandMark(o, ink, dp(18), false),
-            LinearLayout.LayoutParams(if (o.kind == IslandKind.TIMER || o.kind == IslandKind.STOPWATCH) ViewGroup.LayoutParams.WRAP_CONTENT else dp(18), dp(18)).apply {
+            LinearLayout.LayoutParams(if (o.kind == IslandKind.TIMER || o.kind == IslandKind.STOPWATCH || o.mark != null) ViewGroup.LayoutParams.WRAP_CONTENT else dp(18), dp(18)).apply {
                 marginStart = dp(6)
                 gravity = Gravity.CENTER_VERTICAL
             })
@@ -592,7 +672,7 @@ internal class IslandView(private val a: MainActivity) {
 
     /** One thing's mark: its picture in a circle, or its icon in the ink; [lit]: on a soft disc, as a picked button. */
     fun MainActivity.islandMark(o: IslandItem, ink: Int, size: Int, lit: Boolean) = ImageView(this).apply {
-        val picture = o.image ?: islandImage(o.imageUri)
+        val picture = o.image ?: teamImage(o.imageUri, o.badge)
         if (picture != null) {
             setImageBitmap(picture)
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -681,7 +761,7 @@ internal class IslandView(private val a: MainActivity) {
             showIsland()
             // The new thing has its own size: let the tile follow it without the fade.
             island.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-            (island.layoutParams as FrameLayout.LayoutParams).bottomMargin = -(island.measuredHeight - dp(36)).coerceAtLeast(0)
+            islandHang()
             island.requestLayout()
             glass.kick(300)
         } else islandItem?.let { bindIsland(it, islandOpen) }

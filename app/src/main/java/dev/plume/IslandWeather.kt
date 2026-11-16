@@ -146,6 +146,7 @@ internal object IslandWeather : IslandSource {
                 "wx:tomorrow", IslandKind.WEATHER,
                 ctx.getString(R.string.isl_wx_tomorrow, Math.round(f.min[t]).toInt(), Math.round(f.max[t]).toInt()),
                 sub, icon = weatherIcon(f.code[t], day = true), mono = true, since = f.time, until = f.days[t],
+                mark = ctx.getString(R.string.isl_wx_mark_range, Math.round(f.min[t]).toInt(), Math.round(f.max[t]).toInt()),
             )
         }
         val change = wxChange(f.max[today], f.max[t], f.fahrenheit)
@@ -158,6 +159,7 @@ internal object IslandWeather : IslandSource {
                 ctx.getString(if (change < 0) R.string.isl_wx_colder else R.string.isl_wx_warmer),
                 ctx.getString(R.string.isl_wx_max_today, Math.round(f.max[t]).toInt(), Math.round(f.max[today]).toInt()),
                 icon = weatherIcon(f.code[t], day = true), mono = true, since = f.time, until = end,
+                mark = ctx.getString(R.string.isl_wx_mark_max, Math.round(f.max[t]).toInt()),
             )
         }
         return out

@@ -43,6 +43,11 @@ internal data class IslandItem(
     val image: Bitmap? = null,
     val imageUri: String? = null,
     val image2Uri: String? = null,
+    /** "ABT|3f8108": a badge drawn when [imageUri] has no picture ([badge2] for [image2Uri]). */
+    val badge: String? = null,
+    val badge2: String? = null,
+    /** A few characters beside the item's mark on the resting pill ("2°/9°"), so the mark says something. */
+    val mark: String? = null,
     val progress: Float? = null,
     val tick: Long = 0L,
     val since: Long = 0L,

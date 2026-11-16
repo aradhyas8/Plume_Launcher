@@ -106,4 +106,37 @@ class IslandSportsTest {
         sportsNowRank(true, true, "Round 3 - Suspended"), sportsNowRank(false, false, null)))
     @Test fun sponsorGoes() = assertEquals("Austin Championship", sportsShortName("Austin Championship pres. by Compliance Solutions"))
     @Test fun plainNameStays() = assertEquals("Brazilian Grand Prix", sportsShortName("Brazilian Grand Prix"))
+
+    // ---------- cricket (scores as ESPN's cricket score panel sends them) ----------
+
+    private fun cricket(summary: String, away: String, home: String) = SportsGame(
+        "2", "cricket/scorepanel", 0L, "in", false, summary, summary,
+        SportsSide("1", "ABT", "Abbottabad", away, null), SportsSide("2", "HYD-R", "Hyderabad R", home, null),
+        name = "ABT v HYD-R", cricket = true,
+    )
+
+    @Test fun cricketRunsDropOvers() = assertEquals("339 & 169/7", cricketRuns("339 & 169/7 (58 ov)"))
+    @Test fun cricketScoreShowsBothSides() = assertEquals("ABT 118/4 · HYD-R 121", cricketScore(cricket("", "118/4 (28.1 ov)", "121")))
+    @Test fun cricketSideNotBattedShowsLetters() = assertEquals("ABT 335/7 · HYD-R", cricketScore(cricket("", "335/7", "")))
+
+    @Test fun cricketTossHidesOncePlayStarts() {
+        val c = cricketState(cricket("Hyderabad R won toss", "118/4 (28.1 ov)", "121"))
+        assertEquals("ABT", c.batting)
+        assertEquals("28.1", c.overs)
+        assertEquals("Hyderabad R", c.toss)
+        assertNull(c.note)
+        assertTrue(c.runs)
+    }
+
+    @Test fun cricketTossBeforeFirstBall() {
+        val c = cricketState(cricket("Hyderabad R won the toss", "", ""))
+        assertNull(c.batting)
+        assertEquals("Hyderabad R", c.toss)
+        assertFalse(c.runs)
+    }
+
+    @Test fun cricketSummaryThatSaysMoreStays() =
+        assertEquals("Zimbabwe lead by 291 runs", cricketState(cricket("Zimbabwe lead by 291 runs", "217", "339 & 169/7 (58 ov)")).note)
+
+    @Test fun badgeHasLettersAndColour() = assertEquals("ABT|3f8108", SportsSide("1", "ABT", "A", "", null, "3f8108").badge)
 }
