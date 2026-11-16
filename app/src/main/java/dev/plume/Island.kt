@@ -11,7 +11,7 @@ import java.net.URL
 /**
  * The island's shared model. Each source (music, timers, alerts, sports, weather, system) turns what it knows into
  * [IslandItem]s; the home screen asks every source for its items, [islandArrange] orders them, and the island shows
- * the first in its pill and the rest as small marks beside it. Plain Kotlin apart from the picture types, so the
+ * the first in its pill and the rest in the open tile. Plain Kotlin apart from the picture types, so the
  * rules can be tested without Android.
  */
 
@@ -73,6 +73,7 @@ internal fun islandClock(ms: Long, countdown: Boolean = true): String {
 
 /** The island's sizes and choices, shared by its view and its settings. */
 internal const val ISLAND_ROUND = 24 // dp; the pill is 36 high, so it stays a full pill, and the open card is softly round
+internal const val ISLAND_NETWORK_GRACE = 10_000L
 internal const val ISLAND_IDLE_MS = 5 * 60_000L // paused this long, the pill steps aside
 internal val ISLAND_TIMERS = listOf(1, 3, 5, 10, 15, 20, 30, 45, 60) // minutes the timer menu offers
 internal val ISLAND_SLEEP = listOf(15, 30, 45, 60, 90, 120) // and the sleep timer

@@ -2992,7 +2992,10 @@ class MainActivity : Activity() {
             renderSettings(k)
         }
         val wxAgain = { IslandWeather.stop(); IslandWeather.start(this) }
-        rows[R.string.isl_on] = islRow(R.string.isl_on, "isl_on")
+        rows[R.string.isl_on] = islRow(R.string.isl_on, "isl_on") {
+            wxAgain()
+            IslandSports.start(this)
+        }
         rows[R.string.isl_access] = Triple(getString(R.string.isl_access), getString(if (listenerOn()) R.string.isl_access_on else R.string.isl_access_off)) { openListenerAccess() }
         rows[R.string.isl_music] = islRow(R.string.isl_music, "isl_music")
         rows[R.string.isl_idle] = Triple(getString(R.string.isl_idle), getString(ISLAND_IDLE_NAMES[ISLAND_IDLES.indexOf(prefs.getLong("isl_idle", ISLAND_IDLE_MS)).coerceAtLeast(0)])) {
@@ -3009,7 +3012,7 @@ class MainActivity : Activity() {
         rows[R.string.isl_sports] = islRow(R.string.isl_sports, "isl_sports") { IslandSports.start(this) }
         // Everything about games on one page: the picks, where to pick them, your teams and how many fit.
         rows[R.string.isl_games] = Triple(getString(R.string.isl_games), IslandSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGames() }
-        rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", after = wxAgain)
+        rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", def = false, after = wxAgain)
         rows[R.string.isl_update_row] = islRow(R.string.isl_update_row, "isl_update")
         rows[R.string.isl_dream_row] = islRow(R.string.isl_dream_row, "isl_dream")
         rows[R.string.isl_net_row] = islRow(R.string.isl_net_row, "isl_net")
@@ -3154,19 +3157,29 @@ class MainActivity : Activity() {
         renderSettings(R.string.isl_bt_row)
     }
 
+    internal fun requireSleepAccess(): Boolean {
+        if (listenerOn()) return true
+        homePopup(0, getString(R.string.isl_sleep_timer), getString(R.string.isl_sleep_access), null,
+            getString(R.string.isl_access_give) to { setupDialog?.dismiss(); openListenerAccess() },
+            getString(R.string.setup_not_now) to { setupDialog?.dismiss() })
+        return false
+    }
+
     /** Timer, stopwatch, sleep timer. Starting one closes the panel, so it shows on the island at once. */
     internal fun pickIslandTimer(focus: Int = 0) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
-        fun start(go: () -> Unit) { closeLauncherSettings(); go(); isl.started() }
+        fun start(key: String, go: () -> Unit) { closeLauncherSettings(); go(); isl.started(key) }
         showPage(getString(R.string.isl_timers), listOf(
             page(getString(R.string.isl_timer), "›") {
-                showPage(getString(R.string.isl_timer), ISLAND_TIMERS.map { m -> page(mins(m)) { start { IslandTimers.startTimer(this, m * 60_000L) } } } +
+                showPage(getString(R.string.isl_timer), ISLAND_TIMERS.map { m -> page(mins(m)) { start("timer") { IslandTimers.startTimer(this, m * 60_000L) } } } +
                     page(getString(R.string.isl_custom), "›") { isl.customTimer() },
                     crumb = getString(R.string.isl_timers)) { pickIslandTimer(0) }
             },
-            page(getString(R.string.isl_stopwatch)) { start { IslandTimers.startStopwatch(this) } },
+            page(getString(R.string.isl_stopwatch)) { start("stopwatch") { IslandTimers.startStopwatch(this) } },
             page(getString(R.string.isl_sleep_timer), "›") {
-                showPage(getString(R.string.isl_sleep_timer), ISLAND_SLEEP.map { m -> page(mins(m)) { start { IslandTimers.startSleep(this, m * 60_000L) } } },
+                if (requireSleepAccess()) showPage(getString(R.string.isl_sleep_timer), ISLAND_SLEEP.map { m -> page(mins(m)) {
+                    if (requireSleepAccess()) start("sleep") { IslandTimers.startSleep(this, m * 60_000L) }
+                } },
                     crumb = getString(R.string.isl_timers)) { pickIslandTimer(2) }
             },
         ), focus, crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_timers) }
@@ -4044,7 +4057,7 @@ class MainActivity : Activity() {
         }
         val now = System.currentTimeMillis()
         if (!up && isl.netDownAt == 0L) isl.netDownAt = now
-        if (up && isl.netDownAt > 0L) { if (now - isl.netDownAt > 10_000) isl.netBackAt = now; isl.netDownAt = 0L }
+        if (up && isl.netDownAt > 0L) { if (now - isl.netDownAt >= ISLAND_NETWORK_GRACE) isl.netBackAt = now; isl.netDownAt = 0L }
         isl.show()
     }
 
@@ -6171,6 +6184,8 @@ class MainActivity : Activity() {
             page(c.name, c.where) {
                 prefs.edit().putBoolean("geo_manual", true).putString("geo_city", c.name)
                     .putFloat("geo_lat", c.lat).putFloat("geo_lon", c.lon).remove("wx_time").apply()
+                IslandWeather.start(this)
+                isl.show()
                 refreshWeather()
                 renderSettings(R.string.weather_location)
             }

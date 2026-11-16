@@ -302,16 +302,18 @@ internal object IslandTimers : IslandSource {
     }
 
     private fun sleepDone(c: Context) {
-        try {
+        val playing = try {
             c.getSystemService(MediaSessionManager::class.java)
                 .getActiveSessions(ComponentName(c, MediaListener::class.java))
-                .forEach {
-                    val s = it.playbackState?.state
-                    if (s == PlaybackState.STATE_PLAYING || s == PlaybackState.STATE_BUFFERING) it.transportControls.pause()
-                }
-        } catch (_: SecurityException) { // no notification access, so Plume cannot see the players
+                .filter { it.playbackState?.state in listOf(PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING) }
+        } catch (_: SecurityException) {
+            Toast.makeText(c, R.string.isl_sleep_access, Toast.LENGTH_LONG).show()
+            return Island.changed()
         }
-        if (Island.listener == null) Toast.makeText(c, R.string.isl_timer_sleep_toast, Toast.LENGTH_LONG).show()
+        playing.forEach { it.transportControls.pause() }
+        if (Island.listener == null && playing.isNotEmpty()) {
+            Toast.makeText(c, R.string.isl_timer_sleep_toast, Toast.LENGTH_LONG).show()
+        }
         Island.changed()
     }
 

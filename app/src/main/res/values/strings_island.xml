@@ -48,7 +48,7 @@
     <string name="isl_teams_failed">Couldn\'t load teams. Check the internet and try again.</string>
     <string name="isl_following">Following</string>
     <string name="isl_wx_rain_row">Rain and snow soon</string>
-    <string name="help_isl_wx_rain">Rain or snow starting or stopping in the next hour.</string>
+    <string name="help_isl_wx_rain">Rain or snow starting or stopping in the next hour. When on, Plume sends your saved weather location to Open-Meteo.</string>
     <string name="isl_wx_needs_place">Needs the weather location (Clock &amp; weather).</string>
     <string name="isl_update_row">Plume updates</string>
     <string name="help_isl_update">How far an update of Plume is.</string>
@@ -147,7 +147,7 @@
     <string name="isl_timer_sleep_min">Music stops in %d min</string>
     <string name="isl_timer_sleep_s">Music stops in %d s</string>
     <string name="isl_timer_sleep_sub">Sleep timer</string>
-    <string name="isl_timer_sleep_toast">Sleep timer: music paused</string>
+    <string name="isl_timer_sleep_toast">Sleep timer ended</string>
     <string name="isl_timer_plus1">+1</string>
     <string name="isl_timer_plus15">+15</string>
 
@@ -177,4 +177,6 @@
     <string name="isl_wx_until">%1$s until %2$s</string>
     <!-- Tomorrow's lowest, then highest temperature. -->
     <!-- Tomorrow's highest temperature, then today's. -->
+    <string name="isl_sleep_access">Allow notification access so Plume can pause playback when the sleep timer ends.</string>
+    <string name="isl_score_live">Live · %1$s</string>
 </resources>

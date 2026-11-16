@@ -3,6 +3,7 @@ package dev.plume
 import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
@@ -15,16 +16,24 @@ import android.service.notification.StatusBarNotification
  * keeps one item per notification key. A TV is shared and most of what it posts is system noise, so the filter is
  * strict, and the privacy setting decides how much of a notification the room gets to read.
  */
-internal object IslandAlerts : IslandSource {
+internal object IslandAlerts {
     private const val PEEK_MS = 6_000L
     private const val LAST_MS = 120_000L
 
-    private val shown = LinkedHashMap<String, IslandItem>()
+    internal data class CachedAlert(val pkg: String, val privacy: String, val item: IslandItem) {
+        fun visible(now: Long, currentPrivacy: String?, muted: Set<String>) =
+            now < item.until && privacy == currentPrivacy && pkg !in muted
+    }
+
+    private val shown = LinkedHashMap<String, CachedAlert>()
     private val lastPeek = HashMap<String, Long>()
 
-    @Synchronized override fun items(now: Long): List<IslandItem> {
-        shown.values.removeAll { now >= it.until }
-        return shown.values.toList()
+    @Synchronized fun items(now: Long, prefs: SharedPreferences): List<IslandItem> {
+        val privacy = prefs.getString("isl_alert_privacy", "app")
+        val muted = prefs.getStringSet("isl_alert_off", null).orEmpty()
+        if (!prefs.getBoolean("isl_alerts", true)) shown.clear()
+        shown.values.removeAll { !it.visible(now, privacy, muted) }
+        return shown.values.map { it.item }
     }
 
     /** Everything already posted when the listener connects, so a call that rings before Plume starts still shows. */
@@ -85,7 +94,7 @@ internal object IslandAlerts : IslandSource {
         val picture = if (full) bigPicture(ex) ?: largeIcon(ctx, n) else null
         val image = picture ?: appIcon(ctx, info, pkg)
         // Reply actions need a keyboard the island does not have, so an alert keeps only the plain buttons.
-        val actions = (n.actions ?: emptyArray())
+        val actions = (n.actions?.takeIf { full } ?: emptyArray())
             .filter { it.actionIntent != null && !it.title.isNullOrBlank() && (call || it.remoteInputs.isNullOrEmpty()) }
             .take(2)
             .map { a -> IslandAction(label = a.title.toString()) { try { a.actionIntent.send() } catch (_: PendingIntent.CanceledException) {} } }
@@ -94,9 +103,9 @@ internal object IslandAlerts : IslandSource {
             val peekUntil = when {
                 call -> Long.MAX_VALUE // a ringing call stays open until it is answered or missed
                 islandAlertMayPeek(lastPeek[pkg], now) -> { lastPeek[pkg] = now; post + PEEK_MS }
-                else -> shown[sbn.key]?.peekUntil ?: 0L // too soon after the last peek: update quietly
+                else -> shown[sbn.key]?.item?.peekUntil ?: 0L // too soon after the last peek: update quietly
             }
-            shown[sbn.key] = IslandItem(
+            shown[sbn.key] = CachedAlert(pkg, privacy, IslandItem(
                 key = sbn.key,
                 kind = if (call) IslandKind.CALL else IslandKind.ALERT,
                 title = shownTitle,
@@ -108,7 +117,7 @@ internal object IslandAlerts : IslandSource {
                 peekUntil = peekUntil,
                 actions = actions,
                 description = "$label: ${if (shownTitle == label) sub else shownTitle}",
-            )
+            ))
         }
         Island.changed()
     }

@@ -208,15 +208,20 @@
             android:visibility="gone">
 
                 <!-- Open, with more than one thing on the island: a mark for each, Left and Right pick which one shows. -->
-                <LinearLayout
-                    android:id="@+id/islandChips"
-                    android:layout_width="wrap_content"
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="14dp"
-                    android:clipChildren="false"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:visibility="gone" />
+                    android:focusable="false"
+                    android:scrollbars="none"
+                    android:visibility="gone">
+                    <LinearLayout
+                        android:id="@+id/islandChips"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
 
                 <LinearLayout
                     android:id="@+id/islandTop"
@@ -256,7 +261,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="6dp"
-                            android:alpha="0.7"
+                            android:alpha="0.95"
                             android:ellipsize="end"
                             android:fontFamily="sans-serif"
                             android:includeFontPadding="false"

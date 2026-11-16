@@ -52,7 +52,7 @@ Plume replaces the cluttered stock home screen with the two things you actually 
 - **Clean apps row.** Monochrome logos, colour logos or banners in three sizes. Rearrange, hide, or sort by most used. A PIN keeps the layout safe from small hands.
 - **Home button on Google TV**, even where the stock launcher can't be replaced. Holding Home still opens the Google TV dashboard.
 - **Remote keys and Sources.** Remap the TV, Netflix or Settings button, with a separate action on hold. Switch HDMI inputs from the top bar.
-- **Tiny and fast.** A 0.4 MB APK with no third-party libraries and no background services. It updates itself from GitHub.
+- **Tiny and fast.** A small APK with no third-party libraries. It updates itself from GitHub.
 
 ## How it compares
 
@@ -62,7 +62,7 @@ Measured on a Hisense Google TV (Android 12, 1.8 GB RAM):
 |---|---|---|---|
 | APK size | **0.4 MB** | ~10–14 MB | ~25 MB |
 | RAM while running | **~50–70 MB** | ~65–70 MB | ~93 MB, plus a ~22 MB helper process |
-| Extra background services | **None** | 2 | 1 always-on helper |
+| Extra background services | **Optional notification listener** | 2 | 1 always-on helper |
 | Return to home from an app | **~95 ms** | – | – |
 
 ## Install
@@ -261,6 +261,8 @@ Plume has no analytics, no ads and no account. It only connects to the internet 
 - download the Gallery paintings from this repository, **only if you choose that screensaver**
 - check this repository for wallpapers **when you open Built-in**. Plume updates photos you already downloaded. New photos download only when you select them.
 - get the Bing picture of the day (about 300 KB), **only if you choose it as your wallpaper**. Plume sends a request to [bing.com](https://www.bing.com) when the home screen opens: once a day, or once an hour until the picture has changed that day. Bing sees the TV's IP address and its language and country. Plume keeps one picture and deletes it when you choose another wallpaper.
+- fetch game scores and team logos from ESPN when you browse Island games, pin a game, or follow a team. Plume polls your picks only while the Island is on and Home is open.
+- fetch precipitation from Open-Meteo when you enable Island rain alerts. Plume uses your saved weather coordinates and stops requesting forecasts when the Island is off.
 - find artwork through [TMDB](https://www.themoviedb.org) **only if you add an API key and use Your shows**. TMDB receives the key to authenticate requests and the show title when Plume needs a backdrop. Plume stores the key on the TV and excludes it from backups. The QR form sends it over unencrypted HTTP on your local network. Select **Turn off TMDB and remove key** to stop lookups.
 - download one NASA Earth video from [svs.gsfc.nasa.gov](https://svs.gsfc.nasa.gov/4019), **only when you select that scene**. NASA sees the TV's IP address.
 - download an Apple Aerial video from [sylvan.apple.com](https://sylvan.apple.com) or an Amazon Fire TV video from [Amazon's Fire TV CDN](https://aebcs-cdn-prod-na.services.firetv.amazon.dev), **only when you select that scene**. The source sees the TV's IP address.

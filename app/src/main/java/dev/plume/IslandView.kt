@@ -145,6 +145,7 @@ internal class IslandView(private val a: MainActivity) {
 
     var islandOpen = false // the shape the tile has now; the wanted shape can be ahead of it while content fades
     var islandWant: Boolean? = null // the shape the running fade is heading for
+    private var islandRim: GradientDrawable? = null
     var islandInk = 0 // the ink last picked, for the progress between full refreshes
     var islandList: List<IslandItem> = emptyList() // everything on the island, in order, as last shown
     var islandItem: IslandItem? = null // the one the tile shows
@@ -155,6 +156,7 @@ internal class IslandView(private val a: MainActivity) {
     var peekKey: String? = null // the item the island opened for by itself, and the peeks already shown
     val peeksShown = HashSet<String>()
     var seekTo = -1L // a seek still being chosen: shown at once, sent once the keys stop
+    private var seekTrack: List<String?>? = null
     var netDownAt = 0L // when the network went away (0: it is up), and when it came back
     var netBackAt = 0L
     var updateDone = -1f // the update's download, 0..1, while one runs; -1: none
@@ -179,9 +181,23 @@ internal class IslandView(private val a: MainActivity) {
         override fun onSessionDestroyed() = a.refreshMedia()
     }
     val islandTick = Runnable { a.showIsland() }
+    val seekClear = Runnable { seekTo = -1L; seekTrack = null; a.showProgress() }
     val seekSend = Runnable {
-        if (seekTo >= 0) media?.transportControls?.seekTo(seekTo)
-        a.ui.postDelayed({ seekTo = -1L; a.showProgress() }, 1500) // until the app reports the new place
+        val player = media
+        if (seekTo >= 0 && player?.track() == seekTrack) player?.transportControls?.seekTo(seekTo)
+        a.ui.postDelayed(seekClear, 1500)
+    }
+
+    private fun MediaController.track() = metadata?.let {
+        listOf(it.getString(MediaMetadata.METADATA_KEY_MEDIA_ID), it.getString(MediaMetadata.METADATA_KEY_TITLE),
+            it.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE), it.getString(MediaMetadata.METADATA_KEY_ARTIST))
+    }
+
+    private fun MainActivity.clearSeek() {
+        ui.removeCallbacks(seekSend)
+        ui.removeCallbacks(seekClear)
+        seekTo = -1L
+        seekTrack = null
     }
 
     fun on(key: String, default: Boolean = true) = a.prefs.getBoolean(key, default)
@@ -198,6 +214,9 @@ internal class IslandView(private val a: MainActivity) {
 
     /** A glass tile like the app row's, open or not: the same Glass style, theme, tint and focus light. */
     fun MainActivity.styleIsland() {
+        val rim = GradientDrawable().apply { cornerRadius = dp(ISLAND_ROUND).toFloat() }
+        islandRim = rim
+        island.foreground = null
         style(island, dp(ISLAND_ROUND), card = true, lift = 1f, rise = false) { focused ->
             if (focused) {
                 lastTop = island
@@ -207,6 +226,7 @@ internal class IslandView(private val a: MainActivity) {
             }
             showIsland()
         }
+        island.foreground = LayerDrawable(arrayOf(island.foreground ?: ColorDrawable(Color.TRANSPARENT), rim))
         showIsland()
     }
 
@@ -233,6 +253,7 @@ internal class IslandView(private val a: MainActivity) {
         mediaSessions.removeOnActiveSessionsChangedListener(sessionsChanged)
         media?.unregisterCallback(mediaChanged)
         media = null
+        clearSeek()
         ui.removeCallbacks(islandTick)
     }
 
@@ -241,11 +262,12 @@ internal class IslandView(private val a: MainActivity) {
     fun MainActivity.pickMedia(list: List<MediaController>) {
         val pick = islandPick(list, { a.mediaPlaying(it) }) { mediaTitle(it.metadata) != null }
         if (pick?.sessionToken != media?.sessionToken) {
+            clearSeek()
             media?.unregisterCallback(mediaChanged)
             media = pick
             pausedAt = 0L
             pick?.registerCallback(mediaChanged, ui)
-        }
+        } else if (seekTo >= 0 && media?.track() != seekTrack) clearSeek()
         showIsland()
     }
 
@@ -308,6 +330,7 @@ internal class IslandView(private val a: MainActivity) {
         val next = can == 0L || can and PlaybackState.ACTION_SKIP_TO_NEXT != 0L
         return IslandItem("media", if (playing) IslandKind.MEDIA else IslandKind.MEDIA_PAUSED, title, who,
             icon = R.drawable.ic_music_note, mono = art == null, image = art, since = now,
+            until = if (!playing && !island.isFocused && idle > 0L) now + (idle - (clock - pausedAt)) else Long.MAX_VALUE,
             actions = listOfNotNull(
                 IslandAction(R.drawable.ic_skip_previous, description = getString(R.string.media_previous)) { t.skipToPrevious() }.takeIf { prev },
                 IslandAction(if (playing) R.drawable.ic_pause else R.drawable.ic_play, description = getString(R.string.media_play_pause)) { if (mediaPlaying(media)) t.pause() else t.play() },
@@ -319,7 +342,7 @@ internal class IslandView(private val a: MainActivity) {
     /** The network and Plume's own update, which the home screen knows itself. */
     fun MainActivity.systemItems(now: Long): List<IslandItem> = listOfNotNull(
         // Gone for 10 s first: Wi-Fi coming up after a wake would flash it for nothing.
-        if (on("isl_net") && netDownAt > 0 && now - netDownAt > 10_000)
+        if (on("isl_net") && netDownAt > 0 && now >= netDownAt + ISLAND_NETWORK_GRACE)
             IslandItem("net", IslandKind.NETWORK, getString(netWhy.takeIf { it != 0 } ?: R.string.isl_net_down),
                 getString(if (netWhy == R.string.isl_net_captive) R.string.isl_net_captive_sub else R.string.isl_net_down_sub), R.drawable.ic_isl_wifi_off,
                 since = netDownAt, peekUntil = netDownAt + 16_000,
@@ -341,7 +364,7 @@ internal class IslandView(private val a: MainActivity) {
         val all = ArrayList<IslandItem>()
         mediaItem(now)?.let { all += it }
         all += IslandTimers.items(now)
-        if (on("isl_alerts")) all += IslandAlerts.items(now)
+        all += IslandAlerts.items(now, prefs)
         if (on("isl_sports")) all += IslandSports.items(now)
         all += IslandWeather.items(now)
         if (on("isl_bluetooth", false)) all += IslandBluetooth.items(now)
@@ -364,12 +387,15 @@ internal class IslandView(private val a: MainActivity) {
         val now = System.currentTimeMillis()
         islandList = islandAll(now)
         ui.removeCallbacks(islandTick)
+        val networkDeadline = (netDownAt + ISLAND_NETWORK_GRACE)
+            .takeIf { on("isl_on") && on("isl_net") && netDownAt > 0 && it > now }
         if (islandList.isEmpty()) {
             if (island.isFocused) findViewById<View?>(shownTop().first())?.requestFocus()
             if (lastTop === island) lastTop = null
             island.visibility = View.GONE
             islandOpen = false
             islandWant = null
+            networkDeadline?.let { ui.postDelayed(islandTick, it - now) }
             return
         }
         // An alert opens the island by itself for a moment, only while nothing else is going on on the screen.
@@ -393,7 +419,7 @@ internal class IslandView(private val a: MainActivity) {
         island.visibility = View.VISIBLE
         if (islandWant == null && open == islandOpen) bindIsland(item, open) else shapeIsland(open)
         // Look again when something changes by itself: a second passes on a timer, or an item or a peek runs out.
-        val next = (islandList.flatMap { listOf(it.until, it.peekUntil) } + listOfNotNull(peek?.peekUntil)).filter { it > now }.minOrNull()
+        val next = (islandList.flatMap { listOf(it.until, it.peekUntil) } + listOfNotNull(networkDeadline)).filter { it > now }.minOrNull()
         // Each item says how often its text changes; open, the music's bar and times move every second.
         val period = (islandList.mapNotNull { it.tick.takeIf { t -> t > 0 } } + listOfNotNull(1000L.takeIf { open && (media != null || item.progress != null) })).minOrNull()
         val wait = minOf(period ?: Long.MAX_VALUE, next?.let { it - now + 50 } ?: Long.MAX_VALUE)
@@ -524,10 +550,13 @@ internal class IslandView(private val a: MainActivity) {
         val glassy = glassActive()
         val ink = if (!glassy) fg else if (island.isShown && island.width > 0) inkBehind(listOf(island)) else iconInk
         islandInk = ink
+        islandRim?.setStroke(dp(2), if (island.isFocused) ink and 0xFFFFFF or 0xC0000000.toInt() else Color.TRANSPARENT)
+        val sports = item.kind == IslandKind.SPORTS || item.kind == IslandKind.SPORTS_LIVE
         fun TextView.inked() = if (glassy) ink(this, ink) else { setShadowLayer(0f, 0f, 0f, 0); setTextColor(fg) }
         val music = item.kind == IslandKind.MEDIA || item.kind == IslandKind.MEDIA_PAUSED
         findViewById<TextView>(R.id.islandTitle).apply {
             text = item.title
+            textSize = if (!open) 13f else if (sports) 22f else 18f
             fontFeatureSettings = if (item.tick > 0 || item.kind == IslandKind.SPORTS_LIVE) "tnum" else null // numbers that change keep their width
             inked()
         }
@@ -539,6 +568,10 @@ internal class IslandView(private val a: MainActivity) {
         }
         island.contentDescription = item.description ?: listOfNotNull(item.title, item.sub).joinToString(", ")
         val (picture, picture2) = islandPictures(item)
+        val size = dp(if (!open) 26 else if (sports) 40 else 68)
+        if (islandArt.layoutParams.width != size) {
+            islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
+        }
         when {
             picture != null -> { islandArt.clearColorFilter(); islandArt.setImageBitmap(picture); islandArt.background = null; islandArt.setPadding(0, 0, 0, 0) }
             item.icon != 0 -> {
@@ -546,13 +579,18 @@ internal class IslandView(private val a: MainActivity) {
                 if (item.mono) islandArt.setColorFilter(ink) else islandArt.clearColorFilter()
                 // An icon sits on a soft disc of the ink, the size of the picture it stands in for.
                 islandArt.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ink and 0xFFFFFF or 0x26000000) }
-                val pad = dp(if (open) 16 else 5)
+                val pad = dp(if (!open) 5 else if (sports) 8 else 16)
                 islandArt.setPadding(pad, pad, pad, pad)
             }
             else -> islandArt.setImageDrawable(null)
         }
         islandArt2.visibility = if (picture2 != null) View.VISIBLE else View.GONE
         islandArt2.setImageBitmap(picture2)
+        if (sports) {
+            islandArt.scaleType = ImageView.ScaleType.FIT_CENTER
+        } else {
+            islandArt.scaleType = ImageView.ScaleType.CENTER_CROP
+        }
         // The music's mark as the Shows row shows it: a plain mark in the ink, or its brand colour with Colour on.
         val pkg = media?.packageName
         val logo = pkg?.let { MainActivity.LOGOS[it] }?.takeIf { !it.second }
@@ -611,30 +649,68 @@ internal class IslandView(private val a: MainActivity) {
             v.background = if (on) GradientDrawable().apply {
                 if (v is ImageView) shape = GradientDrawable.OVAL else cornerRadius = dp(22).toFloat()
                 setColor(ink and 0xFFFFFF or 0x2E000000)
+                setStroke(dp(1), ink)
             } else null
             v.alpha = if (on || selRow != IslandRow.ACTIONS) 1f else 0.75f
         }
     }
 
-    /** The other things on the island: small marks after the pill's text at rest, a row to pick from when open. */
+    /** A row of items to choose from while the island is open. */
     fun MainActivity.bindMarks(open: Boolean, ink: Int) {
         val item = islandItem
         // At rest the pill shows one thing only: the others wait in the open tile's row of marks.
         findViewById<LinearLayout>(R.id.islandMarks).apply { visibility = View.GONE; removeAllViews() }
-        islandChips.visibility = if (open && islandList.size > 1) View.VISIBLE else View.GONE
+        val scroll = islandChips.parent as android.widget.HorizontalScrollView
+        scroll.visibility = if (open && islandList.size > 1) View.VISIBLE else View.GONE
         islandChips.removeAllViews()
         if (open && islandList.size > 1) {
             val sel = island.isFocused && islandRows(item).getOrNull(islandRowAt) == IslandRow.MARKS
             islandList.forEachIndexed { i, o ->
-                val chip = islandMark(o, ink, dp(30), sel && i == islandCol)
-                chip.alpha = if (o.key == item?.key) 1f else 0.55f
-                islandChips.addView(chip, LinearLayout.LayoutParams(dp(30), dp(30)).apply { if (i > 0) marginStart = dp(10) })
+                val active = o.key == item?.key
+                val chip = LinearLayout(this).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(islandMark(o, ink, dp(24)), LinearLayout.LayoutParams(dp(24), dp(24)))
+                    if (active || islandList.size <= 3) {
+                        val name = when (o.kind) {
+                            IslandKind.CALL, IslandKind.ALERT -> R.string.isl_alerts
+                            IslandKind.TIMER, IslandKind.TIMER_DONE -> R.string.isl_timer
+                            IslandKind.STOPWATCH -> R.string.isl_stopwatch
+                            IslandKind.SLEEP -> R.string.isl_sleep_timer
+                            IslandKind.NETWORK -> R.string.isl_net_row
+                            IslandKind.MEDIA, IslandKind.MEDIA_PAUSED -> R.string.isl_music
+                            IslandKind.SPORTS, IslandKind.SPORTS_LIVE -> R.string.isl_games
+                            IslandKind.UPDATE -> R.string.isl_update_row
+                            IslandKind.WEATHER -> R.string.isl_wx_rain_row
+                            IslandKind.BLUETOOTH -> R.string.isl_bt_row
+                        }
+                        addView(TextView(context).apply {
+                            setText(name)
+                            textSize = 12f
+                            maxLines = 1
+                            maxWidth = dp(72)
+                            ellipsize = android.text.TextUtils.TruncateAt.END
+                            setPadding(dp(4), 0, 0, 0)
+                            setTextColor(ink)
+                        })
+                    }
+                    setPadding(dp(6), 0, dp(6), 0)
+                    alpha = if (active) 1f else 0.72f
+                    if (active) background = GradientDrawable().apply {
+                        cornerRadius = dp(15).toFloat()
+                        setColor(ink and 0xFFFFFF or 0x22000000)
+                        if (sel && i == islandCol) setStroke(dp(1), ink)
+                    }
+                }
+                islandChips.addView(chip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)).apply {
+                    if (i > 0) marginStart = dp(4)
+                })
+                if (active) chip.post { if (chip.parent != null) chip.requestRectangleOnScreen(Rect(0, 0, chip.width, chip.height), true) }
             }
         }
     }
 
-    /** One thing's mark: its picture in a circle, or its icon in the ink; [lit]: on a soft disc, as a picked button. */
-    fun MainActivity.islandMark(o: IslandItem, ink: Int, size: Int, lit: Boolean) = ImageView(this).apply {
+    /** One item's mark: its picture in a circle, or its icon in the ink. */
+    fun MainActivity.islandMark(o: IslandItem, ink: Int, size: Int) = ImageView(this).apply {
         val picture = islandPictures(o).first
         if (picture != null) {
             setImageBitmap(picture)
@@ -648,7 +724,6 @@ internal class IslandView(private val a: MainActivity) {
             val p = size / 6
             setPadding(p, p, p, p)
         }
-        if (lit) foreground = GradientDrawable().apply { shape = GradientDrawable.OVAL; setStroke(0, 0); setColor(ink and 0xFFFFFF or 0x40000000) }
         contentDescription = o.description ?: o.title
     }
 
@@ -675,6 +750,8 @@ internal class IslandView(private val a: MainActivity) {
         val length = c.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: return
         val from = if (seekTo >= 0) seekTo
             else islandPosition(s.position, s.lastPositionUpdateTime, android.os.SystemClock.elapsedRealtime(), s.playbackSpeed, mediaPlaying(c), length)
+        seekTrack = c.track()
+        ui.removeCallbacks(seekClear)
         seekTo = (from + dir * (if (islandRepeat > 4) 30_000L else 10_000L)).coerceIn(0L, length)
         showProgress()
         ui.removeCallbacks(seekSend)
@@ -747,12 +824,14 @@ internal class IslandView(private val a: MainActivity) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
         holdMenu(anchor, listOf(
             getString(R.string.isl_timer) to {
-                holdMenu(anchor, ISLAND_TIMERS.map { m -> mins(m) to { IslandTimers.startTimer(this, m * 60_000L); islandStarted() } } +
+                holdMenu(anchor, ISLAND_TIMERS.map { m -> mins(m) to { IslandTimers.startTimer(this, m * 60_000L); islandStarted("timer") } } +
                     (getString(R.string.isl_custom) to { showPanel(); editTimer() }), below = true)
             },
-            getString(R.string.isl_stopwatch) to { IslandTimers.startStopwatch(this); islandStarted() },
+            getString(R.string.isl_stopwatch) to { IslandTimers.startStopwatch(this); islandStarted("stopwatch") },
             getString(R.string.isl_sleep_timer) to {
-                holdMenu(anchor, ISLAND_SLEEP.map { m -> mins(m) to { IslandTimers.startSleep(this, m * 60_000L); islandStarted() } }, below = true)
+                if (requireSleepAccess()) holdMenu(anchor, ISLAND_SLEEP.map { m -> mins(m) to {
+                    if (requireSleepAccess()) { IslandTimers.startSleep(this, m * 60_000L); islandStarted("sleep") }
+                } }, below = true)
             },
             getString(R.string.isl_games_now) to { showPanel(); pickGamesNow() },
         ), below = true)
@@ -792,7 +871,7 @@ internal class IslandView(private val a: MainActivity) {
             getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(field.windowToken, 0)
             closeLauncherSettings()
             IslandTimers.startTimer(this, m * 60_000L)
-            islandStarted()
+            islandStarted("timer")
         }
         lateinit var field: EditText
         field = textField("", getString(R.string.isl_custom_hint), InputType.TYPE_CLASS_NUMBER, EditorInfo.IME_ACTION_DONE) { start(it, field) }
@@ -821,8 +900,12 @@ internal class IslandView(private val a: MainActivity) {
     }
 
     /** A timer just started: make sure the island is on to show it. */
-    fun MainActivity.islandStarted() {
+    fun MainActivity.islandStarted(key: String) {
         if (!on("isl_on")) prefs.edit().putBoolean("isl_on", true).apply()
+        showIsland()
+        island.requestFocus()
+        islandPick = key
+        islandRowAt = Int.MAX_VALUE
         showIsland()
     }
 
@@ -836,7 +919,7 @@ internal class IslandView(private val a: MainActivity) {
     fun ok() = a.islandOk()
     fun menu(anchor: View) = a.timerMenu(anchor)
     fun hold() = a.islandHoldMenu()
-    fun started() = a.islandStarted()
+    fun started(key: String) = a.islandStarted(key)
     fun askAccess() = a.askIslandAccess()
     fun customTimer() = a.editTimer()
 

@@ -295,7 +295,7 @@ internal object IslandSports : IslandSource {
         val ctx = app ?: return
         val now = System.currentTimeMillis()
         val before = items(now)
-        val on = prefs(ctx).getBoolean(PREF_ON, true)
+        val on = prefs(ctx).getBoolean("isl_on", true) && prefs(ctx).getBoolean(PREF_ON, true)
         trimPins(ctx)
         val teams = if (on) followed(ctx) else emptyList()
         val pins = if (on) pinned(ctx) else emptyList()
@@ -423,12 +423,12 @@ internal object IslandSports : IslandSource {
             }
             live && g.cricket -> {
                 val line = cricketLine(ctx, g)
-                IslandItem(key = key, kind = kind, title = cricketScore(g), sub = line, mono = false, imageUri = away,
+                IslandItem(key = key, kind = kind, title = cricketScore(g), sub = ctx.getString(R.string.isl_score_live, line), mono = false, imageUri = away,
                     image2Uri = home, icon = icon, since = since, peekUntil = s.peekUntil,
                     description = "${g.away?.name} ${g.away?.score}, ${g.home?.name} ${g.home?.score}, $line")
             }
             live -> IslandItem(key = key, kind = kind, title = g.name ?: sportsScore(g),
-                sub = if (g.name != null) g.shortDetail else sportsDetail(g.shortDetail), mono = false, imageUri = away,
+                sub = ctx.getString(R.string.isl_score_live, if (g.name != null) g.shortDetail else sportsDetail(g.shortDetail)), mono = false, imageUri = away,
                 image2Uri = home, icon = icon, since = since, peekUntil = s.peekUntil,
                 description = describe(ctx, g, if (g.name != null) g.detail else sportsDetail(g.detail)))
             // A postponed or cancelled game is "post" but not completed; it has no result to show.
