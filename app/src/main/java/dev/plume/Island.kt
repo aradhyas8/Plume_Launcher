@@ -75,8 +75,10 @@ internal fun islandClock(ms: Long, countdown: Boolean = true): String {
 internal const val ISLAND_ROUND = 24 // dp; the pill is 36 high, so it stays a full pill, and the open card is softly round
 internal const val ISLAND_IDLE_MS = 5 * 60_000L // paused this long, the pill steps aside
 internal val ISLAND_TIMERS = listOf(1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120) // minutes Plume settings offers
-internal val ISLAND_QUICK = listOf(1, 2, 5, 10, 15, 30) // the ones the top bar's timer icon lists until people pick their own
-internal const val QUICK_PREF = "isl_quick" // the lengths switched away from ISLAND_QUICK
+internal val ISLAND_RECENT = listOf(1, 5, 10, 30) // the timer icon's lengths before people start their own
+
+/** The timer icon's lengths after a [used] timer: it comes first, a repeat is not listed twice, at most 4. */
+internal fun islRecent(list: List<Int>, used: Int) = (listOf(used) + (list - used)).take(4)
 internal val ISLAND_IDLES = listOf(60_000L, ISLAND_IDLE_MS, 0L) // "Hide music when paused"; 0 is Never
 
 /** An app's name, or null when it is gone or hidden from Plume. */

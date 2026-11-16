@@ -29,6 +29,9 @@ internal object TopBar {
         return order.map { if (it == key) other else if (it == other) key else it }
     }
 
+    /** [key] takes the place of [out], which leaves the bar. */
+    fun swap(order: List<String>, out: String, key: String) = order.map { if (it == out) key else it }
+
     /** [key] right after [after], or at the end when [after] is not on the bar. */
     fun addAfter(order: List<String>, key: String, after: String): List<String> {
         val rest = order - key

@@ -509,7 +509,7 @@ class MainActivity : Activity() {
                     .setDuration(160).setInterpolator(DECELERATE).start()
             }
             setOnClickListener { action() }
-            setOnLongClickListener { if (!holdFired) fireHold(this); true } // hold OK: move, hide or add icons
+            setOnLongClickListener { if (!holdFired) fireHold(this); true } // hold OK: edit the bar
         }
         isl.setUp()
         if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false) || fakeSetup(intent)) {
@@ -595,7 +595,7 @@ class MainActivity : Activity() {
             intent.removeExtra(Remap.OPEN_RECENT_APPS)
             prefs.edit().remove("return_settings").remove("return_dream").remove("reopen_settings").apply()
             if (editing) endEdit()
-            if (movingTop != null) endTopMove(false)
+            endTopEdit()
             if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
             if (recentAppsRequested || allApps.visibility != View.VISIBLE || recentAppsOpen) openAllApps(recentAppsRequested)
         }
@@ -642,7 +642,7 @@ class MainActivity : Activity() {
             ui.removeCallbacks(themeTick)
             ui.removeCallbacks(wallpaperTick)
             if (editing) endEdit()
-            if (movingTop != null) endTopMove(false) // Home or an app opened in the middle of a move: the bar goes back as it was
+            endTopEdit() // Home or an app opened in the middle of an edit: a lifted icon goes back
         }
         super.onPause()
     }
@@ -1067,7 +1067,7 @@ class MainActivity : Activity() {
         val back = returnTo // set when Plume started the app that Home leaves
         returnTo = null
         if (editing) endEdit()
-        if (movingTop != null) endTopMove(false)
+        endTopEdit()
         if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
         if (allApps.visibility == View.VISIBLE) closeAllApps()
         // Home from an app goes back to the tile or card it was started from, wherever focus is now. If Plume did not start the app,
@@ -3164,21 +3164,17 @@ class MainActivity : Activity() {
         renderSettings(R.string.isl_bt_row)
     }
 
-    /** Timer, stopwatch, and the timer icon's lengths. Starting one closes the panel, so it shows on the island at once. */
+    /** Timer and stopwatch. Starting one closes the panel, so it shows on the island at once. */
     internal fun pickIslandTimer(focus: Int = 0) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
         fun start(go: () -> Unit) { closeLauncherSettings(); go(); isl.started() }
         showPage(getString(R.string.isl_timers), listOf(
             page(getString(R.string.isl_timer), "›") {
-                showPage(getString(R.string.isl_timer), ISLAND_TIMERS.map { m -> page(mins(m)) { start { IslandTimers.startTimer(this, m * 60_000L) } } } +
+                showPage(getString(R.string.isl_timer), ISLAND_TIMERS.map { m -> page(mins(m)) { closeLauncherSettings(); isl.startTimer(m) } } +
                     page(getString(R.string.isl_custom), "›") { isl.customTimer() },
                     crumb = getString(R.string.isl_timers)) { pickIslandTimer(0) }
             },
             page(getString(R.string.isl_stopwatch)) { start { IslandTimers.startStopwatch(this) } },
-            page(getString(R.string.isl_quick), "›") {
-                toggles(getString(R.string.isl_quick), ISLAND_TIMERS.map { mins(it) to "$it" }, QUICK_PREF, getString(R.string.on),
-                    getString(R.string.off), startsOff = (ISLAND_TIMERS - ISLAND_QUICK.toSet()).map { "$it" }.toSet()) { pickIslandTimer(2) }
-            },
         ), focus, crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_timers) }
     }
 
@@ -4031,7 +4027,7 @@ class MainActivity : Activity() {
                 SOURCES = inputs
                 cvteSourcePanel = panel
                 CVTE_SOURCE_PANEL = panel
-                if (movingTop == null) applyTopBar()
+                if (!topEditing) applyTopBar()
                 renderApps()
                 if (allApps.visibility == View.VISIBLE) openAllApps(recentAppsOpen) // a fresh remote request can precede the app list
             }
@@ -4487,7 +4483,7 @@ class MainActivity : Activity() {
             return true
         }
         val panel = cvteSourcePanel
-        if (panel != null && !editing && movingTop == null &&
+        if (panel != null && !editing && !topEditing &&
             settingsScrim.visibility != View.VISIBLE && allApps.visibility != View.VISIBLE &&
             Remap.cvteSourceKey(e.keyCode, e.scanCode, Remap.all(this))) {
             if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) openCvteSources(panel)
@@ -4495,7 +4491,7 @@ class MainActivity : Activity() {
         }
         val confirm = e.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || e.keyCode == KeyEvent.KEYCODE_ENTER ||
             e.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
-        if (movingTop != null && topMoveKey(e, confirm)) return true
+        if (topEditing && topEditKey(e, confirm)) return true
         if (confirm) {
             if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) holdFired = false
             if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount > 0) {
@@ -4736,14 +4732,17 @@ class MainActivity : Activity() {
     private var activeMenu: PopupWindow? = null
 
     /** A small Plume-styled menu just above [anchor] (under it when [below]); Back closes it. [rows] builds its rows. */
-    private fun popupMenu(anchor: View, below: Boolean = false, rows: (dismiss: () -> Unit) -> List<View>) {
-        val list: LinearLayout = if (glassActive()) glassSurface(dp(14).toFloat()) else LinearLayout(this).apply {
-            background = if (dark) rimCard(dp(12), false, solid = true) else GradientDrawable().apply {
-                cornerRadius = dp(12).toFloat()
-                setColor(0xFFF7F8FA.toInt())
-            }
-            elevation = if (dark) 0f else dp(8).toFloat()
+    /** The card under a menu or the top bar's edit panel: glass, or the theme's solid card. */
+    private fun menuSurface(): LinearLayout = if (glassActive()) glassSurface(dp(14).toFloat()) else LinearLayout(this).apply {
+        background = if (dark) rimCard(dp(12), false, solid = true) else GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat()
+            setColor(0xFFF7F8FA.toInt())
         }
+        elevation = if (dark) 0f else dp(8).toFloat()
+    }
+
+    private fun popupMenu(anchor: View, below: Boolean = false, rows: (dismiss: () -> Unit) -> List<View>) {
+        val list = menuSurface()
         list.orientation = LinearLayout.VERTICAL
         list.setPadding(dp(6), dp(6), dp(6), dp(6))
         val menu = PopupWindow(list, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, true)
@@ -4769,19 +4768,34 @@ class MainActivity : Activity() {
         list.getChildAt(0).requestFocus()
     }
 
-    internal fun holdMenu(anchor: View, items: List<Pair<String, () -> Unit>>, below: Boolean = false) =
-        popupMenu(anchor, below) { dismiss -> items.map { (name, action) -> settingsRow(name, "") { dismiss(); action() } } }
+    /** A menu of [items]. [holds] (by position, null for none) is what holding OK on an item does. */
+    internal fun holdMenu(anchor: View, items: List<Pair<String, () -> Unit>>, below: Boolean = false, holds: List<(() -> Unit)?> = emptyList()) =
+        popupMenu(anchor, below) { dismiss ->
+            items.mapIndexed { i, (name, action) ->
+                settingsRow(name, "") { dismiss(); action() }.also { row -> holds.getOrNull(i)?.let { onHoldOk(row) { dismiss(); it() } } }
+            }
+        }
 
-    // ---------- the top bar: hold OK on an icon to move it, hide it, or add one back ----------
+    /**
+     * Holding OK on a row in a menu: the first repeat of OK, or the long click on remotes that send no repeats.
+     * [holdFired] then keeps the OK that is let go, back on the home screen, from clicking what is under the menu.
+     */
+    private fun onHoldOk(row: View, run: () -> Unit) {
+        var fired = false
+        val hold = { if (!fired) { fired = true; holdFired = true; run() } }
+        row.setOnKeyListener { _, code, e ->
+            val ok = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER
+            if (ok && e.action == KeyEvent.ACTION_DOWN && e.repeatCount > 0) { hold(); true } else false
+        }
+        row.setOnLongClickListener { hold(); true }
+    }
+
+    // ---------- the top bar ----------
 
     /** The bar's icons in their default order, with the key each is saved under. */
     private val TOP_KEYS = linkedMapOf(R.id.wifi to "wifi", R.id.sourcesButton to "sources", R.id.allAppsButton to "apps",
         R.id.systemSettings to "system", R.id.launcherSettings to "plume", R.id.timerButton to "timer", R.id.powerButton to "power",
         R.id.recentsButton to "recents", R.id.screensaverButton to "screensaver")
-
-    private var movingTop: View? = null // the icon being moved, while Left and Right slide it
-    private var topLive: List<Int> = emptyList() // the order while moving; saved when OK places the icon
-    private var topBefore: List<Int> = emptyList() // the order when the move started, for Back
 
     /** The icons the bar shows, in order: the saved list, or all of them. Plume settings is always on it. */
     private fun topOrder(): List<Int> {
@@ -4835,47 +4849,6 @@ class MainActivity : Activity() {
         Remap.powerMenu(service)
     }
 
-    /** Hold OK on a top-bar icon: Move, Hide (not Plume settings, so the bar is never empty) and Add icon. */
-    private fun topMenu(v: View) {
-        if (locked()) return holdMenu(v, listOfNotNull(
-            if (v.id == R.id.allAppsButton) getString(R.string.recent_apps) to { openAllApps(recent = true) } else null,
-            getString(R.string.unlock_to_edit) to { unlock { v.requestFocus(); topMenu(v) } },
-        ), below = true)
-        val hidden = TOP_KEYS.keys - topOrder().toSet()
-        holdMenu(v, listOfNotNull(
-            if (v.id == R.id.allAppsButton) getString(R.string.recent_apps) to { openAllApps(recent = true) } else null,
-            getString(R.string.move) to { startTopMove(v) },
-            if (v.id == R.id.launcherSettings) null else getString(R.string.hide) to { hideTop(v) },
-            if (hidden.isEmpty()) null else getString(R.string.add_icon) to {
-                if (shownTop().size < TopBar.MAX) addIconMenu(v) else toast(getString(R.string.top_bar_full), long = true)
-            },
-        ), below = true)
-    }
-
-    private fun hideTop(v: View) {
-        val order = topOrder()
-        val shown = shownTop(order)
-        val next = shown.getOrNull(shown.indexOf(v.id) + 1) ?: shown.getOrNull(shown.indexOf(v.id) - 1)
-        val left = order - v.id
-        saveTopOrder(left)
-        applyTopBar(left)
-        next?.let { findViewById<View>(it).requestFocus() }
-        Toast.makeText(this, getString(R.string.icon_hidden), Toast.LENGTH_LONG).show()
-    }
-
-    /** The hidden icons, with their pictures. Picking one puts it next to [anchor] and goes straight into Move. */
-    private fun addIconMenu(anchor: View) {
-        val hidden = TOP_KEYS.keys.filter { it !in topOrder() }
-        popupMenu(anchor, below = true) { dismiss ->
-            hidden.map { id ->
-                val icon = findViewById<ImageView>(id)
-                val note = if (id == R.id.sourcesButton && !hasSources()) getString(R.string.shows_with_input) else ""
-                rowIcon(settingsRow(icon.contentDescription.toString(), note) { dismiss(); addTopIcon(id, anchor) },
-                    icon.drawable.constantState?.newDrawable(resources)?.mutate() ?: icon.drawable)
-            }
-        }
-    }
-
     /** A menu row with [icon] before its name. The row is a column (name line, then choices), so the icon goes in the name line. */
     private fun rowIcon(row: View, icon: Drawable?) = row.also {
         ((it as ViewGroup).getChildAt(0) as LinearLayout).addView(ImageView(this).apply {
@@ -4884,57 +4857,289 @@ class MainActivity : Activity() {
         }, 0, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(12) })
     }
 
-    private fun addTopIcon(id: Int, after: View) {
-        topBefore = topOrder()
-        topLive = keys(TopBar.addAfter(keyList(topBefore), TOP_KEYS.getValue(id), TOP_KEYS.getValue(after.id)))
-        applyTopBar(topLive)
-        if (id !in shownTop(topLive)) { // Sources on a TV with no input: nothing on screen to move, so keep it where it goes
-            saveTopOrder(topLive)
-            after.requestFocus()
-            return
+    // ---------- editing the top bar, right on the bar ----------
+    // Hold OK on any icon: the bar goes into edit mode and a panel under it shows the icons that are not on it.
+    // Everything is a key press on the bar itself: OK lifts an icon, Left and Right move it, OK places it, Down
+    // takes it off. OK on an icon in the panel puts it on the bar; on a full bar it takes the place of one icon.
+    // Every change is saved when it is placed, so Back only puts back a lifted icon, then ends editing.
+
+    private var topTray: LinearLayout? = null // the panel under the bar; null when the bar is not being edited
+    private var trayIcons: LinearLayout? = null
+    private var trayCount: TextView? = null
+    private var trayName: TextView? = null
+    private var trayHint: TextView? = null
+    private var movingTop: View? = null // the lifted icon: Left and Right move it, OK places it
+    private var topLive: List<Int> = emptyList() // the order on screen while editing
+    private var topBefore: List<Int> = emptyList() // the order when the icon was lifted, for Back
+    private var swapIn: Int? = null // a full bar: the icon being added
+    private var swapOut: Int? = null // and the one it takes the place of
+
+    private val topEditing get() = topTray != null
+
+    /** Hold OK on a top-bar icon: edit the bar right there. With a PIN set, Plume asks for it first. */
+    private fun topMenu(v: View) {
+        if (topEditing) return
+        if (locked()) return unlock {
+            if (settingsScrim.visibility == View.VISIBLE) closeLauncherSettings()
+            v.requestFocus()
+            topMenu(v)
         }
-        beginTopMove(findViewById(id))
+        startTopEdit(v)
     }
 
-    private fun startTopMove(v: View) {
-        topBefore = topOrder()
-        topLive = topBefore
-        beginTopMove(v)
+    private fun startTopEdit(v: View) {
+        val shown = shownTop()
+        // Icons past the limit leave the saved list, so the panel offers them again. Sources with no input keeps its place.
+        topLive = topOrder().filter { it in shown || it == R.id.sourcesButton && !hasSources() }
+        saveTopOrder(topLive)
+        val wrap = LinearLayout.LayoutParams.WRAP_CONTENT
+        val panel = menuSurface()
+        panel.orientation = LinearLayout.VERTICAL
+        panel.setPadding(dp(20), dp(14), dp(20), dp(14))
+        panel.minimumWidth = dp(360)
+        val small = { text: String -> label(text, 13f).apply { setTextColor(valueInk()); panelShadow() } }
+        trayCount = small("").also { panel.addView(it) }
+        trayName = label("", 17f).apply { setTextColor(focusInk()); panelShadow() }
+            .also { panel.addView(it, LinearLayout.LayoutParams(wrap, wrap).apply { topMargin = dp(2) }) }
+        panel.addView(small(getString(R.string.top_more)), LinearLayout.LayoutParams(wrap, wrap).apply { topMargin = dp(14) })
+        trayIcons = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; minimumHeight = dp(44) }
+            .also { panel.addView(it, LinearLayout.LayoutParams(wrap, wrap).apply { topMargin = dp(6) }) }
+        trayHint = small("").also { panel.addView(it, LinearLayout.LayoutParams(wrap, wrap).apply { topMargin = dp(12) }) }
+        val bar = wifi.parent as View
+        val at = IntArray(2).also { bar.getLocationInWindow(it) }
+        panel.elevation = dp(16).toFloat()
+        findViewById<FrameLayout>(R.id.root).addView(panel, FrameLayout.LayoutParams(wrap, wrap, Gravity.TOP or Gravity.END).apply {
+            topMargin = at[1] + bar.height + dp(12)
+            marginEnd = resources.displayMetrics.widthPixels - (at[0] + bar.width)
+        })
+        topTray = panel
+        fillTray()
+        v.requestFocus()
+        topSays(v.id)
     }
 
-    private fun beginTopMove(v: View) {
+    /** Ends editing: a lifted icon goes back first. Called by Back, and when Home or an app takes over. */
+    private fun endTopEdit() {
+        val panel = topTray ?: return
+        if (swapIn != null) undoSwap()
+        if (movingTop != null) undoTop()
+        val back = barIcon()
+        findViewById<FrameLayout>(R.id.root).removeView(panel)
+        topTray = null
+        trayIcons = null
+        back.requestFocus()
+    }
+
+    /** The bar icon to come back to from the panel: the last one focused on the bar, or Plume settings. */
+    private fun barIcon(): View = lastTop?.takeIf { it.parent === wifi.parent && it.visibility == View.VISIBLE }
+        ?: findViewById(R.id.launcherSettings)
+
+    /** The icons not on the bar. Sources only on a TV with an input: elsewhere it would not show once added. */
+    private fun trayList() = TOP_KEYS.keys.filter { it !in topLive && (it != R.id.sourcesButton || hasSources()) }
+
+    private fun fillTray(focus: Int? = null) {
+        val row = trayIcons ?: return
+        row.removeAllViews()
+        for (id in trayList()) {
+            val src = findViewById<ImageView>(id)
+            row.addView(ImageView(this).apply {
+                tag = id
+                setImageDrawable(src.drawable.constantState?.newDrawable(resources)?.mutate() ?: src.drawable)
+                contentDescription = src.contentDescription
+                setColorFilter(restInk())
+                setPadding(dp(9), dp(9), dp(9), dp(9))
+                isFocusable = true
+                setOnFocusChangeListener { v, focused ->
+                    v.background = if (focused) plate(20) else null
+                    setColorFilter(if (focused) focusInk() else restInk())
+                    if (focused) topSays(id, inTray = true)
+                }
+            }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { if (row.childCount > 0) marginStart = dp(8) })
+        }
+        if (row.childCount == 0) row.addView(label(getString(R.string.top_all_on), 15f).apply { setTextColor(restInk()); panelShadow() })
+        focus?.let { id -> trayView(id)?.requestFocus() }
+    }
+
+    private fun trayView(id: Int): View? = trayIcons?.let { r -> (0 until r.childCount).map(r::getChildAt).firstOrNull { it.tag == id } }
+
+    /** The panel's lines for the icon in focus: how full the bar is, the icon's name, and what each key does now. */
+    private fun topSays(id: Int, inTray: Boolean = false) {
+        trayCount?.text = getString(R.string.top_count, shownTop(topLive).size, TopBar.MAX)
+        val name = findViewById<View>(id).contentDescription
+        val out = swapOut
+        trayName?.text = when {
+            out != null -> getString(R.string.top_replaces, name, findViewById<View>(out).contentDescription)
+            id == R.id.launcherSettings -> getString(R.string.top_always, name)
+            else -> name
+        }
+        trayHint?.text = getString(when {
+            out != null -> R.string.top_hint_swap
+            movingTop != null -> if (id == R.id.launcherSettings) R.string.top_hint_lifted_plume else R.string.top_hint_lifted
+            inTray -> if (shownTop(topLive).size >= TopBar.MAX) R.string.top_hint_tray_full else R.string.top_hint_tray
+            else -> R.string.top_hint_bar
+        })
+    }
+
+    private fun lift(v: View, up: Boolean) {
+        v.translationY = if (up) -dp(6).toFloat() else 0f
+    }
+
+    private fun liftTop(v: View) {
+        topBefore = topLive
         movingTop = v
-        appsTitle.text = getString(R.string.moving_hint)
-        appsTitle.visibility = View.VISIBLE
-        v.alpha = 0.6f
+        lift(v, true)
+        topSays(v.id)
+    }
+
+    private fun slideTop(dir: Int) {
+        val v = movingTop ?: return
+        val order = keys(TopBar.slide(keyList(topLive), keyList(shownTop(topLive)), TOP_KEYS.getValue(v.id), dir))
+        if (order == topLive) return
+        topLive = order
+        applyTopBar(order) // the view leaves the bar and comes back: take focus again
         v.requestFocus()
     }
 
-    /** OK places the icon, Back puts everything as it was; Left and Right slide the icon past the ones on screen. */
-    private fun endTopMove(save: Boolean) {
+    private fun placeTop() {
         val v = movingTop ?: return
         movingTop = null
-        v.alpha = 1f
-        appsTitle.visibility = View.GONE
-        if (save) saveTopOrder(topLive) else applyTopBar(topBefore)
-        (if (v.visibility == View.VISIBLE) v else findViewById<View>(shownTop().first())).requestFocus() // an added icon is gone again after Back
+        lift(v, false)
+        saveTopOrder(topLive)
+        topSays(v.id)
     }
 
-    private fun topMoveKey(e: KeyEvent, confirm: Boolean): Boolean {
-        val v = movingTop ?: return false
+    /** Back on a lifted icon: the bar as it was. An icon that was just added goes back to the panel. */
+    private fun undoTop() {
+        val v = movingTop ?: return
+        movingTop = null
+        lift(v, false)
+        topLive = topBefore
+        applyTopBar(topLive)
+        if (v.id in topLive) { v.requestFocus(); topSays(v.id) } else fillTray(focus = v.id)
+    }
+
+    /** Down on a lifted icon: off the bar, into the panel. Plume settings stays. */
+    private fun removeTop() {
+        val v = movingTop ?: return
+        if (v.id == R.id.launcherSettings) return
+        movingTop = null
+        lift(v, false)
+        topLive = topLive - v.id
+        applyTopBar(topLive)
+        saveTopOrder(topLive)
+        fillTray(focus = v.id)
+    }
+
+    /** OK on an icon in the panel: onto the bar after the icon last focused there, lifted, so Left and Right place it. */
+    private fun addTop(id: Int) {
+        topBefore = topLive
+        val after = barIcon().id
+        if (shownTop(topLive).size >= TopBar.MAX) {
+            swapIn = id
+            val targets = swapTargets()
+            return showSwap(after.takeIf { it in targets } ?: targets.last())
+        }
+        topLive = keys(TopBar.addAfter(keyList(topLive), TOP_KEYS.getValue(id), TOP_KEYS.getValue(after)))
+        applyTopBar(topLive)
+        val v = findViewById<View>(id)
+        v.requestFocus() // before the panel refills: its focused icon leaves it
+        movingTop = v
+        lift(v, true)
+        fillTray()
+        topSays(id)
+    }
+
+    /** On a full bar the added icon can take the place of any icon but Plume settings. */
+    private fun swapTargets() = shownTop(topBefore) - R.id.launcherSettings
+
+    private fun showSwap(out: Int) {
+        val id = swapIn ?: return
+        swapOut = out
+        topLive = keys(TopBar.swap(keyList(topBefore), TOP_KEYS.getValue(out), TOP_KEYS.getValue(id)))
+        applyTopBar(topLive)
+        val v = findViewById<View>(id)
+        v.requestFocus()
+        lift(v, true)
+        topSays(id)
+    }
+
+    private fun stepSwap(dir: Int) {
+        val targets = swapTargets()
+        targets.getOrNull(targets.indexOf(swapOut) + dir)?.let { showSwap(it) }
+    }
+
+    private fun placeSwap() {
+        val id = swapIn ?: return
+        swapIn = null
+        swapOut = null
+        val v = findViewById<View>(id)
+        lift(v, false)
+        saveTopOrder(topLive)
+        fillTray()
+        v.requestFocus()
+        topSays(id)
+    }
+
+    private fun undoSwap() {
+        val id = swapIn ?: return
+        swapIn = null
+        swapOut = null
+        lift(findViewById(id), false)
+        topLive = topBefore
+        applyTopBar(topLive)
+        fillTray(focus = id)
+    }
+
+    /** Left and Right on the bar or in the panel: the next icon, never out of either. */
+    private fun stepFocus(dir: Int, inTray: Boolean) {
+        val f = currentFocus ?: return
+        if (inTray) {
+            val row = trayIcons ?: return
+            row.getChildAt(row.indexOfChild(f) + dir)?.takeIf { it.isFocusable }?.requestFocus()
+            return
+        }
+        val shown = shownTop(topLive)
+        shown.getOrNull(shown.indexOf(f.id) + dir)?.let { findViewById<View>(it).requestFocus(); topSays(it) }
+    }
+
+    /** Every key while the bar is edited. Keys it has no use for (Home, volume, media) go on as usual. */
+    private fun topEditKey(e: KeyEvent, confirm: Boolean): Boolean {
+        val down = e.action == KeyEvent.ACTION_DOWN
+        val f = currentFocus
+        val inTray = f != null && f.parent === trayIcons
         when {
-            e.keyCode == KeyEvent.KEYCODE_BACK -> if (e.action == KeyEvent.ACTION_UP) endTopMove(false)
-            confirm -> if (e.action == KeyEvent.ACTION_UP) endTopMove(true)
-            e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> if (e.action == KeyEvent.ACTION_DOWN) {
-                val order = keys(TopBar.slide(keyList(topLive), keyList(shownTop(topLive)), TOP_KEYS.getValue(v.id),
-                    if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1))
-                if (order != topLive) {
-                    topLive = order
-                    applyTopBar(order) // the view leaves the bar and comes back: take focus again
-                    v.requestFocus()
+            confirm -> {
+                if (down) {
+                    if (e.repeatCount == 0) holdFired = false
+                    return true
+                }
+                if (holdFired) { holdFired = false; return true } // the OK held to start editing, let go
+                when {
+                    swapIn != null -> placeSwap()
+                    movingTop != null -> placeTop()
+                    inTray -> addTop(f!!.tag as Int)
+                    f != null && f.parent === wifi.parent -> liftTop(f)
                 }
             }
-            e.keyCode == KeyEvent.KEYCODE_DPAD_UP || e.keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> {} // the icon stays in the bar
+            e.keyCode == KeyEvent.KEYCODE_BACK -> if (!down) when {
+                swapIn != null -> undoSwap()
+                movingTop != null -> undoTop()
+                else -> endTopEdit()
+            }
+            e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) {
+                val dir = if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
+                when {
+                    swapIn != null -> stepSwap(dir)
+                    movingTop != null -> slideTop(dir)
+                    else -> stepFocus(dir, inTray)
+                }
+            }
+            e.keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> if (down && e.repeatCount == 0) when {
+                swapIn != null -> undoSwap()
+                movingTop != null -> removeTop()
+                !inTray -> trayIcons?.getChildAt(0)?.takeIf { it.isFocusable }?.requestFocus()
+            }
+            e.keyCode == KeyEvent.KEYCODE_DPAD_UP -> if (down && e.repeatCount == 0 && inTray) barIcon().let { it.requestFocus(); topSays(it.id) }
             else -> return false
         }
         return true

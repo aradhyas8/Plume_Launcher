@@ -127,11 +127,6 @@
     <string name="pin_forgot">Esqueceu? Config. do Android → Apps → Plume → Limpar dados remove o bloqueio, junto com seu layout e configurações.</string>
     <string name="tip_move">Dica: segure OK sobre um app para reorganizar a fileira</string>
     <string name="open">Abrir</string>
-    <string name="hide">Ocultar</string>
-    <string name="add_icon">Adicionar ícone</string>
-    <string name="icon_hidden">Oculto. Para trazer de volta, segure OK sobre um ícone e escolha Adicionar ícone.</string>
-    <string name="shows_with_input">Aparece quando a TV tem uma entrada</string>
-    <string name="top_bar_hint">Segure OK sobre um ícone da barra superior para mover, ocultar ou adicionar ícones.</string>
     <string name="power_needs_home">Ative o botão Início</string>
     <string name="power_menu_failed">Esta TV não abre o menu de energia.</string>
     <string name="move">Mover</string>
@@ -330,7 +325,6 @@
     <string name="section_style">Estilo</string>
     <string name="group_home_screen">Tela inicial</string>
     <string name="group_tv">TV</string>
-    <string name="help_style">Segure OK em um ícone da barra superior para mover, ocultar ou adicionar ícones.</string>
     <string name="help_theme">O Automático fica claro do nascer ao pôr do sol e escuro à noite.</string>
     <string name="help_glass">Desligado: blocos sólidos. Fosco: o papel de parede desfocado atrás dos blocos. Transparente: o papel de parede nítido atrás deles.</string>
     <string name="help_app_animations">O app cresce a partir do seu bloco ao abrir.</string>

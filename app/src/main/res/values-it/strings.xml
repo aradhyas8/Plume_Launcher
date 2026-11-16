@@ -111,11 +111,6 @@
     <string name="pin_forgot">Lo hai dimenticato? Impostazioni Android → App → Plume → Cancella dati toglie il blocco, insieme a layout e impostazioni.</string>
     <string name="tip_move">Suggerimento: tieni premuto OK su un\'app per riordinare la riga</string>
     <string name="open">Apri</string>
-    <string name="hide">Nascondi</string>
-    <string name="add_icon">Aggiungi icona</string>
-    <string name="icon_hidden">Nascosta. Per ripristinarla, tieni premuto OK su un\'icona e scegli Aggiungi icona.</string>
-    <string name="shows_with_input">Visibile se la TV ha un ingresso</string>
-    <string name="top_bar_hint">Tieni premuto OK su un\'icona in alto per spostare, nascondere o aggiungere icone.</string>
     <string name="move">Sposta</string>
     <string name="remove_from_row">Rimuovi dalla riga</string>
     <string name="removed_from_row">Rimossa dalla riga. Resta in Tutte le app.</string>

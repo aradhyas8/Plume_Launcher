@@ -47,6 +47,10 @@ class TopBarTest {
         assertEquals(listOf("plume"), TopBar.cap(listOf("plume"), "plume"))
     }
 
+    @Test fun anIconAddedToAFullBarTakesThePlaceOfOne() {
+        assertEquals(listOf("wifi", "power", "plume"), TopBar.swap(listOf("wifi", "apps", "plume"), "apps", "power"))
+    }
+
     @Test fun aDefaultCanLeaveAnIconOut() { // Power is not on the bar until someone adds it
         val all = known + "power"
         assertEquals(known, TopBar.parse(null, all, all - "power", "plume"))

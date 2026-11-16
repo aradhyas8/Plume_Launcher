@@ -743,23 +743,33 @@ internal class IslandView(private val a: MainActivity) {
     }
 
     /**
-     * The top bar's island icon: the stopwatch, the person's own timer lengths (see [quickTimers]) and today's games,
-     * one click from Home.
+     * The top bar's island icon: the stopwatch, the last timer lengths used (hold OK on one to take it off), any other
+     * length, and today's games, one click from Home. Nothing to set up: the list follows what people start.
      */
     fun MainActivity.timerMenu(anchor: View) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
+        val recent = recentTimers()
         holdMenu(anchor, listOf(getString(R.string.isl_stopwatch) to { IslandTimers.startStopwatch(this); islandStarted() }) +
-            quickTimers().map { m -> mins(m) to { IslandTimers.startTimer(this, m * 60_000L); islandStarted() } } +
+            recent.map { m -> mins(m) to { startTimer(m) } } +
             listOf(
                 getString(R.string.isl_custom) to { showPanel(); editTimer() },
                 getString(R.string.isl_games_now) to { showPanel(); pickGamesNow() },
-            ), below = true)
+            ), below = true,
+            holds = listOf(null) + recent.map { m -> { saveRecent(recentTimers() - m); timerMenu(anchor) } })
     }
 
-    /** The timer lengths the top bar's icon lists: [ISLAND_QUICK], with the ones switched in Plume settings flipped. */
-    fun MainActivity.quickTimers(): List<Int> {
-        val flipped = prefs.getStringSet(QUICK_PREF, emptySet())!!
-        return ISLAND_TIMERS.filter { (it in ISLAND_QUICK) != ("$it" in flipped) }
+    private val RECENT_PREF = "isl_recent_t" // the timer icon's lengths, newest first; "" when all were taken off
+
+    fun MainActivity.recentTimers(): List<Int> =
+        prefs.getString(RECENT_PREF, null)?.split(',')?.mapNotNull { it.toIntOrNull() } ?: ISLAND_RECENT
+
+    private fun MainActivity.saveRecent(list: List<Int>) = prefs.edit().putString(RECENT_PREF, list.joinToString(",")).apply()
+
+    /** Starts a timer of [m] minutes from any menu, and puts it first in the timer icon's list. */
+    fun MainActivity.startTimer(m: Int) {
+        saveRecent(islRecent(recentTimers(), m))
+        IslandTimers.startTimer(this, m * 60_000L)
+        islandStarted()
     }
 
     /** Hold OK on the island: hide what it shows, or stop what sent it, right where it is seen. */
@@ -795,8 +805,7 @@ internal class IslandView(private val a: MainActivity) {
             val m = value.trim().toIntOrNull()?.takeIf { it in 1..999 } ?: return
             getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(field.windowToken, 0)
             closeLauncherSettings()
-            IslandTimers.startTimer(this, m * 60_000L)
-            islandStarted()
+            startTimer(m)
         }
         lateinit var field: EditText
         field = textField("", getString(R.string.isl_custom_hint), InputType.TYPE_CLASS_NUMBER, EditorInfo.IME_ACTION_DONE) { start(it, field) }
@@ -843,6 +852,7 @@ internal class IslandView(private val a: MainActivity) {
     fun started() = a.islandStarted()
     fun askAccess() = a.askIslandAccess()
     fun customTimer() = a.editTimer()
+    fun startTimer(m: Int) = a.startTimer(m)
 
     /** A logo from an address into [into], from the island's cache or fetched once; 24 dp, for settings rows. */
     fun logo(url: String, into: ImageView) {
