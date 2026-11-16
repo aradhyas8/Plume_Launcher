@@ -373,11 +373,12 @@ internal object IslandSports : IslandSource {
         // teams out of the pill.
         val kind = if (live && s.source != SPORTS_LEAGUE) IslandKind.SPORTS_LIVE else IslandKind.SPORTS
         val since = sportsSince(s.source, live, if (g.state == "pre") -g.start else s.changed)
-        val away = g.away?.logo ?: g.logo
-        val home = g.home?.logo
+        // Cricket names its match home side first ("ABT v HYD-R"): the pictures follow the order of the words.
+        val (first, second) = sportsSides(g)
+        val away = first?.logo ?: g.logo
+        val home = second?.logo
         // Many teams (most domestic cricket) have no logo at ESPN: a badge with the team's letters and colour stands in.
-        val badge = g.away?.badge
-        val badge2 = g.home?.badge
+        val (badge, badge2) = sportsBadges(first, second)
         return when {
             g.state == "pre" && sportsSoon(g.start, now) -> {
                 val zone = ZoneId.systemDefault()
@@ -477,10 +478,7 @@ internal data class PinnedGame(val sport: String, val league: String, val eventI
 }
 
 internal data class SportsSide(val id: String, val abbreviation: String, val name: String, val score: String, val logo: String?,
-    val color: String? = null) {
-    /** "ABT|3f8108": the letters and colour for a badge when the logo is missing. */
-    val badge get() = abbreviation.takeIf { it.isNotEmpty() }?.let { "$it|${color.orEmpty()}" }
-}
+    val color: String? = null)
 
 /**
  * A game from a scoreboard. [league] is "sport/league"; [state] is ESPN's "pre", "in" or "post"; [start] is wall-clock
@@ -606,9 +604,38 @@ private val oversText = Regex("""\(([\d.]+) ov""")
 /** A cricket score without its overs: "339 & 169/7 (58 ov)" is "339 & 169/7". */
 internal fun cricketRuns(score: String) = score.replace(Regex("""\s*\([^)]*\)\s*$"""), "").trim()
 
-/** "ABT 118/4 · HYD-R 121"; a side that has not batted shows its letters only. */
-internal fun cricketScore(g: SportsGame) = listOfNotNull(g.away, g.home).joinToString(" · ") { s ->
-    cricketRuns(s.score).let { if (it.isEmpty()) s.abbreviation else "${s.abbreviation} $it" }
+/** The two sides in the order the match is named: home first for cricket ("ABT v HYD-R"), else away first. */
+internal fun sportsSides(g: SportsGame): Pair<SportsSide?, SportsSide?> =
+    if (g.cricket && g.home != null && g.name?.startsWith(g.home.abbreviation) == true) g.home to g.away else g.away to g.home
+
+/**
+ * "ABT 118/4 · HYD-R 121", in the order of the match's name; a side that has not batted shows its letters only. Each
+ * side's letters and runs never part across two lines (no-break spaces).
+ */
+internal fun cricketScore(g: SportsGame) = sportsSides(g).toList().filterNotNull().joinToString(" · ") { s ->
+    cricketRuns(s.score).let { if (it.isEmpty()) s.abbreviation else "${s.abbreviation} $it" }.replace(' ', '\u00A0')
+}
+
+/** A badge's letters: "HYD-R" is "HYD", at most four. */
+internal fun badgeLetters(abbreviation: String) =
+    abbreviation.split('-', ' ', '/').firstOrNull { it.length >= 2 }?.take(4) ?: abbreviation.filter { it.isLetterOrDigit() }.take(4)
+
+/** Badge colours for a team ESPN gives no colour: calm and mid-dark, so white letters read on each. */
+private val BADGE_COLOURS = listOf("3d6e9e", "8a4b6f", "4e7d5b", "9a6a2f", "5b5b9e", "2f7f86", "8e4a3f")
+
+/**
+ * The two sides' badges ("ABT|3d6e9e"). A side with no colour from ESPN gets one picked by its letters; the second
+ * side never gets the first one's colour, so the two badges always look different.
+ */
+internal fun sportsBadges(first: SportsSide?, second: SportsSide?): Pair<String?, String?> {
+    fun pick(s: SportsSide, skip: String?): String {
+        s.color?.takeIf { it.length == 6 && it != skip }?.let { return it }
+        val i = Math.floorMod(s.abbreviation.hashCode(), BADGE_COLOURS.size)
+        return BADGE_COLOURS[i].takeIf { it != skip } ?: BADGE_COLOURS[(i + 1) % BADGE_COLOURS.size]
+    }
+    val a = first?.takeIf { it.abbreviation.isNotEmpty() }?.let { pick(it, null) }
+    val b = second?.takeIf { it.abbreviation.isNotEmpty() }?.let { pick(it, a) }
+    return a?.let { "${first.abbreviation}|$it" } to b?.let { "${second.abbreviation}|$it" }
 }
 
 /**

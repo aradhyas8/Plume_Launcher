@@ -514,7 +514,7 @@ internal class IslandView(private val a: MainActivity) {
             Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { b ->
                 val c = Canvas(b)
                 c.drawCircle(size / 2f, size / 2f, size / 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fill })
-                val text = letters.take(4)
+                val text = badgeLetters(letters)
                 val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = if (Color.luminance(fill) > 0.6f) 0xFF1A1A1A.toInt() else Color.WHITE
                     typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
