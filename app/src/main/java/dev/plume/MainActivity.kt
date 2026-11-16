@@ -3007,15 +3007,8 @@ class MainActivity : Activity() {
             if (seen.isEmpty()) "" else if (off == 0) getString(R.string.all_on) else getString(R.string.n_off, off)
         }) { pickAlertApps() }
         rows[R.string.isl_sports] = islRow(R.string.isl_sports, "isl_sports") { IslandSports.start(this) }
-        rows[R.string.isl_games_now] = Triple(getString(R.string.isl_games_now), IslandSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGamesNow() }
-        rows[R.string.isl_leagues] = Triple(getString(R.string.isl_leagues), IslandSports.followedLeagues(this).joinToString(", ") { it.name }.ifEmpty { "›" }) { pickSport(teams = false) }
-        // How many games the island holds at once: one by default, so the island is never a list of scores.
-        rows[R.string.isl_games_max] = Triple(getString(R.string.isl_games_max), IslandSports.max(this).toString()) {
-            prefs.edit().putInt("isl_sports_max", IslandSports.max(this) % 3 + 1).apply()
-            isl.show()
-            renderSettings(R.string.isl_games_max)
-        }
-        rows[R.string.isl_teams] = Triple(getString(R.string.isl_teams), IslandSports.followed(this).joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) { pickSport(teams = true) }
+        // Everything about games on one page: the picks, where to pick them, your teams and how many fit.
+        rows[R.string.isl_games] = Triple(getString(R.string.isl_games), IslandSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGames() }
         rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", after = wxAgain)
         rows[R.string.isl_update_row] = islRow(R.string.isl_update_row, "isl_update")
         rows[R.string.isl_dream_row] = islRow(R.string.isl_dream_row, "isl_dream")
@@ -3048,8 +3041,7 @@ class MainActivity : Activity() {
                 else listOfNotNull(R.string.isl_on, R.string.isl_access, R.string.isl_timers,
                     R.string.isl_music, R.string.isl_idle.takeIf { isl.on("isl_music") },
                     R.string.isl_alerts, R.string.isl_privacy.takeIf { isl.on("isl_alerts") }, R.string.isl_alert_apps.takeIf { isl.on("isl_alerts") },
-                    R.string.isl_sports, R.string.isl_games_now.takeIf { isl.on("isl_sports") }, R.string.isl_leagues.takeIf { isl.on("isl_sports") },
-                    R.string.isl_teams.takeIf { isl.on("isl_sports") }, R.string.isl_games_max.takeIf { isl.on("isl_sports") },
+                    R.string.isl_sports, R.string.isl_games.takeIf { isl.on("isl_sports") },
                     R.string.isl_wx_rain_row,
                     R.string.isl_update_row, R.string.isl_net_row, R.string.isl_bt_row, R.string.isl_dream_row)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
@@ -3189,53 +3181,107 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Games now: what is live or starts within 3 h, in every league, live first. OK pins a game; it leaves the island
-     * by itself after the final. The quickest way to a game: no teams, no leagues.
+     * Games: one page for all of it, like Apple's "Follow live" and "My Sports". First the games on the island now (OK
+     * takes one off), then the two ways to pick a game (Live now, By league), then Your teams (every game they play
+     * shows by itself), then how many games fit. A pick when the island is full takes the place of the oldest one.
      */
+    internal fun pickGames(focus: Int = 0) {
+        if (IslandSports.trimPins(this)) gamesChanged()
+        val pins = IslandSports.pinned(this).sortedBy { it.at }
+        val max = IslandSports.max(this)
+        val teams = IslandSports.followed(this)
+        val rows = pins.map { p ->
+            page(IslandSports.pinName(this, p) ?: getString(R.string.isl_game), getString(R.string.isl_pinned)) {
+                IslandSports.unpinGame(this, p.eventId)
+                gamesChanged()
+                pickGames()
+            }
+        } + listOf(
+            page(getString(R.string.isl_games_now), "›") { pickGamesNow() },
+            page(getString(R.string.isl_leagues), "›") { pickSport(teams = false) },
+            page(getString(R.string.isl_teams), teams.joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) { pickSport(teams = true) },
+            page(getString(R.string.isl_games_max), max.toString()) {
+                prefs.edit().putInt("isl_sports_max", max % 3 + 1).apply()
+                gamesChanged()
+                // Going from 3 back to 1 drops the oldest picks, so the focus stays on this row by its place from the end.
+                pickGames(pins.size + 3 - (pins.size - minOf(pins.size, max % 3 + 1)))
+            },
+        )
+        showPage(getString(R.string.isl_games), rows, focus.coerceIn(0, rows.size - 1), crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_games) }
+    }
+
+    private fun gamesChanged() {
+        IslandSports.start(this)
+        isl.show()
+    }
+
+    /** OK on a game row: takes it off the island, or puts it on (in place of the oldest pick when the island is full). */
+    private fun toggleGame(g: IslandSports.NowGame) {
+        if (IslandSports.pinned(this).any { it.eventId == g.eventId }) IslandSports.unpinGame(this, g.eventId)
+        else IslandSports.pinGame(this, g).firstOrNull()?.let { toast(getString(R.string.isl_game_replaced, IslandSports.pinName(this, it) ?: getString(R.string.isl_game))) }
+        gamesChanged()
+    }
+
+    /** A list of games to pick from: "On the island" beside the picked ones, else the league or the start time. */
+    private fun showGames(title: String, list: List<IslandSports.NowGame>, focus: Int, crumb: String, again: (Int) -> Unit, back: () -> Unit) {
+        val pins = IslandSports.pinned(this).map { it.eventId }.toSet()
+        showPage(title, list.mapIndexed { i, g ->
+            page(g.title, if (g.eventId in pins) getString(R.string.isl_pinned) else g.leagueName) { toggleGame(g); again(i) }
+        }, focus, styles = list.map { RowStyle(logo = it.awayLogo ?: it.homeLogo) }, crumb = crumb, back = back)
+    }
+
+    /** Live now: every game that is live or starts within 3 h, in every league, live first. */
     internal fun pickGamesNow(focus: Int = 0, list: List<IslandSports.NowGame>? = null) {
-        val crumb = getString(R.string.isl_section)
+        val title = getString(R.string.isl_games_now)
+        val crumb = getString(R.string.isl_games)
+        val back = { pickGames(IslandSports.pinned(this).size) }
         if (list == null) {
-            showPage(getString(R.string.isl_games_now), listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = crumb) { renderSettings(R.string.isl_games_now) }
+            showPage(title, listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = crumb, back = back)
             return IslandSports.gamesNow(this) { games ->
                 if (isDestroyed || settingsScrim.visibility != View.VISIBLE) return@gamesNow
-                if (games.isEmpty()) showPage(getString(R.string.isl_games_now), listOf(page(getString(R.string.isl_games_none)) {}), crumb = crumb) { renderSettings(R.string.isl_games_now) }
+                if (games.isEmpty()) showPage(title, listOf(page(getString(R.string.isl_games_none)) {}), crumb = crumb, back = back)
                 else pickGamesNow(0, games)
             }
         }
-        val pins = IslandSports.pinned(this).map { it.eventId }.toSet()
-        showPage(getString(R.string.isl_games_now), list.mapIndexed { i, g ->
-            page(g.title, if (g.eventId in pins) getString(R.string.isl_pinned) else g.leagueName) {
-                if (g.eventId in pins) IslandSports.unpinGame(this, g.eventId) else IslandSports.pinGame(this, g)
-                IslandSports.start(this)
-                isl.show()
-                pickGamesNow(i, list)
-            }
-        }, focus, styles = list.map { RowStyle(logo = it.awayLogo ?: it.homeLogo) }, crumb = crumb) { renderSettings(R.string.isl_games_now) }
+        showGames(title, list, focus, crumb, { pickGamesNow(it, list) }, back)
     }
 
-    /** Sport folders (Football, Basketball, Motorsport…), so no list is long. [teams]: the way to Teams, else to Leagues. */
+    /** One league's games (By league): live, or starting within a day. */
+    private fun pickLeagueGames(l: IslandSports.League, focus: Int = 0, list: List<IslandSports.NowGame>? = null, back: () -> Unit) {
+        val crumb = getString(R.string.isl_leagues)
+        if (list == null) {
+            showPage(l.name, listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = crumb, back = back)
+            return IslandSports.leagueGames(this, l) { games ->
+                if (isDestroyed || settingsScrim.visibility != View.VISIBLE) return@leagueGames
+                when {
+                    games == null -> showPage(l.name, listOf(page(getString(R.string.isl_games_failed)) { pickLeagueGames(l, back = back) }), crumb = crumb, back = back)
+                    games.isEmpty() -> showPage(l.name, listOf(page(getString(R.string.isl_league_none)) {}), crumb = crumb, back = back)
+                    else -> pickLeagueGames(l, 0, games, back)
+                }
+            }
+        }
+        showGames(l.name, list, focus, crumb, { pickLeagueGames(l, it, list, back) }, back)
+    }
+
+    /** Sport folders (Football, Basketball, Motorsport…), so no list is long. [teams]: the way to Your teams, else to By league. */
     private fun pickSport(teams: Boolean, focus: Int = 0) {
         val groups = IslandSports.LEAGUES.filter { !teams || it.teams }.groupBy { it.group }
         val title = getString(if (teams) R.string.isl_teams else R.string.isl_leagues)
-        val mine = if (teams) IslandSports.followed(this).map { "${it.sport}/${it.league}" } else IslandSports.followedLeagues(this).map { it.key }
+        val mine = if (teams) IslandSports.followed(this).map { "${it.sport}/${it.league}" } else IslandSports.pinned(this).map { "${it.sport}/${it.league}" }
+        val pins = IslandSports.pinned(this).size
         showPage(title, groups.entries.mapIndexed { i, (group, leagues) ->
-            val n = leagues.count { it.key in mine }
-            page(getString(group), if (n == 0) "›" else getString(R.string.n_on, n)) { pickSportLeagues(teams, leagues, i) }
-        }, focus, crumb = getString(R.string.isl_section)) { renderSettings(if (teams) R.string.isl_teams else R.string.isl_leagues) }
+            val n = mine.count { m -> leagues.any { it.key == m } }
+            page(getString(group), if (n == 0) "›" else getString(if (teams) R.string.n_on else R.string.isl_n_pinned, n)) { pickSportLeagues(teams, leagues, i) }
+        }, focus, crumb = getString(R.string.isl_games)) { pickGames(pins + if (teams) 2 else 1) }
     }
 
-    /** One sport's leagues: for Leagues, OK follows the league; for Teams, OK opens its teams. */
+    /** One sport's leagues: for Your teams, OK opens its teams; for By league, its games. */
     private fun pickSportLeagues(teams: Boolean, leagues: List<IslandSports.League>, groupAt: Int, focus: Int = 0) {
         val followed = IslandSports.followed(this)
-        val mine = IslandSports.followedLeagues(this).map { it.key }.toSet()
         showPage(getString(leagues.first().group), leagues.mapIndexed { i, l ->
             if (teams) page(l.name, followed.filter { it.sport == l.sport && it.league == l.league }.joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) {
                 pickTeams(l) { pickSportLeagues(true, leagues, groupAt, i) }
-            } else page(l.name, if (l.key in mine) getString(R.string.isl_following) else "") {
-                if (l.key in mine) IslandSports.unfollowLeague(this, l) else IslandSports.followLeague(this, l)
-                IslandSports.start(this)
-                pickSportLeagues(false, leagues, groupAt, i)
-            }
+            } else page(l.name, "›") { pickLeagueGames(l) { pickSportLeagues(false, leagues, groupAt, i) } }
         }, focus, crumb = getString(if (teams) R.string.isl_teams else R.string.isl_leagues)) { pickSport(teams, groupAt) }
     }
 
@@ -7098,8 +7144,8 @@ class MainActivity : Activity() {
             R.string.isl_on to R.drawable.ms_widgets, R.string.isl_access to R.drawable.ms_lock, R.string.isl_timers to R.drawable.ms_timer,
             R.string.isl_music to R.drawable.ic_music_note, R.string.isl_idle to R.drawable.ms_schedule, R.string.isl_alerts to R.drawable.ms_badge,
             R.string.isl_privacy to R.drawable.ms_visibility_off, R.string.isl_alert_apps to R.drawable.ms_checklist, R.string.isl_sports to R.drawable.ms_public,
-            R.string.isl_teams to R.drawable.ms_checklist, R.string.isl_games_now to R.drawable.ms_play_circle, R.string.isl_leagues to R.drawable.ms_view_carousel, R.string.isl_wx_rain_row to R.drawable.ms_water,
-            R.string.isl_games_max to R.drawable.ms_filter_list, R.string.isl_update_row to R.drawable.ms_system_update, R.string.isl_net_row to R.drawable.ic_wifi,
+            R.string.isl_games to R.drawable.ms_play_circle, R.string.isl_wx_rain_row to R.drawable.ms_water,
+            R.string.isl_update_row to R.drawable.ms_system_update, R.string.isl_net_row to R.drawable.ic_wifi,
             R.string.isl_bt_row to R.drawable.ic_isl_bluetooth, R.string.isl_dream_row to R.drawable.ms_bedtime,
         )
         val SECTION_ICONS = mapOf(
@@ -7131,9 +7177,8 @@ class MainActivity : Activity() {
             R.string.isl_section to R.string.help_isl_section, R.string.isl_on to R.string.help_isl_on, R.string.isl_access to R.string.help_isl_access,
             R.string.isl_music to R.string.help_isl_music, R.string.isl_idle to R.string.help_isl_idle, R.string.isl_timers to R.string.help_isl_timers,
             R.string.isl_alerts to R.string.help_isl_alerts, R.string.isl_privacy to R.string.help_isl_privacy, R.string.isl_alert_apps to R.string.help_isl_alert_apps,
-            R.string.isl_sports to R.string.help_isl_sports, R.string.isl_teams to R.string.help_isl_teams,
-            R.string.isl_games_now to R.string.help_isl_games_now, R.string.isl_leagues to R.string.help_isl_leagues,
-            R.string.isl_wx_rain_row to R.string.help_isl_wx_rain, R.string.isl_games_max to R.string.help_isl_games_max,
+            R.string.isl_sports to R.string.help_isl_sports, R.string.isl_games to R.string.help_isl_games,
+            R.string.isl_wx_rain_row to R.string.help_isl_wx_rain,
             R.string.isl_update_row to R.string.help_isl_update, R.string.isl_net_row to R.string.help_isl_net, R.string.isl_bt_row to R.string.help_isl_bt,
             R.string.isl_dream_row to R.string.help_isl_dream,
         )

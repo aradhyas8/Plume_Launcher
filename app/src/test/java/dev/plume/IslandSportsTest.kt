@@ -146,4 +146,21 @@ class IslandSportsTest {
     @Test fun cricketSummaryThatSaysMoreStays() =
         assertEquals("Zimbabwe lead by 291 runs", cricketState(cricket("Zimbabwe lead by 291 runs", "217", "339 & 169/7 (58 ov)")).note)
 
+
+    // ---------- picks ----------
+
+    private fun pin(id: String, at: Long) = PinnedGame("nba", "nba", id, 9_000L, at, "IND at PHI")
+
+    @Test fun pickReplacesTheOnlyGame() = assertEquals(listOf("1"), sportsPinsToDrop(listOf(pin("1", 10)), 1).map { it.eventId })
+    @Test fun pickFitsWhenThereIsRoom() = assertEquals(emptyList<String>(), sportsPinsToDrop(listOf(pin("1", 10)), 2).map { it.eventId })
+    @Test fun pickReplacesTheOldest() = assertEquals(listOf("2"), sportsPinsToDrop(listOf(pin("1", 30), pin("2", 10)), 2).map { it.eventId })
+    // The limit went down to 1 after three picks: the new pick is the only one left.
+    @Test fun smallerLimitDropsMore() = assertEquals(listOf("2", "1", "3"),sportsPinsToDrop(listOf(pin("1", 30), pin("2", 10), pin("3", 50)), 1).map { it.eventId })
+
+    @Test fun pickKeepsItsNameAndTime() {
+        val p = pin("7", 42).copy(name = "A|B at C")
+        assertEquals(p.copy(name = "A/B at C"), PinnedGame.parse(p.entry))
+    }
+
+    @Test fun oldPickStillReads() = assertEquals(PinnedGame("nba", "nba", "7", 9_000L), PinnedGame.parse("nba|nba|7|9000"))
 }
