@@ -144,6 +144,7 @@ internal class IslandView(private val a: MainActivity) {
     var islandOpen = false // the shape the tile has now; the wanted shape can be ahead of it while content fades
     var islandWant: Boolean? = null // the shape the running fade is heading for
     var islandInk = 0 // the ink last picked, for the progress between full refreshes
+    var accent = 0 // the music art's colour (else the ink): its bars, its progress and its picked button
     var islandList: List<IslandItem> = emptyList() // everything on the island, in order, as last shown
     var islandItem: IslandItem? = null // the one the tile shows
     var islandPick: String? = null // the key of the thing picked with the marks, while the island is open
@@ -200,9 +201,9 @@ internal class IslandView(private val a: MainActivity) {
     fun on(key: String, default: Boolean = true) = a.prefs.getBoolean(key, default)
 
     fun MainActivity.setUpIsland() {
-        // Corners that follow the tile's: a circle in the pill, a soft square in the open tile.
+        // The art is a cover: a soft square, a little rounder open.
         islandArt.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, if (v.width < dp(40)) v.width / 2f else dp(10).toFloat())
+            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, dp(if (v.width < dp(40)) 8 else 12).toFloat())
         }
         islandArt.clipToOutline = true
         styleIsland()
@@ -280,7 +281,7 @@ internal class IslandView(private val a: MainActivity) {
             artUri = uri
             artSharp = uri?.let { posters.get(it) }
             if (uri != null && artSharp == null) posterIo.execute {
-                val b = try { decode(uri, dp(68), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } ?: return@execute
+                val b = try { decode(uri, dp(160), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } ?: return@execute
                 posters.put(uri, b)
                 ui.post { if (artUri == uri && !isDestroyed) { artSharp = b; showIsland() } }
             }
@@ -414,7 +415,7 @@ internal class IslandView(private val a: MainActivity) {
         // Look again when something changes by itself: a second passes on a timer, or an item or a peek runs out.
         val next = (islandList.flatMap { listOf(it.until, it.peekUntil) } + listOfNotNull(networkDeadline)).filter { it > now }.minOrNull()
         // Each item says how often its text changes; open, the music's bar and times move every second.
-        val period = (islandList.mapNotNull { it.tick.takeIf { t -> t > 0 } } + listOfNotNull(1000L.takeIf { open && (media != null || item.progress != null) })).minOrNull()
+        val period = (islandList.mapNotNull { it.tick.takeIf { t -> t > 0 } } + listOfNotNull(1000L.takeIf { open && (media != null || item.progress != null) }, 5000L.takeIf { media != null })).minOrNull()
         val wait = minOf(period ?: Long.MAX_VALUE, next?.let { it - now + 50 } ?: Long.MAX_VALUE)
         if (wait != Long.MAX_VALUE) ui.postDelayed(islandTick, wait)
     }
@@ -445,21 +446,19 @@ internal class IslandView(private val a: MainActivity) {
         island.layoutParams.width = if (open) fit.coerceAtLeast(dp(MIN_OPEN)) else ViewGroup.LayoutParams.WRAP_CONTENT
         // Too little room beside the clock and the icons: the open tile comes down below the top bar, not over it.
         val below = open && fit < dp(MIN_OPEN)
-        (island.layoutParams as FrameLayout.LayoutParams).topMargin = if (below) (island.parent as View).height else 0
-        if (open) island.setPadding(dp(18), dp(18), dp(18), dp(14)) else island.setPadding(dp(5), dp(5), dp(14), dp(5))
+        // At rest the 44 dp pill sits on the 36 dp icons' centre line.
+        (island.layoutParams as FrameLayout.LayoutParams).topMargin = if (below) (island.parent as View).height else if (open) 0 else -dp(4)
+        if (open) island.setPadding(dp(14), dp(14), dp(16), dp(14)) else island.setPadding(dp(6), dp(6), dp(16), dp(6))
         islandTop.layoutParams.width = if (open) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
-        val size = dp(if (open) 68 else 26)
-        islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
-        islandArt2.layoutParams = islandArt2.layoutParams.apply { width = dp(if (open) 48 else 26); height = dp(if (open) 48 else 26) }
+        islandArt2.layoutParams = islandArt2.layoutParams.apply { width = dp(if (open) 48 else 32); height = dp(if (open) 48 else 32) }
         findViewById<View>(R.id.islandText).layoutParams = (findViewById<View>(R.id.islandText).layoutParams as LinearLayout.LayoutParams).apply {
-            marginStart = dp(if (open) 16 else 10)
+            marginStart = dp(if (open) 14 else 10)
             width = if (open) 0 else ViewGroup.LayoutParams.WRAP_CONTENT
             weight = if (open) 1f else 0f
         }
         findViewById<TextView>(R.id.islandTitle).apply {
-            textSize = if (open) 18f else 13f
             maxLines = if (open) 2 else 1
-            maxWidth = dp(if (open) 400 else 170)
+            maxWidth = dp(if (open) 400 else 200)
         }
         bindIsland(item, open)
         // The tile hangs over the screen: its extra height is taken back by the margin, so the rows below never move.
@@ -548,19 +547,21 @@ internal class IslandView(private val a: MainActivity) {
         val music = item.kind == IslandKind.MEDIA || item.kind == IslandKind.MEDIA_PAUSED
         findViewById<TextView>(R.id.islandTitle).apply {
             text = item.title
-            textSize = if (!open) 13f else if (sports) 22f else 18f
+            textSize = if (!open) 13f else if (sports) 22f else 16f
             fontFeatureSettings = if (item.tick > 0 || item.kind == IslandKind.SPORTS_LIVE) "tnum" else null // numbers that change keep their width
             inked()
         }
         findViewById<TextView>(R.id.islandArtist).apply {
             text = item.sub.orEmpty()
-            visibility = if (open && !item.sub.isNullOrEmpty()) View.VISIBLE else View.GONE
-            maxLines = 2 // a match's state ("ABT batting · 28.1 ov · Zimbabwe lead by 291 runs") can take two lines
+            // At rest only the music keeps its second line, the artist; the pill stays one line for everything else.
+            visibility = if ((open || music) && !item.sub.isNullOrEmpty()) View.VISIBLE else View.GONE
+            textSize = if (open) 13f else 11f
+            maxLines = if (open) 2 else 1 // a match's state ("ABT batting · 28.1 ov · Zimbabwe lead by 291 runs") can take two lines
             inked()
         }
         island.contentDescription = item.description ?: listOfNotNull(item.title, item.sub).joinToString(", ")
         val (picture, picture2) = islandPictures(item)
-        val size = dp(if (!open) 26 else if (sports) 40 else 68)
+        val size = dp(if (!open) 32 else if (sports) 40 else 80)
         if (islandArt.layoutParams.width != size) {
             islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
         }
@@ -571,7 +572,7 @@ internal class IslandView(private val a: MainActivity) {
                 if (item.mono) islandArt.setColorFilter(ink) else islandArt.clearColorFilter()
                 // An icon sits on a soft disc of the ink, the size of the picture it stands in for.
                 islandArt.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ink and 0xFFFFFF or 0x26000000) }
-                val pad = dp(if (!open) 5 else if (sports) 8 else 16)
+                val pad = dp(if (!open) 6 else if (sports) 8 else 20)
                 islandArt.setPadding(pad, pad, pad, pad)
             }
             else -> islandArt.setImageDrawable(null)
@@ -592,9 +593,10 @@ internal class IslandView(private val a: MainActivity) {
         }
         // The bars move with the music, in the art's colour: pale on a light ink and deep on a dark one.
         val light = Color.luminance(ink) > 0.5f
+        accent = item.image?.takeIf { music }?.let { artTone(it) }?.let { islandAccent(it, light) } ?: ink
         findViewById<EqBars>(R.id.islandEq).apply {
             visibility = if (!open && music) View.VISIBLE else View.GONE
-            color = item.image?.let { artTone(it) }?.let { vivid(it, dark = !light) } ?: ink
+            color = accent
             playing = item.kind == IslandKind.MEDIA
         }
         bindMarks(open, ink)
@@ -602,13 +604,18 @@ internal class IslandView(private val a: MainActivity) {
         val rows = islandRows(item)
         val selRow = if (island.isFocused) rows.getOrNull(islandRowAt) else null
         val bar = if (music) (media?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L) > 0L else item.progress != null
-        islandMore.visibility = if (open && (bar || item.actions.isNotEmpty())) View.VISIBLE else View.GONE
+        // At rest the music keeps a thin progress line under its text; open, the bar with its times and the buttons.
+        islandMore.visibility = if ((open || music) && (bar || item.actions.isNotEmpty())) View.VISIBLE else View.GONE
         findViewById<View>(R.id.islandTimes).visibility = if (bar) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.islandElapsed).visibility = if (music) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.islandLeft).visibility = if (music) View.VISIBLE else View.GONE
-        islandBar.layoutParams = islandBar.layoutParams.apply { height = dp(if (selRow == IslandRow.BAR) 8 else 4) }
+        findViewById<View>(R.id.islandElapsed).visibility = if (music && open) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.islandLeft).visibility = if (music && open) View.VISIBLE else View.GONE
+        islandBar.layoutParams = (islandBar.layoutParams as LinearLayout.LayoutParams).apply {
+            height = dp(if (!open) 2 else if (selRow == IslandRow.BAR) 8 else 4)
+            marginStart = if (open) dp(10) else 0
+            marginEnd = if (open) dp(10) else 0
+        }
         if (music) showProgress() else item.progress?.let { islandBar.color = ink; islandBar.fraction = it }
-        islandActions.visibility = if (item.actions.isEmpty()) View.GONE else View.VISIBLE
+        islandActions.visibility = if (item.actions.isEmpty() || !open) View.GONE else View.VISIBLE
         if (islandActions.childCount != item.actions.size || islandActions.tag != item.key + item.actions.joinToString { "${it.icon}${it.label}" }) {
             islandActions.removeAllViews()
             islandActions.tag = item.key + item.actions.joinToString { "${it.icon}${it.label}" }
@@ -616,7 +623,7 @@ internal class IslandView(private val a: MainActivity) {
                 val big = music && a.icon == R.drawable.ic_pause || music && a.icon == R.drawable.ic_play
                 val v: View = if (a.icon != 0) ImageView(this).apply {
                     setImageResource(a.icon)
-                    val p = dp(if (big) 10 else 9)
+                    val p = dp(if (big) 9 else 8)
                     setPadding(p, p, p, p)
                 } else TextView(this).apply {
                     text = a.label
@@ -626,9 +633,9 @@ internal class IslandView(private val a: MainActivity) {
                     setPadding(dp(16), 0, dp(16), 0)
                 }
                 v.contentDescription = a.description ?: a.label
-                val s = dp(if (big) 56 else 44)
+                val s = dp(if (big) 44 else 36)
                 islandActions.addView(v, LinearLayout.LayoutParams(if (a.icon != 0) s else ViewGroup.LayoutParams.WRAP_CONTENT, s).apply {
-                    if (i > 0) marginStart = dp(if (music) 26 else 18)
+                    if (i > 0) marginStart = dp(if (music) 18 else 14)
                 })
             }
         }
@@ -640,7 +647,7 @@ internal class IslandView(private val a: MainActivity) {
             // The picked button sits on a soft disc (a pill for a word) of the ink, like a lit top bar icon: no ring, no growth.
             v.background = if (on) GradientDrawable().apply {
                 if (v is ImageView) shape = GradientDrawable.OVAL else cornerRadius = dp(22).toFloat()
-                setColor(ink and 0xFFFFFF or 0x2E000000)
+                setColor(if (music) accent and 0xFFFFFF or 0x59000000 else ink and 0xFFFFFF or 0x2E000000)
             } else null
             v.alpha = if (on || selRow != IslandRow.ACTIONS) 1f else 0.75f
         }
@@ -725,7 +732,7 @@ internal class IslandView(private val a: MainActivity) {
         if (s == null || length <= 0L) return
         val at = if (seekTo >= 0) seekTo
             else islandPosition(s.position, s.lastPositionUpdateTime, android.os.SystemClock.elapsedRealtime(), s.playbackSpeed, mediaPlaying(c), length)
-        islandBar.color = islandInk
+        islandBar.color = accent
         islandBar.fraction = at.toFloat() / length
         findViewById<TextView>(R.id.islandElapsed).apply { text = islandTime(at); setTextColor(islandInk) }
         findViewById<TextView>(R.id.islandLeft).apply { text = "-" + islandTime(length - at); setTextColor(islandInk) }
@@ -924,4 +931,16 @@ internal class IslandView(private val a: MainActivity) {
             a.ui.post { islandImages[url] = b; if (into.tag == url) into.setImageBitmap(b) }
         }
     }
+}
+
+/**
+ * The music art's colour, strong enough to read as a colour on the glass: the art's mean hue, at least half
+ * saturated, bright over a dark wallpaper (light ink) and deep over a light one. A grey cover stays grey.
+ */
+internal fun islandAccent(mean: Int, lightInk: Boolean): Int {
+    val hsv = FloatArray(3)
+    Color.colorToHSV(mean, hsv)
+    if (hsv[1] > 0.12f) hsv[1] = maxOf(hsv[1], 0.55f)
+    hsv[2] = if (lightInk) 0.95f else 0.45f
+    return Color.HSVToColor(hsv)
 }

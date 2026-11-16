@@ -198,13 +198,14 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="-4dp"
             android:clipChildren="false"
             android:clipToPadding="false"
             android:orientation="vertical"
-            android:paddingStart="5dp"
-            android:paddingTop="5dp"
-            android:paddingEnd="14dp"
-            android:paddingBottom="5dp"
+            android:paddingStart="6dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="6dp"
             android:visibility="gone">
 
                 <!-- Open, with more than one thing on the island: a mark for each, Left and Right pick which one shows. -->
@@ -232,8 +233,8 @@
 
                     <ImageView
                         android:id="@+id/islandArt"
-                        android:layout_width="26dp"
-                        android:layout_height="26dp"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
                         android:importantForAccessibility="no"
                         android:scaleType="centerCrop" />
 
@@ -260,14 +261,75 @@
                             android:id="@+id/islandArtist"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="6dp"
-                            android:alpha="0.95"
+                            android:layout_marginTop="2dp"
+                            android:alpha="0.8"
                             android:ellipsize="end"
                             android:fontFamily="sans-serif"
                             android:includeFontPadding="false"
                             android:maxLines="1"
                             android:textSize="13sp"
                             android:visibility="gone" />
+                        <!-- Under the text: the progress (a thin line at rest), then the buttons while open. -->
+                        <LinearLayout
+                            android:id="@+id/islandMore"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:orientation="vertical"
+                            android:visibility="gone">
+
+                            <LinearLayout
+                                android:id="@+id/islandTimes"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:id="@+id/islandElapsed"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:alpha="0.7"
+                                    android:fontFamily="sans-serif"
+                                    android:fontFeatureSettings="tnum"
+                                    android:includeFontPadding="false"
+                                    android:minWidth="30dp"
+                                    android:textSize="11sp" />
+
+                                <dev.plume.IslandBar
+                                    android:id="@+id/islandProgress"
+                                    android:layout_width="0dp"
+                                    android:layout_height="4dp"
+                                    android:layout_marginStart="10dp"
+                                    android:layout_marginEnd="10dp"
+                                    android:layout_weight="1" />
+
+                                <TextView
+                                    android:id="@+id/islandLeft"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:alpha="0.7"
+                                    android:fontFamily="sans-serif"
+                                    android:fontFeatureSettings="tnum"
+                                    android:gravity="end"
+                                    android:includeFontPadding="false"
+                                    android:minWidth="30dp"
+                                    android:textSize="11sp" />
+                            </LinearLayout>
+
+                            <!-- The open item's buttons, made for each item. -->
+                            <LinearLayout
+                                android:id="@+id/islandActions"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center_horizontal"
+                                android:layout_marginTop="6dp"
+                                android:clipChildren="false"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal" />
+                        </LinearLayout>
                     </LinearLayout>
 
                     <!-- A second picture at the end: the home team's logo. -->
@@ -308,67 +370,6 @@
                         android:visibility="gone" />
                 </LinearLayout>
 
-                <!-- Only while open. -->
-                <LinearLayout
-                    android:id="@+id/islandMore"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:clipChildren="false"
-                    android:clipToPadding="false"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <LinearLayout
-                        android:id="@+id/islandTimes"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:id="@+id/islandElapsed"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:alpha="0.7"
-                            android:fontFamily="sans-serif"
-                            android:fontFeatureSettings="tnum"
-                            android:includeFontPadding="false"
-                            android:minWidth="30dp"
-                            android:textSize="11sp" />
-
-                        <dev.plume.IslandBar
-                            android:id="@+id/islandProgress"
-                            android:layout_width="0dp"
-                            android:layout_height="4dp"
-                            android:layout_marginStart="10dp"
-                            android:layout_marginEnd="10dp"
-                            android:layout_weight="1" />
-
-                        <TextView
-                            android:id="@+id/islandLeft"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:alpha="0.7"
-                            android:fontFamily="sans-serif"
-                            android:fontFeatureSettings="tnum"
-                            android:gravity="end"
-                            android:includeFontPadding="false"
-                            android:minWidth="30dp"
-                            android:textSize="11sp" />
-                    </LinearLayout>
-
-                    <!-- The open item's buttons, made for each item. -->
-                    <LinearLayout
-                        android:id="@+id/islandActions"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center_horizontal"
-                        android:layout_marginTop="8dp"
-                        android:clipChildren="false"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal" />
-                </LinearLayout>
         </LinearLayout>
         </FrameLayout>
 
