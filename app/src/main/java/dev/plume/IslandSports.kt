@@ -45,6 +45,8 @@ internal object IslandSports : IslandSource {
         val awayLogo: String?, val homeLogo: String?, val live: Boolean, val start: Long, val rank: Int = 2,
         /** Who plays, without the score ("IND at PHI"): kept with a pick, so the settings can name it offline. */
         val name: String = title,
+        /** The two teams' ids, to put the user's teams first. */
+        val teamIds: List<String> = emptyList(),
     )
 
     // The league names are proper names, so they stay plain constants rather than translated resources. ESPN has no
@@ -269,7 +271,7 @@ internal object IslandSports : IslandSource {
         }
         val (first, second) = sportsSides(g) // the logos in the order of the words ("AFG v ZIM": AFG's first)
         return NowGame(l.sport, l.league, l.name, g.id, title, first?.logo ?: g.logo, second?.logo, live, g.start,
-            sportsNowRank(live, g.name != null || l.sport == "cricket", g.shortDetail), label(ctx, g))
+            sportsNowRank(live, g.name != null || l.sport == "cricket", g.shortDetail), label(ctx, g), listOfNotNull(g.away?.id, g.home?.id))
     }
 
     // ---------- polling ----------
@@ -439,6 +441,8 @@ internal object IslandSports : IslandSource {
             else -> null
         }
     }
+
+    fun closeness(g: NowGame, teams: List<FollowedTeam>) = sportsCloseness(g.sport, g.league, g.teamIds, teams)
 
     /** How many games the island holds at once, 1 to 3: 1 by default. */
     fun max(ctx: Context) = prefs(ctx).getInt("isl_sports_max", 1).coerceIn(1, 3)
@@ -690,4 +694,15 @@ internal fun sportIcon(sport: String) = when (sport) {
     "racing" -> R.drawable.ms_sports_motorsports_fill
     "mma" -> R.drawable.ms_sports_mma_fill
     else -> R.drawable.ms_sports_soccer_fill
+}
+
+/**
+ * How close a game is to what the user follows, best first: 0 one of their teams plays, 1 another game of a league
+ * they follow a team in, 2 the same sport, 3 anything else. Live now lists games in this order, then live first.
+ */
+internal fun sportsCloseness(sport: String, league: String, teamIds: List<String>, teams: List<FollowedTeam>): Int = when {
+    teams.any { it.sport == sport && it.league == league && it.teamId in teamIds } -> 0
+    teams.any { it.sport == sport && it.league == league } -> 1
+    teams.any { it.sport == sport } -> 2
+    else -> 3
 }

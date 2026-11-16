@@ -3200,7 +3200,7 @@ class MainActivity : Activity() {
             page(getString(R.string.isl_games_now), "›") { pickGamesNow() },
             page(getString(R.string.isl_leagues), "›") { pickSport(teams = false) },
             page(getString(R.string.isl_teams), teams.joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) { pickSport(teams = true) },
-            page(getString(R.string.isl_games_max), max.toString()) {
+            page(getString(R.string.isl_games_max), resources.getQuantityString(R.plurals.isl_n_games, max, max)) {
                 prefs.edit().putInt("isl_sports_max", max % 3 + 1).apply()
                 gamesChanged()
                 // Going from 3 back to 1 drops the oldest picks, so the focus stays on this row by its place from the end.
@@ -3223,10 +3223,11 @@ class MainActivity : Activity() {
     }
 
     /** A list of games to pick from: "On the island" beside the picked ones, else the league or the start time. */
-    private fun showGames(title: String, list: List<IslandSports.NowGame>, focus: Int, crumb: String, again: (Int) -> Unit, back: () -> Unit) {
+    private fun showGames(title: String, list: List<IslandSports.NowGame>, focus: Int, crumb: String, again: (Int) -> Unit, back: () -> Unit,
+                          note: (IslandSports.NowGame) -> String? = { null }) {
         val pins = IslandSports.pinned(this).map { it.eventId }.toSet()
         showPage(title, list.mapIndexed { i, g ->
-            page(g.title, if (g.eventId in pins) getString(R.string.isl_pinned) else g.leagueName) { toggleGame(g); again(i) }
+            page(g.title, if (g.eventId in pins) getString(R.string.isl_pinned) else note(g) ?: g.leagueName) { toggleGame(g); again(i) }
         }, focus, styles = list.map { RowStyle(logo = it.awayLogo ?: it.homeLogo) }, crumb = crumb, back = back)
     }
 
@@ -3243,7 +3244,11 @@ class MainActivity : Activity() {
                 else pickGamesNow(0, games)
             }
         }
-        showGames(title, list, focus, crumb, { pickGamesNow(it, list) }, back)
+        // Your teams' games first, then their leagues, then their sports, then the rest; live first in each.
+        val teams = IslandSports.followed(this)
+        val near = list.associate { it.eventId to IslandSports.closeness(it, teams) }
+        val sorted = list.sortedWith(compareBy<IslandSports.NowGame>({ near[it.eventId] }, { it.rank }, { it.start }))
+        showGames(title, sorted, focus, crumb, { pickGamesNow(it, sorted) }, back) { g -> if (near[g.eventId] == 0) getString(R.string.isl_your_team) else null }
     }
 
     /** One league's games (By league): live, or starting within a day. */

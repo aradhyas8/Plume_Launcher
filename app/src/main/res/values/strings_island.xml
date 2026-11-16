@@ -100,7 +100,12 @@
     <string name="isl_sports_today">Today %1$s</string>
     <string name="isl_sports_tomorrow">Tomorrow %1$s</string>
     <string name="isl_sports_final">Final</string>
-    <string name="isl_games_max">Games at once</string>
+    <string name="isl_games_max">Show on the island</string>
+    <plurals name="isl_n_games">
+        <item quantity="one">%d game</item>
+        <item quantity="other">Up to %d games</item>
+    </plurals>
+    <string name="isl_your_team">Your team</string>
     <string name="isl_games">Games</string>
     <string name="help_isl_games">Pick a game to follow it live, or add your teams to see every game they play.</string>
     <string name="isl_game">Game</string>
