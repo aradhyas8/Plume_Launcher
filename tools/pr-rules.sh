@@ -8,7 +8,9 @@ added() { git diff "$base"...HEAD -- "$@" | grep '^+[^+]'; }
 fail=0
 
 deps=$(added '*.gradle.kts' | grep -E '^\+\s*(implementation|api|compileOnly|runtimeOnly|ksp|kapt|annotationProcessor)\(|^\+\s*id\(')
-perms=$(added '*AndroidManifest.xml' | grep -E 'uses-permission|<permission')
+# Permissions agreed for a feature: the Island's Bluetooth alerts (PR 269) need BLUETOOTH and BLUETOOTH_CONNECT.
+allowed='android\.permission\.(BLUETOOTH|BLUETOOTH_CONNECT)"'
+perms=$(added '*AndroidManifest.xml' | grep -E 'uses-permission|<permission' | grep -vE "$allowed")
 changed=$(git diff --name-only "$base"...HEAD -- app/src/main)
 notes=$(git diff "$base"...HEAD -- CHANGELOG.md | grep -c '^+- ')
 

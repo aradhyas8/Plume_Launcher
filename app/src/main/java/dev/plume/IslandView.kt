@@ -43,10 +43,8 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ClipDrawable
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.TransitionDrawable
 import android.media.MediaMetadata
 import android.media.session.MediaController
@@ -145,7 +143,6 @@ internal class IslandView(private val a: MainActivity) {
 
     var islandOpen = false // the shape the tile has now; the wanted shape can be ahead of it while content fades
     var islandWant: Boolean? = null // the shape the running fade is heading for
-    private var islandRim: GradientDrawable? = null
     var islandInk = 0 // the ink last picked, for the progress between full refreshes
     var islandList: List<IslandItem> = emptyList() // everything on the island, in order, as last shown
     var islandItem: IslandItem? = null // the one the tile shows
@@ -214,9 +211,6 @@ internal class IslandView(private val a: MainActivity) {
 
     /** A glass tile like the app row's, open or not: the same Glass style, theme, tint and focus light. */
     fun MainActivity.styleIsland() {
-        val rim = GradientDrawable().apply { cornerRadius = dp(ISLAND_ROUND).toFloat() }
-        islandRim = rim
-        island.foreground = null
         style(island, dp(ISLAND_ROUND), card = true, lift = 1f, rise = false) { focused ->
             if (focused) {
                 lastTop = island
@@ -226,7 +220,6 @@ internal class IslandView(private val a: MainActivity) {
             }
             showIsland()
         }
-        island.foreground = LayerDrawable(arrayOf(island.foreground ?: ColorDrawable(Color.TRANSPARENT), rim))
         showIsland()
     }
 
@@ -550,7 +543,6 @@ internal class IslandView(private val a: MainActivity) {
         val glassy = glassActive()
         val ink = if (!glassy) fg else if (island.isShown && island.width > 0) inkBehind(listOf(island)) else iconInk
         islandInk = ink
-        islandRim?.setStroke(dp(2), if (island.isFocused) ink and 0xFFFFFF or 0xC0000000.toInt() else Color.TRANSPARENT)
         val sports = item.kind == IslandKind.SPORTS || item.kind == IslandKind.SPORTS_LIVE
         fun TextView.inked() = if (glassy) ink(this, ink) else { setShadowLayer(0f, 0f, 0f, 0); setTextColor(fg) }
         val music = item.kind == IslandKind.MEDIA || item.kind == IslandKind.MEDIA_PAUSED
@@ -649,7 +641,6 @@ internal class IslandView(private val a: MainActivity) {
             v.background = if (on) GradientDrawable().apply {
                 if (v is ImageView) shape = GradientDrawable.OVAL else cornerRadius = dp(22).toFloat()
                 setColor(ink and 0xFFFFFF or 0x2E000000)
-                setStroke(dp(1), ink)
             } else null
             v.alpha = if (on || selRow != IslandRow.ACTIONS) 1f else 0.75f
         }
@@ -697,8 +688,8 @@ internal class IslandView(private val a: MainActivity) {
                     alpha = if (active) 1f else 0.72f
                     if (active) background = GradientDrawable().apply {
                         cornerRadius = dp(15).toFloat()
-                        setColor(ink and 0xFFFFFF or 0x22000000)
-                        if (sel && i == islandCol) setStroke(dp(1), ink)
+                        // No ring (see PR 191): the picked mark only gets a stronger disc.
+                        setColor(ink and 0xFFFFFF or if (sel && i == islandCol) 0x40000000 else 0x22000000)
                     }
                 }
                 islandChips.addView(chip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)).apply {
