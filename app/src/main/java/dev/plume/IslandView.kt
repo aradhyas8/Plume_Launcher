@@ -742,20 +742,24 @@ internal class IslandView(private val a: MainActivity) {
         ui.postDelayed({ showIsland() }, 150) // the source has changed its state by now
     }
 
-    /** The top bar's island icon: timers, the stopwatch, the sleep timer and today's games, a few clicks from Home. */
+    /**
+     * The top bar's island icon: the stopwatch, the person's own timer lengths (see [quickTimers]) and today's games,
+     * one click from Home.
+     */
     fun MainActivity.timerMenu(anchor: View) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
-        holdMenu(anchor, listOf(
-            getString(R.string.isl_timer) to {
-                holdMenu(anchor, ISLAND_TIMERS.map { m -> mins(m) to { IslandTimers.startTimer(this, m * 60_000L); islandStarted() } } +
-                    (getString(R.string.isl_custom) to { showPanel(); editTimer() }), below = true)
-            },
-            getString(R.string.isl_stopwatch) to { IslandTimers.startStopwatch(this); islandStarted() },
-            getString(R.string.isl_sleep_timer) to {
-                holdMenu(anchor, ISLAND_SLEEP.map { m -> mins(m) to { IslandTimers.startSleep(this, m * 60_000L); islandStarted() } }, below = true)
-            },
-            getString(R.string.isl_games_now) to { showPanel(); pickGamesNow() },
-        ), below = true)
+        holdMenu(anchor, listOf(getString(R.string.isl_stopwatch) to { IslandTimers.startStopwatch(this); islandStarted() }) +
+            quickTimers().map { m -> mins(m) to { IslandTimers.startTimer(this, m * 60_000L); islandStarted() } } +
+            listOf(
+                getString(R.string.isl_custom) to { showPanel(); editTimer() },
+                getString(R.string.isl_games_now) to { showPanel(); pickGamesNow() },
+            ), below = true)
+    }
+
+    /** The timer lengths the top bar's icon lists: [ISLAND_QUICK], with the ones switched in Plume settings flipped. */
+    fun MainActivity.quickTimers(): List<Int> {
+        val flipped = prefs.getStringSet(QUICK_PREF, emptySet())!!
+        return ISLAND_TIMERS.filter { (it in ISLAND_QUICK) != ("$it" in flipped) }
     }
 
     /** Hold OK on the island: hide what it shows, or stop what sent it, right where it is seen. */

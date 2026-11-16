@@ -34,10 +34,4 @@ class IslandTimersTest {
         assertEquals(15_000L, islElapsed(base, 0L, true, 66_000L))
     }
 
-    @Test fun sleepWordsRoundUp() {
-        assertEquals(28L, islSleepCount(27 * 60_000L + 1L))
-        assertEquals(1L, islSleepCount(60_000L))
-        assertEquals(45L, islSleepCount(44_001L))
-        assertEquals(0L, islSleepCount(0L))
-    }
 }

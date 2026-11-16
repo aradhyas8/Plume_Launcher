@@ -5,6 +5,16 @@ package dev.plume
  * the home screen turns the keys into its views.
  */
 internal object TopBar {
+    /** The most icons the bar shows: more crowd the clock and the island. */
+    const val MAX = 5
+
+    /** The first [MAX] of the icons on screen. [required] stays on even when it is further along: it takes the last place. */
+    fun cap(shown: List<String>, required: String): List<String> {
+        if (shown.size <= MAX) return shown
+        val first = shown.take(MAX)
+        return if (required in first || required !in shown) first else first.dropLast(1) + required
+    }
+
     /** The saved list ("wifi,apps,plume") without unknown or repeated keys, or [default]. [required] is always on the bar. */
     fun parse(saved: String?, known: List<String>, default: List<String>, required: String): List<String> {
         val order = saved?.split(',')?.filter { it in known }?.distinct() ?: default

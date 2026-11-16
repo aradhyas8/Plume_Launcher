@@ -18,7 +18,7 @@ import java.net.URL
 /** What an item is. A lower [rank] wins the pill; items of the same rank go newest first. */
 internal enum class IslandKind(val rank: Int) {
     CALL(0), TIMER_DONE(1), ALERT(2), NETWORK(3), MEDIA(4), SPORTS_LIVE(5),
-    TIMER(6), STOPWATCH(6), SLEEP(6), UPDATE(7), SPORTS(8), WEATHER(9), BLUETOOTH(10), MEDIA_PAUSED(11),
+    TIMER(6), STOPWATCH(6), UPDATE(7), SPORTS(8), WEATHER(9), BLUETOOTH(10), MEDIA_PAUSED(11),
 }
 
 /** A button in the open island: a drawable [icon], or a short [label] when there is no fitting icon. */
@@ -74,8 +74,9 @@ internal fun islandClock(ms: Long, countdown: Boolean = true): String {
 /** The island's sizes and choices, shared by its view and its settings. */
 internal const val ISLAND_ROUND = 24 // dp; the pill is 36 high, so it stays a full pill, and the open card is softly round
 internal const val ISLAND_IDLE_MS = 5 * 60_000L // paused this long, the pill steps aside
-internal val ISLAND_TIMERS = listOf(1, 3, 5, 10, 15, 20, 30, 45, 60) // minutes the timer menu offers
-internal val ISLAND_SLEEP = listOf(15, 30, 45, 60, 90, 120) // and the sleep timer
+internal val ISLAND_TIMERS = listOf(1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120) // minutes Plume settings offers
+internal val ISLAND_QUICK = listOf(1, 2, 5, 10, 15, 30) // the ones the top bar's timer icon lists until people pick their own
+internal const val QUICK_PREF = "isl_quick" // the lengths switched away from ISLAND_QUICK
 internal val ISLAND_IDLES = listOf(60_000L, ISLAND_IDLE_MS, 0L) // "Hide music when paused"; 0 is Never
 
 /** An app's name, or null when it is gone or hidden from Plume. */

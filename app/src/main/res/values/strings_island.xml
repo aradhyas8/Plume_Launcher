@@ -4,7 +4,7 @@
     <string name="isl_section">Island</string>
     <string name="help_isl_section">What is going on now, at the top of the home screen: music, timers, alerts, scores and more.</string>
     <string name="isl_on">Island</string>
-    <string name="help_isl_on">Off: the island never shows. Timers and the sleep timer still run.</string>
+    <string name="help_isl_on">Off: the island never shows. Timers still run.</string>
     <string name="isl_access">Notification access</string>
     <string name="isl_access_on">Allowed</string>
     <string name="isl_access_off">Give access</string>
@@ -17,11 +17,10 @@
     <string name="isl_idle_1">After 1 min</string>
     <string name="isl_idle_5">After 5 min</string>
     <string name="isl_timers">Timers</string>
-    <string name="help_isl_timers">Start a timer, the stopwatch or a sleep timer. Add the timer icon to the top bar to start them from there.</string>
+    <string name="help_isl_timers">Start a timer or the stopwatch. Add the timer icon to the top bar to start them from there.</string>
     <string name="isl_timer">Timer</string>
     <string name="isl_stopwatch">Stopwatch</string>
-    <string name="isl_sleep_timer">Sleep timer</string>
-    <string name="isl_sleep_help">Pauses the music and videos that play when it ends.</string>
+    <string name="isl_quick">Timer icon lengths</string>
     <plurals name="isl_minutes">
         <item quantity="one">%d min</item>
         <item quantity="other">%d min</item>
@@ -128,7 +127,7 @@
     <string name="isl_sports_unfollowed">Unfollowed %1$s</string>
 
     <!-- Timers -->
-    <!-- The island's timer, stopwatch and sleep timer: see IslandTimers. -->
+    <!-- The island's timer and stopwatch: see IslandTimers. -->
     <string name="isl_timer_sub">Timer · %s</string>
     <string name="isl_timer_sub_paused">Paused · %s timer</string>
     <string name="isl_timer_minutes">%d min</string>
@@ -137,23 +136,16 @@
     <string name="isl_timer_toast">Timer done</string>
     <string name="isl_timer_stopwatch">Stopwatch</string>
     <string name="isl_timer_paused">Paused</string>
-    <string name="isl_timer_sleep_min">Music stops in %d min</string>
-    <string name="isl_timer_sleep_s">Music stops in %d s</string>
-    <string name="isl_timer_sleep_sub">Sleep timer</string>
-    <string name="isl_timer_sleep_toast">Sleep timer: music paused</string>
     <string name="isl_timer_plus1">+1</string>
-    <string name="isl_timer_plus15">+15</string>
 
     <!-- Spoken by screen readers for the island's buttons. -->
     <string name="isl_timer_add_minute">Add 1 minute</string>
-    <string name="isl_timer_add_15">Add 15 minutes</string>
     <string name="isl_timer_again">Start a 1 minute timer</string>
     <string name="isl_timer_pause">Pause</string>
     <string name="isl_timer_resume">Resume</string>
     <string name="isl_timer_stop">Stop</string>
     <string name="isl_timer_dismiss">Dismiss</string>
     <string name="isl_timer_reset">Reset</string>
-    <string name="isl_timer_cancel_sleep">Cancel sleep timer</string>
 
     <!-- Weather -->
     <string name="isl_wx_rain_in">Rain in %d min</string>

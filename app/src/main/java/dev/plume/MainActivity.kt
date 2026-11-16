@@ -488,6 +488,8 @@ class MainActivity : Activity() {
             R.id.launcherSettings to { unlock { openLauncherSettings() } },
             R.id.powerButton to { powerDialog() },
             R.id.timerButton to { isl.menu(findViewById(R.id.timerButton)) },
+            R.id.recentsButton to { openAllApps(recent = true) },
+            R.id.screensaverButton to { startScreensaver() },
         )) findViewById<ImageView>(id).apply {
             setColorFilter(fg)
             val ring = GradientDrawable().apply { shape = GradientDrawable.OVAL }
@@ -3162,7 +3164,7 @@ class MainActivity : Activity() {
         renderSettings(R.string.isl_bt_row)
     }
 
-    /** Timer, stopwatch, sleep timer. Starting one closes the panel, so it shows on the island at once. */
+    /** Timer, stopwatch, and the timer icon's lengths. Starting one closes the panel, so it shows on the island at once. */
     internal fun pickIslandTimer(focus: Int = 0) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
         fun start(go: () -> Unit) { closeLauncherSettings(); go(); isl.started() }
@@ -3173,9 +3175,9 @@ class MainActivity : Activity() {
                     crumb = getString(R.string.isl_timers)) { pickIslandTimer(0) }
             },
             page(getString(R.string.isl_stopwatch)) { start { IslandTimers.startStopwatch(this) } },
-            page(getString(R.string.isl_sleep_timer), "›") {
-                showPage(getString(R.string.isl_sleep_timer), ISLAND_SLEEP.map { m -> page(mins(m)) { start { IslandTimers.startSleep(this, m * 60_000L) } } },
-                    crumb = getString(R.string.isl_timers)) { pickIslandTimer(2) }
+            page(getString(R.string.isl_quick), "›") {
+                toggles(getString(R.string.isl_quick), ISLAND_TIMERS.map { mins(it) to "$it" }, QUICK_PREF, getString(R.string.on),
+                    getString(R.string.off), startsOff = (ISLAND_TIMERS - ISLAND_QUICK.toSet()).map { "$it" }.toSet()) { pickIslandTimer(2) }
             },
         ), focus, crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_timers) }
     }
@@ -4774,7 +4776,8 @@ class MainActivity : Activity() {
 
     /** The bar's icons in their default order, with the key each is saved under. */
     private val TOP_KEYS = linkedMapOf(R.id.wifi to "wifi", R.id.sourcesButton to "sources", R.id.allAppsButton to "apps",
-        R.id.systemSettings to "system", R.id.launcherSettings to "plume", R.id.timerButton to "timer", R.id.powerButton to "power")
+        R.id.systemSettings to "system", R.id.launcherSettings to "plume", R.id.timerButton to "timer", R.id.powerButton to "power",
+        R.id.recentsButton to "recents", R.id.screensaverButton to "screensaver")
 
     private var movingTop: View? = null // the icon being moved, while Left and Right slide it
     private var topLive: List<Int> = emptyList() // the order while moving; saved when OK places the icon
@@ -4783,14 +4786,15 @@ class MainActivity : Activity() {
     /** The icons the bar shows, in order: the saved list, or all of them. Plume settings is always on it. */
     private fun topOrder(): List<Int> {
         val all = TOP_KEYS.values.toList()
-        // Power is not on the bar until someone adds it.
-        return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - "power", "plume"))
+        // Power, Recent apps and Screensaver are not on the bar until someone adds them.
+        return keys(TopBar.parse(prefs.getString("top_bar", null), all, all - setOf("power", "recents", "screensaver"), "plume"))
     }
 
     private fun hasSources() = sources.isNotEmpty() || cvteSourcePanel != null
 
-    /** What is really on screen: Sources stays out while there is nothing to open. */
-    internal fun shownTop(order: List<Int> = topOrder()) = order.filter { it != R.id.sourcesButton || hasSources() }
+    /** What is really on screen: Sources stays out while there is nothing to open, and no more than [TopBar.MAX] icons. */
+    internal fun shownTop(order: List<Int> = topOrder()) =
+        keys(TopBar.cap(keyList(order.filter { it != R.id.sourcesButton || hasSources() }), "plume"))
 
     /** Puts the icons in [order], hides the others, and gives the first one on screen no left margin. */
     private fun applyTopBar(order: List<Int> = topOrder()) {
@@ -4842,7 +4846,9 @@ class MainActivity : Activity() {
             if (v.id == R.id.allAppsButton) getString(R.string.recent_apps) to { openAllApps(recent = true) } else null,
             getString(R.string.move) to { startTopMove(v) },
             if (v.id == R.id.launcherSettings) null else getString(R.string.hide) to { hideTop(v) },
-            if (hidden.isEmpty()) null else getString(R.string.add_icon) to { addIconMenu(v) },
+            if (hidden.isEmpty()) null else getString(R.string.add_icon) to {
+                if (shownTop().size < TopBar.MAX) addIconMenu(v) else toast(getString(R.string.top_bar_full), long = true)
+            },
         ), below = true)
     }
 
@@ -4864,14 +4870,18 @@ class MainActivity : Activity() {
             hidden.map { id ->
                 val icon = findViewById<ImageView>(id)
                 val note = if (id == R.id.sourcesButton && !hasSources()) getString(R.string.shows_with_input) else ""
-                settingsRow(icon.contentDescription.toString(), note) { dismiss(); addTopIcon(id, anchor) }.also { row ->
-                    (row as LinearLayout).addView(ImageView(this).apply {
-                        setImageDrawable(icon.drawable.constantState?.newDrawable(resources)?.mutate() ?: icon.drawable)
-                        setColorFilter(if (dark) DARK_TEXT_2 else fg)
-                    }, 0, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(12) })
-                }
+                rowIcon(settingsRow(icon.contentDescription.toString(), note) { dismiss(); addTopIcon(id, anchor) },
+                    icon.drawable.constantState?.newDrawable(resources)?.mutate() ?: icon.drawable)
             }
         }
+    }
+
+    /** A menu row with [icon] before its name. The row is a column (name line, then choices), so the icon goes in the name line. */
+    private fun rowIcon(row: View, icon: Drawable?) = row.also {
+        ((it as ViewGroup).getChildAt(0) as LinearLayout).addView(ImageView(this).apply {
+            setImageDrawable(icon)
+            setColorFilter(if (dark) DARK_TEXT_2 else fg)
+        }, 0, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(12) })
     }
 
     private fun addTopIcon(id: Int, after: View) {
@@ -4953,11 +4963,7 @@ class MainActivity : Activity() {
                     if (src.offline) getString(R.string.no_signal) else null,
                     if (src.pkg in pinned) getString(R.string.in_row) else null,
                 ).joinToString(" · ")
-                settingsRow(src.label, state) { dismiss(); launch(src) }.also { row ->
-                    (row as LinearLayout).addView(ImageView(this).apply {
-                        setImageDrawable(src.icon)
-                        setColorFilter(if (dark) DARK_TEXT_2 else fg)
-                    }, 0, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(12) })
+                rowIcon(settingsRow(src.label, state) { dismiss(); launch(src) }, src.icon).also { row ->
                     row.setOnLongClickListener { dismiss(); unlock { togglePin(src) }; true } // hold OK: in or out of the home row
                 }
             }
@@ -5724,14 +5730,14 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    /** Plume previews its own content; other screensavers use the system entry point. */
     private fun testScreensaver() {
-        if (galleryOn()) {
-            returnTo(R.string.test_screensaver)
-            startActivity(Intent(this, GalleryPreview::class.java))
-            return
-        }
-        returnTo(R.string.test_screensaver, dream = true)
+        returnTo(R.string.test_screensaver, dream = !galleryOn())
+        startScreensaver()
+    }
+
+    /** Plume previews its own content; other screensavers use the system entry point. */
+    private fun startScreensaver() {
+        if (galleryOn()) return startActivity(Intent(this, GalleryPreview::class.java))
         try {
             startActivity(Intent(Intent.ACTION_MAIN).setClassName("com.android.systemui", "com.android.systemui.Somnambulator"))
         } catch (e: Exception) {
