@@ -12,11 +12,11 @@ import java.util.Date
 import java.util.concurrent.Executors
 
 /**
- * Weather for the island: rain or snow starting or stopping within the hour, tomorrow's forecast in the evening, and
- * a big temperature change. One Open-Meteo request every 30 minutes while the home screen is shown, with the same
- * coordinates the top bar's weather already uses; nothing else leaves the TV. Each rule has its own switch in prefs
- * ("isl_wx_rain", "isl_wx_tomorrow", "isl_wx_temp", all on by default). The rules themselves are the plain functions
- * at the end of this file, so they can be tested without Android.
+ * Weather for the island: only rain or snow starting or stopping within the hour. The top bar already shows the
+ * weather, so the island never repeats it; it speaks only when something is about to change. One Open-Meteo request
+ * every 30 minutes while the home screen is shown, with the same coordinates the top bar's weather already uses;
+ * nothing else leaves the TV. Switch: "isl_wx_rain", on by default. The rules themselves are the plain functions at
+ * the end of this file, so they can be tested without Android.
  */
 internal object IslandWeather : IslandSource {
     private const val STALE = 25 * 60_000L
@@ -72,7 +72,7 @@ internal object IslandWeather : IslandSource {
         val ctx = app ?: return
         val p = prefs(ctx)
         if (!p.contains("geo_lat")) return
-        if (!p.getBoolean("isl_wx_rain", true) && !p.getBoolean("isl_wx_tomorrow", true) && !p.getBoolean("isl_wx_temp", true)) return
+        if (!p.getBoolean("isl_wx_rain", true)) return
         val f = forecast
         val wantF = fahrenheit(p)
         val now = System.currentTimeMillis()
@@ -130,38 +130,6 @@ internal object IslandWeather : IslandSource {
             refresh()
             return out
         }
-        val today = wxDay(f.days, now)
-        if (today < 0) return out
-        val t = today + 1
-        val cal = Calendar.getInstance().apply { timeInMillis = now }
-        val hour = cal.get(Calendar.HOUR_OF_DAY)
-        if (p.getBoolean("isl_wx_tomorrow", true) && hour >= 18 && !f.min[t].isNaN() && !f.max[t].isNaN()) {
-            val sky = wxSky(f.code[t])
-            val pop = f.pop[t]
-            val sub = when {
-                pop >= 50 -> ctx.getString(if (sky == WxSky.SNOW) R.string.isl_wx_snow_likely else R.string.isl_wx_rain_likely, pop)
-                else -> ctx.getString(word(sky))
-            }
-            out += IslandItem(
-                "wx:tomorrow", IslandKind.WEATHER,
-                ctx.getString(R.string.isl_wx_tomorrow, Math.round(f.min[t]).toInt(), Math.round(f.max[t]).toInt()),
-                sub, icon = weatherIcon(f.code[t], day = true), mono = true, since = f.time, until = f.days[t],
-                mark = ctx.getString(R.string.isl_wx_mark_range, Math.round(f.min[t]).toInt(), Math.round(f.max[t]).toInt()),
-            )
-        }
-        val change = wxChange(f.max[today], f.max[t], f.fahrenheit)
-        if (p.getBoolean("isl_wx_temp", true) && hour in 7..21 && change != 0) {
-            val end = (cal.clone() as Calendar).apply {
-                set(Calendar.HOUR_OF_DAY, 22); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            out += IslandItem(
-                "wx:temp", IslandKind.WEATHER,
-                ctx.getString(if (change < 0) R.string.isl_wx_colder else R.string.isl_wx_warmer),
-                ctx.getString(R.string.isl_wx_max_today, Math.round(f.max[t]).toInt(), Math.round(f.max[today]).toInt()),
-                icon = weatherIcon(f.code[t], day = true), mono = true, since = f.time, until = end,
-                mark = ctx.getString(R.string.isl_wx_mark_max, Math.round(f.max[t]).toInt()),
-            )
-        }
         return out
     }
 
@@ -199,17 +167,6 @@ internal object IslandWeather : IslandSource {
     }
 
 
-    private fun word(sky: WxSky) = when (sky) {
-        WxSky.CLEAR -> R.string.wx_clear
-        WxSky.PARTLY -> R.string.wx_partly_cloudy
-        WxSky.CLOUDY -> R.string.wx_cloudy
-        WxSky.FOG -> R.string.wx_fog
-        WxSky.DRIZZLE -> R.string.wx_drizzle
-        WxSky.RAIN -> R.string.wx_rain
-        WxSky.SNOW -> R.string.wx_snow
-        WxSky.SHOWERS -> R.string.isl_wx_showers
-        WxSky.THUNDER -> R.string.wx_thunderstorm
-    }
 }
 
 // ---------- the rules, plain Kotlin ----------
@@ -255,38 +212,6 @@ internal fun wxLevel(mm: Double) = when {
 
 /** Whole minutes until [at], rounded up, so it never says "in 0 min" before it happens. */
 internal fun wxMinutes(at: Long, now: Long) = ((at - now + 59_999) / 60_000).toInt()
-
-/** The index of today in daily [days] (each the start of a day), or -1 when there is no today or no tomorrow after it. */
-internal fun wxDay(days: List<Long>, now: Long): Int {
-    val i = days.indexOfLast { it <= now }
-    return if (i >= 0 && i + 1 < days.size) i else -1
-}
-
-/** -1 when tomorrow's max is much colder than today's, 1 when much warmer, else 0. 8 °C is 14 °F. */
-internal fun wxChange(todayMax: Double, tomorrowMax: Double, fahrenheit: Boolean): Int {
-    val big = if (fahrenheit) 14.0 else 8.0
-    val d = tomorrowMax - todayMax
-    return when {
-        d <= -big -> -1
-        d >= big -> 1
-        else -> 0
-    }
-}
-
-internal enum class WxSky { CLEAR, PARTLY, CLOUDY, FOG, DRIZZLE, RAIN, SNOW, SHOWERS, THUNDER }
-
-/** WMO weather codes, as Open-Meteo reports them. Unknown codes count as cloudy, like the top bar's icon. */
-internal fun wxSky(code: Int) = when (code) {
-    0 -> WxSky.CLEAR
-    1, 2 -> WxSky.PARTLY
-    45, 48 -> WxSky.FOG
-    in 51..57 -> WxSky.DRIZZLE
-    in 61..67 -> WxSky.RAIN
-    in 71..77, 85, 86 -> WxSky.SNOW
-    in 80..82 -> WxSky.SHOWERS
-    in 95..99 -> WxSky.THUNDER
-    else -> WxSky.CLOUDY
-}
 
 /** A WMO weather code's icon, for the top bar's weather and the island's ([day]: the sun, else the moon). */
 internal fun weatherIcon(code: Int, day: Boolean) = when (code) {

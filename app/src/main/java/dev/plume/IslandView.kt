@@ -489,13 +489,24 @@ internal class IslandView(private val a: MainActivity) {
         return minOf(dp(400), half * 2)
     }
 
+    /**
+     * An item's pictures. A game shows its two logos only when both have come (ESPN's 500 px logos); with one missing
+     * (ESPN has none for many teams) it shows neither, and the item's sharp vector icon (its sport) stands in.
+     */
+    fun MainActivity.islandPictures(o: IslandItem): Pair<Bitmap?, Bitmap?> {
+        val first = o.image ?: islandImage(o.imageUri)
+        if (o.image2Uri == null) return first to null
+        val second = islandImage(o.image2Uri)
+        return if (first != null && second != null) first to second else null to null
+    }
+
     /** A picture fetched from an address (a team logo), kept once it has come; null until then. */
     fun MainActivity.islandImage(uri: String?): Bitmap? {
         if (uri == null) return null
         islandImages[uri]?.let { return it }
         if (uri in islandFailed) return null
         if (islandLoading.add(uri)) posterIo.execute {
-            val b = try { decode(uri, dp(96), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null }
+            val b = try { decode(uri, dp(136), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } // 2x the open art: sharp
             ui.post {
                 islandLoading.remove(uri)
                 if (b == null) islandFailed += uri
@@ -505,26 +516,6 @@ internal class IslandView(private val a: MainActivity) {
         return null
     }
 
-    /** A team's picture: its logo once it has come, else a badge with its letters on its colour ("ABT|3f8108"). */
-    fun MainActivity.teamImage(uri: String?, badge: String?): Bitmap? = islandImage(uri) ?: badge?.let { spec ->
-        islandImages.getOrPut("badge:$spec") {
-            val (letters, hex) = spec.split('|', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-            val fill = hex.takeIf { it.length == 6 }?.let { Color.parseColor("#$it") } ?: 0xFF5F6B7A.toInt()
-            val size = dp(96)
-            Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { b ->
-                val c = Canvas(b)
-                c.drawCircle(size / 2f, size / 2f, size / 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fill })
-                val text = badgeLetters(letters)
-                val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = if (Color.luminance(fill) > 0.6f) 0xFF1A1A1A.toInt() else Color.WHITE
-                    typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-                    textAlign = Paint.Align.CENTER
-                    textSize = size * (if (text.length <= 2) 0.42f else if (text.length == 3) 0.34f else 0.27f)
-                }
-                c.drawText(text, size / 2f, size / 2f - (ink.descent() + ink.ascent()) / 2, ink)
-            }
-        }
-    }
 
     /** Puts [item] on the tile in its [open] or resting form. */
     fun MainActivity.bindIsland(item: IslandItem, open: Boolean) {
@@ -547,7 +538,7 @@ internal class IslandView(private val a: MainActivity) {
             inked()
         }
         island.contentDescription = item.description ?: listOfNotNull(item.title, item.sub).joinToString(", ")
-        val picture = item.image ?: teamImage(item.imageUri, item.badge)
+        val (picture, picture2) = islandPictures(item)
         when {
             picture != null -> { islandArt.clearColorFilter(); islandArt.setImageBitmap(picture); islandArt.background = null; islandArt.setPadding(0, 0, 0, 0) }
             item.icon != 0 -> {
@@ -560,7 +551,6 @@ internal class IslandView(private val a: MainActivity) {
             }
             else -> islandArt.setImageDrawable(null)
         }
-        val picture2 = teamImage(item.image2Uri, item.badge2)
         islandArt2.visibility = if (picture2 != null) View.VISIBLE else View.GONE
         islandArt2.setImageBitmap(picture2)
         // The music's mark as the Shows row shows it: a plain mark in the ink, or its brand colour with Colour on.
@@ -629,35 +619,8 @@ internal class IslandView(private val a: MainActivity) {
     /** The other things on the island: small marks after the pill's text at rest, a row to pick from when open. */
     fun MainActivity.bindMarks(open: Boolean, ink: Int) {
         val item = islandItem
-        val others = islandList.filter { it.key != item?.key }.take(2)
-        val marks = findViewById<LinearLayout>(R.id.islandMarks)
-        marks.visibility = if (!open && others.isNotEmpty()) View.VISIBLE else View.GONE
-        marks.removeAllViews()
-        // A running timer or stopwatch shows its time, not just its icon: that is what anyone glancing at it wants.
-        if (!open) for (o in others) marks.addView(
-            if (o.kind == IslandKind.TIMER || o.kind == IslandKind.STOPWATCH) TextView(this).apply {
-                text = o.title
-                textSize = 11f
-                fontFeatureSettings = "tnum"
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                if (glassActive()) ink(this, ink) else setTextColor(fg)
-            } else if (o.mark != null) TextView(this).apply {
-                // An icon alone says nothing ("a cloud?"): the mark carries its few characters ("2°/9°").
-                text = o.mark
-                textSize = 11f
-                gravity = Gravity.CENTER_VERTICAL
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                if (glassActive()) ink(this, ink) else setTextColor(fg)
-                compoundDrawablePadding = dp(3)
-                setCompoundDrawablesRelative(getDrawable(o.icon)?.mutate()?.apply {
-                    setBounds(0, 0, dp(16), dp(16))
-                    if (o.mono) setTint(if (glassActive()) ink else fg)
-                }, null, null, null)
-            } else islandMark(o, ink, dp(18), false),
-            LinearLayout.LayoutParams(if (o.kind == IslandKind.TIMER || o.kind == IslandKind.STOPWATCH || o.mark != null) ViewGroup.LayoutParams.WRAP_CONTENT else dp(18), dp(18)).apply {
-                marginStart = dp(6)
-                gravity = Gravity.CENTER_VERTICAL
-            })
+        // At rest the pill shows one thing only: the others wait in the open tile's row of marks.
+        findViewById<LinearLayout>(R.id.islandMarks).apply { visibility = View.GONE; removeAllViews() }
         islandChips.visibility = if (open && islandList.size > 1) View.VISIBLE else View.GONE
         islandChips.removeAllViews()
         if (open && islandList.size > 1) {
@@ -672,7 +635,7 @@ internal class IslandView(private val a: MainActivity) {
 
     /** One thing's mark: its picture in a circle, or its icon in the ink; [lit]: on a soft disc, as a picked button. */
     fun MainActivity.islandMark(o: IslandItem, ink: Int, size: Int, lit: Boolean) = ImageView(this).apply {
-        val picture = o.image ?: teamImage(o.imageUri, o.badge)
+        val picture = islandPictures(o).first
         if (picture != null) {
             setImageBitmap(picture)
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -813,7 +776,7 @@ internal class IslandView(private val a: MainActivity) {
                 IslandSports.start(this)
                 showIsland()
             }
-            IslandKind.WEATHER -> mapOf("wx:rain" to "isl_wx_rain", "wx:tomorrow" to "isl_wx_tomorrow", "wx:temp" to "isl_wx_temp")[item.key]?.let { pref ->
+            IslandKind.WEATHER -> mapOf("wx:rain" to "isl_wx_rain")[item.key]?.let { pref ->
                 rows += getString(R.string.isl_menu_wx_off) to { prefs.edit().putBoolean(pref, false).apply(); showIsland() }
             }
             else -> {}

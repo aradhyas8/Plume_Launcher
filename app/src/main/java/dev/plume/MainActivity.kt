@@ -3009,10 +3009,14 @@ class MainActivity : Activity() {
         rows[R.string.isl_sports] = islRow(R.string.isl_sports, "isl_sports") { IslandSports.start(this) }
         rows[R.string.isl_games_now] = Triple(getString(R.string.isl_games_now), IslandSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGamesNow() }
         rows[R.string.isl_leagues] = Triple(getString(R.string.isl_leagues), IslandSports.followedLeagues(this).joinToString(", ") { it.name }.ifEmpty { "›" }) { pickSport(teams = false) }
+        // How many games the island holds at once: one by default, so the island is never a list of scores.
+        rows[R.string.isl_games_max] = Triple(getString(R.string.isl_games_max), IslandSports.max(this).toString()) {
+            prefs.edit().putInt("isl_sports_max", IslandSports.max(this) % 3 + 1).apply()
+            isl.show()
+            renderSettings(R.string.isl_games_max)
+        }
         rows[R.string.isl_teams] = Triple(getString(R.string.isl_teams), IslandSports.followed(this).joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) { pickSport(teams = true) }
         rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", after = wxAgain)
-        rows[R.string.isl_wx_tomorrow_row] = islRow(R.string.isl_wx_tomorrow_row, "isl_wx_tomorrow", after = wxAgain)
-        rows[R.string.isl_wx_temp_row] = islRow(R.string.isl_wx_temp_row, "isl_wx_temp", after = wxAgain)
         rows[R.string.isl_update_row] = islRow(R.string.isl_update_row, "isl_update")
         rows[R.string.isl_dream_row] = islRow(R.string.isl_dream_row, "isl_dream")
         rows[R.string.isl_net_row] = islRow(R.string.isl_net_row, "isl_net")
@@ -3045,8 +3049,8 @@ class MainActivity : Activity() {
                     R.string.isl_music, R.string.isl_idle.takeIf { isl.on("isl_music") },
                     R.string.isl_alerts, R.string.isl_privacy.takeIf { isl.on("isl_alerts") }, R.string.isl_alert_apps.takeIf { isl.on("isl_alerts") },
                     R.string.isl_sports, R.string.isl_games_now.takeIf { isl.on("isl_sports") }, R.string.isl_leagues.takeIf { isl.on("isl_sports") },
-                    R.string.isl_teams.takeIf { isl.on("isl_sports") },
-                    R.string.isl_wx_rain_row, R.string.isl_wx_tomorrow_row, R.string.isl_wx_temp_row,
+                    R.string.isl_teams.takeIf { isl.on("isl_sports") }, R.string.isl_games_max.takeIf { isl.on("isl_sports") },
+                    R.string.isl_wx_rain_row,
                     R.string.isl_update_row, R.string.isl_net_row, R.string.isl_bt_row, R.string.isl_dream_row)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
@@ -7044,7 +7048,7 @@ class MainActivity : Activity() {
         val ISLAND_IDLE_NAMES = listOf(R.string.isl_idle_1, R.string.isl_idle_5, R.string.never)
         val ISLAND_PRIVACY = listOf("full", "app", "hidden")
         val ISLAND_PRIVACY_NAMES = listOf(R.string.isl_privacy_full, R.string.isl_privacy_app, R.string.isl_privacy_hidden)
-        val ISLAND_WX_ROWS = setOf(R.string.isl_wx_rain_row, R.string.isl_wx_tomorrow_row, R.string.isl_wx_temp_row)
+        val ISLAND_WX_ROWS = setOf(R.string.isl_wx_rain_row)
         const val BT_REQUEST = 7311
         var fakeDevice: String? = null // debug builds: see fakeSetup()
         var fakeSdk = 0
@@ -7094,8 +7098,8 @@ class MainActivity : Activity() {
             R.string.isl_on to R.drawable.ms_widgets, R.string.isl_access to R.drawable.ms_lock, R.string.isl_timers to R.drawable.ms_timer,
             R.string.isl_music to R.drawable.ic_music_note, R.string.isl_idle to R.drawable.ms_schedule, R.string.isl_alerts to R.drawable.ms_badge,
             R.string.isl_privacy to R.drawable.ms_visibility_off, R.string.isl_alert_apps to R.drawable.ms_checklist, R.string.isl_sports to R.drawable.ms_public,
-            R.string.isl_teams to R.drawable.ms_checklist, R.string.isl_games_now to R.drawable.ms_play_circle, R.string.isl_leagues to R.drawable.ms_view_carousel, R.string.isl_wx_rain_row to R.drawable.ms_water, R.string.isl_wx_tomorrow_row to R.drawable.ms_partly_cloudy_day,
-            R.string.isl_wx_temp_row to R.drawable.ms_thermostat, R.string.isl_update_row to R.drawable.ms_system_update, R.string.isl_net_row to R.drawable.ic_wifi,
+            R.string.isl_teams to R.drawable.ms_checklist, R.string.isl_games_now to R.drawable.ms_play_circle, R.string.isl_leagues to R.drawable.ms_view_carousel, R.string.isl_wx_rain_row to R.drawable.ms_water,
+            R.string.isl_games_max to R.drawable.ms_filter_list, R.string.isl_update_row to R.drawable.ms_system_update, R.string.isl_net_row to R.drawable.ic_wifi,
             R.string.isl_bt_row to R.drawable.ic_isl_bluetooth, R.string.isl_dream_row to R.drawable.ms_bedtime,
         )
         val SECTION_ICONS = mapOf(
@@ -7129,7 +7133,7 @@ class MainActivity : Activity() {
             R.string.isl_alerts to R.string.help_isl_alerts, R.string.isl_privacy to R.string.help_isl_privacy, R.string.isl_alert_apps to R.string.help_isl_alert_apps,
             R.string.isl_sports to R.string.help_isl_sports, R.string.isl_teams to R.string.help_isl_teams,
             R.string.isl_games_now to R.string.help_isl_games_now, R.string.isl_leagues to R.string.help_isl_leagues,
-            R.string.isl_wx_rain_row to R.string.help_isl_wx_rain, R.string.isl_wx_tomorrow_row to R.string.help_isl_wx_tomorrow, R.string.isl_wx_temp_row to R.string.help_isl_wx_temp,
+            R.string.isl_wx_rain_row to R.string.help_isl_wx_rain, R.string.isl_games_max to R.string.help_isl_games_max,
             R.string.isl_update_row to R.string.help_isl_update, R.string.isl_net_row to R.string.help_isl_net, R.string.isl_bt_row to R.string.help_isl_bt,
             R.string.isl_dream_row to R.string.help_isl_dream,
         )

@@ -42,19 +42,4 @@ class IslandWeatherTest {
 
     @Test fun levels() = assertEquals(listOf(0, 1, 1, 2), listOf(0.3, 0.5, 1.9, 2.0).map { wxLevel(it) })
     @Test fun minutesRoundUp() = assertEquals(listOf(1, 1, 2), listOf(1L, min, min + 1).map { wxMinutes(t0 + it, t0) })
-
-    @Test fun todayIsTheDayNowIsIn() = assertEquals(0, wxDay(listOf(t0, t0 + 24 * 60 * min), t0 + 1))
-    @Test fun noTomorrowNoToday() = assertEquals(-1, wxDay(listOf(t0, t0 + 24 * 60 * min), t0 + 24 * 60 * min))
-    @Test fun beforeTheFirstDay() = assertEquals(-1, wxDay(listOf(t0, t0 + 24 * 60 * min), t0 - 1))
-
-    @Test fun muchColderCelsius() = assertEquals(-1, wxChange(11.0, 2.0, false))
-    @Test fun muchWarmerCelsiusAtTheEdge() = assertEquals(1, wxChange(3.0, 11.0, false))
-    @Test fun smallChangeCelsius() = assertEquals(0, wxChange(3.0, 10.9, false))
-    @Test fun fahrenheitNeedsMore() = assertEquals(listOf(0, 1), listOf(13.0, 14.0).map { wxChange(40.0, 40.0 + it, true) })
-    @Test fun missingTemperatureIsNoChange() = assertEquals(0, wxChange(Double.NaN, 2.0, false))
-
-    @Test fun skies() = assertEquals(
-        listOf(WxSky.CLEAR, WxSky.PARTLY, WxSky.CLOUDY, WxSky.FOG, WxSky.DRIZZLE, WxSky.RAIN, WxSky.SNOW, WxSky.SHOWERS, WxSky.SNOW, WxSky.THUNDER, WxSky.CLOUDY),
-        listOf(0, 2, 3, 48, 53, 63, 73, 81, 86, 95, -1).map { wxSky(it) },
-    )
 }

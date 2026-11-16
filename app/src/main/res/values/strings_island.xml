@@ -52,10 +52,6 @@
     <string name="isl_following">Following</string>
     <string name="isl_wx_rain_row">Rain and snow soon</string>
     <string name="help_isl_wx_rain">Rain or snow starting or stopping in the next hour.</string>
-    <string name="isl_wx_tomorrow_row">Tomorrow\'s weather</string>
-    <string name="help_isl_wx_tomorrow">In the evening: tomorrow\'s low, high and rain.</string>
-    <string name="isl_wx_temp_row">Big temperature change</string>
-    <string name="help_isl_wx_temp">When tomorrow is much colder or warmer than today.</string>
     <string name="isl_wx_needs_place">Needs the weather location (Clock &amp; weather).</string>
     <string name="isl_update_row">Plume updates</string>
     <string name="help_isl_update">How far an update of Plume is.</string>
@@ -107,11 +103,11 @@
     <string name="isl_sports_today">Today %1$s</string>
     <string name="isl_sports_tomorrow">Tomorrow %1$s</string>
     <string name="isl_sports_final">Final</string>
+    <string name="isl_games_max">Games on the island</string>
+    <string name="help_isl_games_max">How many games the island holds at once. The pill always shows one; open the island to see the others.</string>
     <string name="isl_cricket_batting">%1$s batting</string>
     <string name="isl_cricket_batting_overs">%1$s batting · %2$s ov</string>
     <string name="isl_cricket_toss">%1$s won the toss · play starts soon</string>
-    <string name="isl_wx_mark_range">%1$d°/%2$d°</string>
-    <string name="isl_wx_mark_max">%1$d°</string>
     <!-- Read aloud: "Pacers 39, 76ers 37, 2nd Quarter · 9:00". -->
     <string name="isl_sports_desc_score">%1$s %2$s, %3$s %4$s, %5$s</string>
     <!-- Read aloud: "Pacers at 76ers, Today 7:30 PM". -->
@@ -173,12 +169,5 @@
     <!-- "Light rain until 3:45 PM": the intensity, then the time it ends. -->
     <string name="isl_wx_until">%1$s until %2$s</string>
     <!-- Tomorrow's lowest, then highest temperature. -->
-    <string name="isl_wx_tomorrow">Tomorrow %1$d° / %2$d°</string>
-    <string name="isl_wx_rain_likely">Rain likely · %d%%</string>
-    <string name="isl_wx_snow_likely">Snow likely · %d%%</string>
-    <string name="isl_wx_showers">Showers</string>
-    <string name="isl_wx_colder">Much colder tomorrow</string>
-    <string name="isl_wx_warmer">Much warmer tomorrow</string>
     <!-- Tomorrow's highest temperature, then today's. -->
-    <string name="isl_wx_max_today">Max %1$d°, today %2$d°</string>
 </resources>

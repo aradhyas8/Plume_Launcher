@@ -126,8 +126,6 @@ class IslandSportsTest {
         assertEquals("ABT", sportsSides(g).first?.abbreviation)
     }
 
-    @Test fun badgeLettersDropTheSuffix() = assertEquals("HYD", badgeLetters("HYD-R"))
-    @Test fun badgeLettersKeepShortNames() = assertEquals("ABT", badgeLetters("ABT"))
 
     @Test fun cricketTossHidesOncePlayStarts() {
         val c = cricketState(cricket("Hyderabad R won toss", "118/4 (28.1 ov)", "121"))
@@ -148,14 +146,4 @@ class IslandSportsTest {
     @Test fun cricketSummaryThatSaysMoreStays() =
         assertEquals("Zimbabwe lead by 291 runs", cricketState(cricket("Zimbabwe lead by 291 runs", "217", "339 & 169/7 (58 ov)")).note)
 
-    @Test fun badgeKeepsEspnColour() = assertEquals("ABT|3f8108", sportsBadges(SportsSide("1", "ABT", "A", "", null, "3f8108"), null).first)
-
-    @Test fun twoBadgesNeverShareAColour() {
-        // Every pair of letters, both without a colour from ESPN: the second badge always differs from the first.
-        val names = listOf("ABT", "HYD-R", "MUL", "FSLB", "ISB", "KRBLS", "SRB", "FATA", "ARA", "UNT")
-        for (x in names) for (y in names) {
-            val (a, b) = sportsBadges(SportsSide("1", x, x, "", null), SportsSide("2", y, y, "", null))
-            assertFalse("$x v $y", a!!.substringAfter('|') == b!!.substringAfter('|'))
-        }
-    }
 }

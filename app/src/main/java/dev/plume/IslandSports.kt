@@ -340,7 +340,7 @@ internal object IslandSports : IslandSource {
             val t = s.optJSONObject("team") ?: continue
             val side = SportsSide(t.optString("id"), t.optString("abbreviation"),
                 t.optString("shortDisplayName").ifEmpty { t.optString("displayName") }, s.optString("score"),
-                t.optString("logo").ifEmpty { null }, t.optString("color").ifEmpty { null })
+                t.optString("logo").ifEmpty { null })
             if (s.optString("homeAway") == "home") home = side else away = side
         }
         val status = e.optJSONObject("status")
@@ -362,7 +362,8 @@ internal object IslandSports : IslandSource {
 
     override fun items(now: Long): List<IslandItem> {
         val ctx = app ?: return emptyList()
-        return shown.mapNotNull { item(ctx, it, now) }
+        // The best games first (pinned, then a followed team's, live before soon), and only as many as the user allows.
+        return islandArrange(shown.mapNotNull { item(ctx, it, now) }, now).take(max(ctx))
     }
 
     private fun item(ctx: Context, s: Shown, now: Long): IslandItem? {
@@ -377,37 +378,40 @@ internal object IslandSports : IslandSource {
         val (first, second) = sportsSides(g)
         val away = first?.logo ?: g.logo
         val home = second?.logo
-        // Many teams (most domestic cricket) have no logo at ESPN: a badge with the team's letters and colour stands in.
-        val (badge, badge2) = sportsBadges(first, second)
+        // Many teams (most domestic cricket) have no logo at ESPN: then the sport's icon stands in (see islandPictures).
+        val icon = sportIcon(g.league.substringBefore('/'))
         return when {
             g.state == "pre" && sportsSoon(g.start, now) -> {
                 val zone = ZoneId.systemDefault()
                 val tomorrow = Instant.ofEpochMilli(g.start).atZone(zone).toLocalDate() != Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
                 val sub = ctx.getString(if (tomorrow) R.string.isl_sports_tomorrow else R.string.isl_sports_today, clock(ctx, g.start))
                 IslandItem(key = key, kind = kind, title = label(ctx, g), sub = sub, mono = false, imageUri = away,
-                    image2Uri = home, badge = badge, badge2 = badge2, since = since,
+                    image2Uri = home, icon = icon, since = since,
                     description = g.name?.let { "$it, $sub" } ?: ctx.getString(R.string.isl_sports_desc_pre, g.away?.name, g.home?.name, sub))
             }
             live && g.cricket -> {
                 val line = cricketLine(ctx, g)
                 IslandItem(key = key, kind = kind, title = cricketScore(g), sub = line, mono = false, imageUri = away,
-                    image2Uri = home, badge = badge, badge2 = badge2, since = since, peekUntil = s.peekUntil,
+                    image2Uri = home, icon = icon, since = since, peekUntil = s.peekUntil,
                     description = "${g.away?.name} ${g.away?.score}, ${g.home?.name} ${g.home?.score}, $line")
             }
             live -> IslandItem(key = key, kind = kind, title = g.name ?: sportsScore(g),
                 sub = if (g.name != null) g.shortDetail else sportsDetail(g.shortDetail), mono = false, imageUri = away,
-                image2Uri = home, badge = badge, badge2 = badge2, since = since, peekUntil = s.peekUntil,
+                image2Uri = home, icon = icon, since = since, peekUntil = s.peekUntil,
                 description = describe(ctx, g, if (g.name != null) g.detail else sportsDetail(g.detail)))
             // A postponed or cancelled game is "post" but not completed; it has no result to show.
             g.state == "post" && g.completed -> {
                 val final = if (g.name != null) g.shortDetail else ctx.getString(R.string.isl_sports_final)
                 IslandItem(key = key, kind = kind, title = if (g.cricket) cricketScore(g) else g.name ?: sportsScore(g), sub = final,
-                    mono = false, imageUri = away, image2Uri = home, badge = badge, badge2 = badge2, since = since, until = s.until, peekUntil = s.peekUntil,
+                    mono = false, imageUri = away, image2Uri = home, icon = icon, since = since, until = s.until, peekUntil = s.peekUntil,
                     description = describe(ctx, g, final))
             }
             else -> null
         }
     }
+
+    /** How many games the island holds at once, 1 to 3: 1 by default. */
+    fun max(ctx: Context) = prefs(ctx).getInt("isl_sports_max", 1).coerceIn(1, 3)
 
     /** "IND at PHI", or the event's name when it shows by name. */
     private fun label(ctx: Context, g: SportsGame) = g.name ?: ctx.getString(R.string.isl_sports_at, g.away?.abbreviation, g.home?.abbreviation)
@@ -477,8 +481,7 @@ internal data class PinnedGame(val sport: String, val league: String, val eventI
     }
 }
 
-internal data class SportsSide(val id: String, val abbreviation: String, val name: String, val score: String, val logo: String?,
-    val color: String? = null)
+internal data class SportsSide(val id: String, val abbreviation: String, val name: String, val score: String, val logo: String?)
 
 /**
  * A game from a scoreboard. [league] is "sport/league"; [state] is ESPN's "pre", "in" or "post"; [start] is wall-clock
@@ -616,27 +619,7 @@ internal fun cricketScore(g: SportsGame) = sportsSides(g).toList().filterNotNull
     cricketRuns(s.score).let { if (it.isEmpty()) s.abbreviation else "${s.abbreviation} $it" }.replace(' ', '\u00A0')
 }
 
-/** A badge's letters: "HYD-R" is "HYD", at most four. */
-internal fun badgeLetters(abbreviation: String) =
-    abbreviation.split('-', ' ', '/').firstOrNull { it.length >= 2 }?.take(4) ?: abbreviation.filter { it.isLetterOrDigit() }.take(4)
 
-/** Badge colours for a team ESPN gives no colour: calm and mid-dark, so white letters read on each. */
-private val BADGE_COLOURS = listOf("3d6e9e", "8a4b6f", "4e7d5b", "9a6a2f", "5b5b9e", "2f7f86", "8e4a3f")
-
-/**
- * The two sides' badges ("ABT|3d6e9e"). A side with no colour from ESPN gets one picked by its letters; the second
- * side never gets the first one's colour, so the two badges always look different.
- */
-internal fun sportsBadges(first: SportsSide?, second: SportsSide?): Pair<String?, String?> {
-    fun pick(s: SportsSide, skip: String?): String {
-        s.color?.takeIf { it.length == 6 && it != skip }?.let { return it }
-        val i = Math.floorMod(s.abbreviation.hashCode(), BADGE_COLOURS.size)
-        return BADGE_COLOURS[i].takeIf { it != skip } ?: BADGE_COLOURS[(i + 1) % BADGE_COLOURS.size]
-    }
-    val a = first?.takeIf { it.abbreviation.isNotEmpty() }?.let { pick(it, null) }
-    val b = second?.takeIf { it.abbreviation.isNotEmpty() }?.let { pick(it, a) }
-    return a?.let { "${first.abbreviation}|$it" } to b?.let { "${second.abbreviation}|$it" }
-}
 
 /**
  * A live match as parts: who bats and their overs (the side whose score ends "(28.1 ov)"), who won the toss, and
@@ -652,4 +635,19 @@ internal fun cricketState(g: SportsGame): CricketState {
     val toss = Regex("""^(.+?) won (the )?toss""", RegexOption.IGNORE_CASE).find(summary)?.groupValues?.get(1)
     val plain = toss != null || summary.isEmpty() || summary.equals("Live", true) || summary.startsWith("Starts", true)
     return CricketState(bat?.abbreviation, overs, toss, summary.takeUnless { plain }, sides.any { cricketRuns(it.score).isNotEmpty() })
+}
+
+/** A sport's icon (Material Symbols, filled): sharp at any size, for a game with no logos. */
+internal fun sportIcon(sport: String) = when (sport) {
+    "cricket" -> R.drawable.ms_sports_cricket_fill
+    "soccer" -> R.drawable.ms_sports_soccer_fill
+    "basketball" -> R.drawable.ms_sports_basketball_fill
+    "baseball" -> R.drawable.ms_sports_baseball_fill
+    "football" -> R.drawable.ms_sports_football_fill
+    "hockey" -> R.drawable.ms_sports_hockey_fill
+    "tennis" -> R.drawable.ms_sports_tennis_fill
+    "golf" -> R.drawable.ms_sports_golf_fill
+    "racing" -> R.drawable.ms_sports_motorsports_fill
+    "mma" -> R.drawable.ms_sports_mma_fill
+    else -> R.drawable.ms_sports_soccer_fill
 }
