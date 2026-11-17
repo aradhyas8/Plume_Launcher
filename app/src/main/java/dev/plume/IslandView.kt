@@ -749,7 +749,7 @@ internal class IslandView(private val a: MainActivity) {
                     if (requireSleepAccess()) { IslandTimers.startSleep(this, m * 60_000L); islandStarted("sleep") }
                 } }, below = true)
             },
-            getString(R.string.isl_games_now) to { showPanel(); pickGamesNow() },
+            getString(R.string.isl_games_now) to { showPanel(); pickSport(teams = false) },
         ), below = true)
     }
 

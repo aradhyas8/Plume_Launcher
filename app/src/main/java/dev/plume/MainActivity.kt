@@ -3195,8 +3195,8 @@ class MainActivity : Activity() {
 
     /**
      * Games: one page for all of it, like Apple's "Follow live" and "My Sports". First the games on the island now (OK
-     * takes one off), then the two ways to pick a game (Live now, By league), then Your teams (every game they play
-     * shows by itself), then how many games fit. A pick when the island is full takes the place of the oldest one.
+     * takes one off), then Games now (a sport, a league, then its games) to pick one, then Your teams (every game they
+     * play shows by itself), then how many games fit. A pick when the island is full takes the place of the oldest one.
      */
     internal fun pickGames(focus: Int = 0) {
         if (IslandSports.trimPins(this)) gamesChanged()
@@ -3210,14 +3210,13 @@ class MainActivity : Activity() {
                 pickGames()
             }
         } + listOf(
-            page(getString(R.string.isl_games_now), "›") { pickGamesNow() },
-            page(getString(R.string.isl_leagues), "›") { pickSport(teams = false) },
+            page(getString(R.string.isl_games_now), "›") { pickSport(teams = false) },
             page(getString(R.string.isl_teams), teams.joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) { pickSport(teams = true) },
             page(getString(R.string.isl_games_max), resources.getQuantityString(R.plurals.isl_n_games, max, max)) {
                 prefs.edit().putInt("isl_sports_max", max % 3 + 1).apply()
                 gamesChanged()
                 // Going from 3 back to 1 drops the oldest picks, so the focus stays on this row by its place from the end.
-                pickGames(pins.size + 3 - (pins.size - minOf(pins.size, max % 3 + 1)))
+                pickGames(pins.size + 2 - (pins.size - minOf(pins.size, max % 3 + 1)))
             },
         )
         showPage(getString(R.string.isl_games), rows, focus.coerceIn(0, rows.size - 1), crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_games) }
@@ -3244,29 +3243,9 @@ class MainActivity : Activity() {
         }, focus, styles = list.map { RowStyle(logo = it.awayLogo ?: it.homeLogo) }, crumb = crumb, back = back)
     }
 
-    /** Live now: every game that is live or starts within 3 h, in every league, live first. */
-    internal fun pickGamesNow(focus: Int = 0, list: List<IslandSports.NowGame>? = null) {
-        val title = getString(R.string.isl_games_now)
-        val crumb = getString(R.string.isl_games)
-        val back = { pickGames(IslandSports.pinned(this).size) }
-        if (list == null) {
-            showPage(title, listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = crumb, back = back)
-            return IslandSports.gamesNow(this) { games ->
-                if (isDestroyed || settingsScrim.visibility != View.VISIBLE) return@gamesNow
-                if (games.isEmpty()) showPage(title, listOf(page(getString(R.string.isl_games_none)) {}), crumb = crumb, back = back)
-                else pickGamesNow(0, games)
-            }
-        }
-        // Your teams' games first, then their leagues, then their sports, then the rest; live first in each.
-        val teams = IslandSports.followed(this)
-        val near = list.associate { it.eventId to IslandSports.closeness(it, teams) }
-        val sorted = list.sortedWith(compareBy<IslandSports.NowGame>({ near[it.eventId] }, { it.rank }, { it.start }))
-        showGames(title, sorted, focus, crumb, { pickGamesNow(it, sorted) }, back) { g -> if (near[g.eventId] == 0) getString(R.string.isl_your_team) else null }
-    }
-
-    /** One league's games (By league): live, or starting within a day. */
+    /** One league's games (Games now): live, or starting within a day. */
     private fun pickLeagueGames(l: IslandSports.League, focus: Int = 0, list: List<IslandSports.NowGame>? = null, back: () -> Unit) {
-        val crumb = getString(R.string.isl_leagues)
+        val crumb = getString(R.string.isl_games_now)
         if (list == null) {
             showPage(l.name, listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = crumb, back = back)
             return IslandSports.leagueGames(this, l) { games ->
@@ -3281,26 +3260,26 @@ class MainActivity : Activity() {
         showGames(l.name, list, focus, crumb, { pickLeagueGames(l, it, list, back) }, back)
     }
 
-    /** Sport folders (Football, Basketball, Motorsport…), so no list is long. [teams]: the way to Your teams, else to By league. */
-    private fun pickSport(teams: Boolean, focus: Int = 0) {
+    /** Sport folders (Football, Basketball, Motorsport…), so no list is long. [teams]: the way to Your teams, else Games now. */
+    internal fun pickSport(teams: Boolean, focus: Int = 0) {
         val groups = IslandSports.LEAGUES.filter { !teams || it.teams }.groupBy { it.group }
-        val title = getString(if (teams) R.string.isl_teams else R.string.isl_leagues)
+        val title = getString(if (teams) R.string.isl_teams else R.string.isl_games_now)
         val mine = if (teams) IslandSports.followed(this).map { "${it.sport}/${it.league}" } else IslandSports.pinned(this).map { "${it.sport}/${it.league}" }
         val pins = IslandSports.pinned(this).size
         showPage(title, groups.entries.mapIndexed { i, (group, leagues) ->
             val n = mine.count { m -> leagues.any { it.key == m } }
             page(getString(group), if (n == 0) "›" else getString(if (teams) R.string.n_on else R.string.isl_n_pinned, n)) { pickSportLeagues(teams, leagues, i) }
-        }, focus, crumb = getString(R.string.isl_games)) { pickGames(pins + if (teams) 2 else 1) }
+        }, focus, crumb = getString(R.string.isl_games)) { pickGames(pins + if (teams) 1 else 0) }
     }
 
-    /** One sport's leagues: for Your teams, OK opens its teams; for By league, its games. */
+    /** One sport's leagues: for Your teams, OK opens its teams; for Games now, its games. */
     private fun pickSportLeagues(teams: Boolean, leagues: List<IslandSports.League>, groupAt: Int, focus: Int = 0) {
         val followed = IslandSports.followed(this)
         showPage(getString(leagues.first().group), leagues.mapIndexed { i, l ->
             if (teams) page(l.name, followed.filter { it.sport == l.sport && it.league == l.league }.joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) {
                 pickTeams(l) { pickSportLeagues(true, leagues, groupAt, i) }
             } else page(l.name, "›") { pickLeagueGames(l) { pickSportLeagues(false, leagues, groupAt, i) } }
-        }, focus, crumb = getString(if (teams) R.string.isl_teams else R.string.isl_leagues)) { pickSport(teams, groupAt) }
+        }, focus, crumb = getString(if (teams) R.string.isl_teams else R.string.isl_games_now)) { pickSport(teams, groupAt) }
     }
 
     /**

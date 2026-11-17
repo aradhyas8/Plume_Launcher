@@ -167,13 +167,4 @@ class IslandSportsTest {
 
     @Test fun oldPickStillReads() = assertEquals(PinnedGame("nba", "nba", "7", 9_000L).entry, PinnedGame.parse("nba|nba|7|9000")?.entry)
 
-    // ---------- Live now order ----------
-
-    private val phi = listOf(FollowedTeam("basketball", "nba", "20", "PHI", "76ers"))
-
-    @Test fun yourTeamFirst() = assertEquals(0, sportsCloseness("basketball", "nba", listOf("11", "20"), phi))
-    @Test fun yourLeagueNext() = assertEquals(1, sportsCloseness("basketball", "nba", listOf("1", "2"), phi))
-    @Test fun yourSportThen() = assertEquals(2, sportsCloseness("basketball", "wnba", listOf("1", "2"), phi))
-    @Test fun otherSportLast() = assertEquals(3, sportsCloseness("cricket", "scorepanel", listOf("40", "9"), phi))
-    @Test fun noTeamsAllEqual() = assertEquals(3, sportsCloseness("basketball", "nba", listOf("20"), emptyList()))
 }

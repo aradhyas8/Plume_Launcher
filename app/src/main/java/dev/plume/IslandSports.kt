@@ -9,7 +9,6 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
@@ -17,7 +16,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * The island's sports source, from ESPN's public site API (no key, no account). Two things put a game on the
- * island: a game the user picked ([gamesNow], [leagueGames], [pinGame]) and a game of one of their teams ([follow]);
+ * island: a game the user picked ([leagueGames], [pinGame]) and a game of one of their teams ([follow]);
  * at most [max] at once, picks first. The home screen calls [start] while it is
  * shown and [stop] when it leaves; each poll asks one scoreboard per league that either of the two needs, and how soon
  * the next poll comes depends on how close the games are (see [sportsPollMs]). The settings call [start] again after
@@ -39,14 +38,12 @@ internal object IslandSports {
 
     class Team(val id: String, val name: String, val abbreviation: String, val logo: String?)
 
-    /** A game for the "Games now" page: [title] is the live score or "IND at PHI · 7:30 PM". */
+    /** A game to pick on the Games now pages: [title] is the live score or "IND at PHI · 7:30 PM". */
     class NowGame(
         val sport: String, val league: String, val leagueName: String, val eventId: String, val title: String,
         val awayLogo: String?, val homeLogo: String?, val live: Boolean, val start: Long, val rank: Int = 2,
         /** Who plays, without the score ("IND at PHI"): kept with a pick, so the settings can name it offline. */
         val name: String = title,
-        /** The two teams' ids, to put the user's teams first. */
-        val teamIds: List<String> = emptyList(),
     )
 
     // The league names are proper names, so they stay plain constants rather than translated resources. ESPN has no
@@ -90,7 +87,6 @@ internal object IslandSports {
     private const val BASE = "https://site.api.espn.com/apis/site/v2/sports"
     private const val PANEL = "scorepanel"
     private const val PEEK_MS = 5_000L
-    private const val NOW_CACHE_MS = 60_000L
 
     private val main = Handler(Looper.getMainLooper())
     private val io by lazy { Executors.newSingleThreadScheduledExecutor() }
@@ -109,7 +105,6 @@ internal object IslandSports {
     @Volatile private var shown: List<Shown> = emptyList()
     // The last good scoreboard of each league, by "sport/league", so the Teams page can put today's teams first.
     private val lastBoard = ConcurrentHashMap<String, List<SportsGame>>()
-    @Volatile private var nowCache: Pair<Long, List<NowGame>>? = null
 
     // ---------- what the user follows (for the settings pages; no network) ----------
 
@@ -137,7 +132,7 @@ internal object IslandSports {
     fun pinned(ctx: Context): List<PinnedGame> = stored(ctx, PREF_GAMES).mapNotNull(PinnedGame::parse)
 
     /**
-     * Pins a game from [gamesNow]. The pin goes by itself two hours after the game's final; when the island never
+     * Pins a game from [leagueGames]. The pin goes by itself two hours after the game's final; when the island never
      * sees a final (the TV was off), it goes eight hours after the start, or after the pin for an event that started
      * days ago (golf, a Test match).
      */
@@ -226,27 +221,7 @@ internal object IslandSports {
         sportsPlayingToday(lastBoard["$sport/$league"].orEmpty(), System.currentTimeMillis(), ZoneId.systemDefault())
 
     /**
-     * Every game of every league that is live or starts within three hours, live first, then by start time. [done]
-     * runs on the main thread; a league that fails is left out. The list is kept for a minute, so going back and
-     * forth on the page does not ask ESPN again.
-     */
-    fun gamesNow(ctx: Context, done: (List<NowGame>) -> Unit) {
-        nowCache?.takeIf { System.currentTimeMillis() - it.first < NOW_CACHE_MS }?.let { cached -> main.post { done(cached.second) }; return }
-        Thread {
-            val now = System.currentTimeMillis()
-            // A few leagues at a time: one by one, 26 leagues take too long; all at once is a burst of requests.
-            val pool = Executors.newFixedThreadPool(6)
-            val jobs = LEAGUES.map { l -> l to pool.submit(Callable { fetch(l, now).orEmpty() }) }
-            pool.shutdown()
-            val list = jobs.flatMap { (l, job) -> job.get().filter { sportsNow(it, now) }.map { nowGame(ctx, l, it, now) } }
-                .distinctBy { it.eventId }.sortedWith(compareBy<NowGame>({ it.rank }, { it.start }))
-            nowCache = now to list
-            main.post { done(list) }
-        }.start()
-    }
-
-    /**
-     * One league's games for the By league page: live, or starting within a day, live first. [done] runs on the main
+     * One league's games for the Games now pages: live, or starting within a day, live first. [done] runs on the main
      * thread, with null when the request fails.
      */
     fun leagueGames(ctx: Context, l: League, done: (List<NowGame>?) -> Unit) {
@@ -271,7 +246,7 @@ internal object IslandSports {
         }
         val (first, second) = sportsSides(g) // the logos in the order of the words ("AFG v ZIM": AFG's first)
         return NowGame(l.sport, l.league, l.name, g.id, title, first?.logo ?: g.logo, second?.logo, live, g.start,
-            sportsNowRank(live, g.name != null || l.sport == "cricket", g.shortDetail), label(ctx, g), listOfNotNull(g.away?.id, g.home?.id))
+            sportsNowRank(live, g.name != null || l.sport == "cricket", g.shortDetail), label(ctx, g))
     }
 
     // ---------- polling ----------
@@ -443,8 +418,6 @@ internal object IslandSports {
             else -> null
         }
     }
-
-    fun closeness(g: NowGame, teams: List<FollowedTeam>) = sportsCloseness(g.sport, g.league, g.teamIds, teams)
 
     /** How many games the island holds at once, 1 to 3: 1 by default. */
     fun max(ctx: Context) = prefs(ctx).getInt("isl_sports_max", 1).coerceIn(1, 3)
@@ -681,15 +654,4 @@ internal fun cricketState(g: SportsGame): CricketState {
     val toss = Regex("""^(.+?) won (the )?toss""", RegexOption.IGNORE_CASE).find(summary)?.groupValues?.get(1)
     val plain = toss != null || summary.isEmpty() || summary.equals("Live", true) || summary.startsWith("Starts", true)
     return CricketState(bat?.abbreviation, overs, toss, summary.takeUnless { plain }, sides.any { cricketRuns(it.score).isNotEmpty() })
-}
-
-/**
- * How close a game is to what the user follows, best first: 0 one of their teams plays, 1 another game of a league
- * they follow a team in, 2 the same sport, 3 anything else. Live now lists games in this order, then live first.
- */
-internal fun sportsCloseness(sport: String, league: String, teamIds: List<String>, teams: List<FollowedTeam>): Int = when {
-    teams.any { it.sport == sport && it.league == league && it.teamId in teamIds } -> 0
-    teams.any { it.sport == sport && it.league == league } -> 1
-    teams.any { it.sport == sport } -> 2
-    else -> 3
 }

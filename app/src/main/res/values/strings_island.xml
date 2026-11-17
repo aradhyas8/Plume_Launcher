@@ -41,7 +41,6 @@
     <string name="isl_games_none">No games now or in the next 3 hours.</string>
     <string name="isl_pinned">On the island</string>
     <string name="isl_n_pinned">%d on the island</string>
-    <string name="isl_leagues">By league</string>
     <string name="isl_today">Today</string>
     <string name="isl_teams_loading">Loading teams…</string>
     <string name="isl_teams_failed">Couldn\'t load teams. Check the internet and try again.</string>
@@ -104,7 +103,6 @@
         <item quantity="one">%d game</item>
         <item quantity="other">Up to %d games</item>
     </plurals>
-    <string name="isl_your_team">Your team</string>
     <string name="isl_games">Games</string>
     <string name="help_isl_games">Pick a game to follow it live, or add your teams to see every game they play.</string>
     <string name="isl_game">Game</string>
