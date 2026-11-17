@@ -145,7 +145,6 @@ internal class IslandView(private val a: MainActivity) {
         IslandTimers.init(this)
         IslandWeather.start(this)
         IslandSports.start(this)
-        IslandBluetooth.start(this)
         try {
             mediaSessions.addOnActiveSessionsChangedListener(sessionsChanged, mediaAccess, ui)
         } catch (e: SecurityException) {
@@ -158,7 +157,6 @@ internal class IslandView(private val a: MainActivity) {
         Island.listener = null
         IslandWeather.stop()
         IslandSports.stop()
-        IslandBluetooth.stop(this)
         mediaSessions.removeOnActiveSessionsChangedListener(sessionsChanged)
         media?.unregisterCallback(mediaChanged)
         media = null
@@ -263,7 +261,6 @@ internal class IslandView(private val a: MainActivity) {
         all += IslandAlerts.items(now, prefs)
         if (on("isl_sports")) all += IslandSports.items(now)
         all += IslandWeather.items(now)
-        if (on("isl_bluetooth", false)) all += IslandBluetooth.items(now)
         all += systemItems(now)
         return islandArrange(all.filter { hideKey(it) !in islandHidden }, now)
     }
@@ -582,7 +579,6 @@ internal class IslandView(private val a: MainActivity) {
                             IslandKind.SPORTS, IslandKind.SPORTS_LIVE -> R.string.isl_games
                             IslandKind.UPDATE -> R.string.isl_update_row
                             IslandKind.WEATHER -> R.string.isl_wx_rain_row
-                            IslandKind.BLUETOOTH -> R.string.isl_bt_row
                         }
                         addView(TextView(context).apply {
                             setText(name)

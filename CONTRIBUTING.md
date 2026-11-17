@@ -38,7 +38,7 @@ Not sure if an idea fits? Open a feature request first and ask. That's much chea
 - **Keep the diff small.** Match the style of the code around your change. Don't reformat or reorganise code you aren't changing.
 - **Test on a real TV** (or an Android TV emulator if you have no TV) and say which device and Android version you used.
 - **Mention size and memory changes.** If your change adds resources or keeps things in memory, give the APK size before and after.
-- **No new permissions** without discussing them in an issue first. Agreed so far: `BLUETOOTH` and `BLUETOOTH_CONNECT`, for the Island's Bluetooth alerts. `tools/pr-rules.sh` lists them.
+- **No new permissions** without discussing them in an issue first.
 
 By sending a pull request you agree that your contribution is licensed under the project's [GPL-3.0 licence](LICENSE).
 

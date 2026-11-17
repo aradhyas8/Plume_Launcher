@@ -607,13 +607,6 @@ class MainActivity : Activity() {
     }
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
-        if (code == BT_REQUEST) {
-            val ok = results.firstOrNull() == PackageManager.PERMISSION_GRANTED
-            prefs.edit().putBoolean("isl_bluetooth", ok).apply()
-            if (ok) { IslandBluetooth.stop(this); IslandBluetooth.start(this) }
-            if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.isl_bt_row)
-            return
-        }
         if (code != MEDIA_REQUEST) return refreshWatchNext()
         if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) afterPhotoAccess?.invoke()
         else toast(getString(R.string.photos_permission), long = true)
@@ -3014,7 +3007,6 @@ class MainActivity : Activity() {
         rows[R.string.isl_games] = Triple(getString(R.string.isl_games), IslandSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGames() }
         rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", def = false, after = wxAgain)
         rows[R.string.isl_update_row] = islRow(R.string.isl_update_row, "isl_update")
-        rows[R.string.isl_bt_row] = Triple(getString(R.string.isl_bt_row), toggle(isl.on("isl_bluetooth", false))) { toggleIslandBluetooth() }
         for (k in listOf(R.string.sort_apps, R.string.weather_units)) steps[k] = { rows[k]!!.third() }
         // Like the layout: behind the PIN. unlock() closes the panel after the PIN, so open it again.
         rows[R.string.section_keys] = page(getString(R.string.section_keys), "${keysSummary()}  ›") {
@@ -3044,7 +3036,7 @@ class MainActivity : Activity() {
                     R.string.isl_alerts, R.string.isl_privacy.takeIf { isl.on("isl_alerts") }, R.string.isl_alert_apps.takeIf { isl.on("isl_alerts") },
                     R.string.isl_sports, R.string.isl_games.takeIf { isl.on("isl_sports") },
                     R.string.isl_wx_rain_row,
-                    R.string.isl_update_row, R.string.isl_bt_row)),
+                    R.string.isl_update_row)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
@@ -3141,18 +3133,6 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
             homePopup(0, getString(R.string.isl_access), getString(R.string.isl_access_steps), null, getString(R.string.done) to { setupDialog?.dismiss() })
         }
-    }
-
-    /** Bluetooth needs Android's own yes on Android 12 and later; asked only when it is switched on. */
-    private fun toggleIslandBluetooth() {
-        val on = !isl.on("isl_bluetooth", false)
-        if (on && Build.VERSION.SDK_INT >= 31 && checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
-            return requestPermissions(arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT), BT_REQUEST)
-        prefs.edit().putBoolean("isl_bluetooth", on).apply()
-        IslandBluetooth.stop(this)
-        if (on) IslandBluetooth.start(this)
-        isl.show()
-        renderSettings(R.string.isl_bt_row)
     }
 
     internal fun requireSleepAccess(): Boolean {
@@ -7079,7 +7059,6 @@ class MainActivity : Activity() {
         val ISLAND_PRIVACY = listOf("full", "app", "hidden")
         val ISLAND_PRIVACY_NAMES = listOf(R.string.isl_privacy_full, R.string.isl_privacy_app, R.string.isl_privacy_hidden)
         val ISLAND_WX_ROWS = setOf(R.string.isl_wx_rain_row)
-        const val BT_REQUEST = 7311
         var fakeDevice: String? = null // debug builds: see fakeSetup()
         var fakeSdk = 0
         const val TV_LISTINGS = "android.permission.READ_TV_LISTINGS"
@@ -7130,7 +7109,6 @@ class MainActivity : Activity() {
             R.string.isl_privacy to R.drawable.ms_visibility_off, R.string.isl_alert_apps to R.drawable.ms_checklist, R.string.isl_sports to R.drawable.ms_public,
             R.string.isl_games to R.drawable.ms_play_circle, R.string.isl_wx_rain_row to R.drawable.ms_water,
             R.string.isl_update_row to R.drawable.ms_system_update,
-            R.string.isl_bt_row to R.drawable.ic_isl_bluetooth,
         )
         val SECTION_ICONS = mapOf(
             R.string.section_style to R.drawable.ms_palette, R.string.section_clock_weather to R.drawable.ms_partly_cloudy_day,
@@ -7163,7 +7141,7 @@ class MainActivity : Activity() {
             R.string.isl_alerts to R.string.help_isl_alerts, R.string.isl_privacy to R.string.help_isl_privacy, R.string.isl_alert_apps to R.string.help_isl_alert_apps,
             R.string.isl_sports to R.string.help_isl_sports, R.string.isl_games to R.string.help_isl_games,
             R.string.isl_wx_rain_row to R.string.help_isl_wx_rain,
-            R.string.isl_update_row to R.string.help_isl_update, R.string.isl_bt_row to R.string.help_isl_bt,
+            R.string.isl_update_row to R.string.help_isl_update,
         )
         val ROW_SHOW = linkedMapOf("always" to R.string.always, "down" to R.string.on_down, "never" to R.string.never) // "Show row"
         val CLOCK_SIZES = linkedMapOf(38 to R.string.clock_small, 48 to R.string.clock_medium, 60 to R.string.clock_large) // sp

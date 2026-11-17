@@ -49,8 +49,6 @@
     <string name="isl_wx_needs_place">Needs the weather location (Clock &amp; weather).</string>
     <string name="isl_update_row">Plume updates</string>
     <string name="help_isl_update">How far an update of Plume is.</string>
-    <string name="isl_bt_row">Bluetooth</string>
-    <string name="help_isl_bt">Headphones and controllers connecting, and a controller\'s low battery. Android asks to allow Bluetooth.</string>
     <string name="isl_custom">Other length…</string>
     <string name="isl_custom_hint">Minutes</string>
     <string name="isl_start">Start</string>
@@ -73,12 +71,6 @@
     <string name="isl_alert_call">Incoming call</string>
 
     <!-- Bluetooth -->
-    <string name="isl_bt_connected">%1$s connected</string>
-    <string name="isl_bt_disconnected">%1$s disconnected</string>
-    <string name="isl_bt_battery">Battery %1$d%%</string>
-    <string name="isl_bt_percent">%1$d%%</string>
-    <string name="isl_bt_device">Bluetooth device</string>
-    <string name="isl_bt_pad_low">Controller battery low</string>
 
     <!-- Sports -->
     <!-- A game that has not started: the away team, then the home team, like the logos in the pill. -->

@@ -18,7 +18,7 @@ import java.net.URL
 /** What an item is. A lower [rank] wins the pill; items of the same rank go newest first. */
 internal enum class IslandKind(val rank: Int) {
     CALL(0), TIMER_DONE(1), ALERT(2), MEDIA(4), SPORTS_LIVE(5),
-    TIMER(6), STOPWATCH(6), SLEEP(6), UPDATE(7), SPORTS(8), WEATHER(9), BLUETOOTH(10), MEDIA_PAUSED(11),
+    TIMER(6), STOPWATCH(6), SLEEP(6), UPDATE(7), SPORTS(8), WEATHER(9), MEDIA_PAUSED(11),
 }
 
 /** A button in the open island: a drawable [icon], or a short [label] when there is no fitting icon. */
