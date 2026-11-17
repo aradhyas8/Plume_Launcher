@@ -27,7 +27,7 @@ internal object SettingsTransfer {
         "wx_unit" to setOf("c", "f"),
     )
     private val switches = setOf("glass", "colour_icons", "app_anim", "row_drop", "cw_colour", "geo_manual")
-    private val clockFormats = ClockFormat.entries.associateBy { it.key }
+    private val clockFormats = ClockFormat.values().associateBy { it.key }
     private val keys = choices.keys + switches + clockFormats.keys + setOf("order", "row_hidden", "cw_off", "row_name", "top_bar",
         "wp_every", "geo_city", "geo_lat", "geo_lon")
     private val pkg = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")
@@ -46,7 +46,7 @@ internal object SettingsTransfer {
     }
 
     /** Also used before any preference mutation; JSON numbers are converted to their declared preference types. */
-    fun validate(values: Map<String, *>): Map<String, Any> = buildMap {
+    fun validate(values: Map<String, *>): Map<String, Any> = LinkedHashMap<String, Any>().apply {
         for ((key, value) in values) {
             if (key !in SettingsTransfer.keys) continue
             val checked: Any = when {
@@ -116,9 +116,8 @@ internal object SettingsTransfer {
         require(root is JSONObject && parser.nextClean() == '\u0000') { "Invalid settings file" }
         require(root.opt("format") == "plume-settings" && root.opt("version") == 1) { "Unsupported settings file" }
         val settings = root.getJSONObject("settings")
-        val values = settings.keys().asSequence().associateWith { key ->
-            settings.get(key).let { value -> if (value is JSONArray) (0 until value.length()).map(value::get) else value }
-        }
+        val values = HashMap<String, Any?>()
+        for (key in settings.keys()) values[key] = settings.get(key).let { value -> if (value is JSONArray) (0 until value.length()).map(value::get) else value }
         return validate(values)
     }
 

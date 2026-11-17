@@ -150,19 +150,37 @@ internal fun folderPhotos(cr: ContentResolver, choice: String): List<Long> =
     cr.query(PHOTOS, arrayOf(MediaStore.Images.Media._ID), "${MediaStore.Images.Media.BUCKET_ID} = ?", arrayOf(choice.split(':')[1]), null)
         ?.use { c -> List(c.count) { c.moveToNext(); c.getLong(0) } } ?: emptyList()
 
+// Small stand-ins for Kotlin library calls that each pull a few KB of library code into the APK.
+
+/** Deletes a folder and everything in it, like deleteRecursively (which brings Kotlin's file walker along). */
+internal fun File.deleteTree(): Boolean {
+    listFiles()?.forEach { it.deleteTree() }
+    return delete()
+}
+
+/** The nearest parent of [v] that is a [T], or null. */
+internal inline fun <reified T> ancestor(v: View): T? {
+    var p = v.parent
+    while (p != null && p !is T) p = p.parent
+    return p as T?
+}
+
+/** A four-digit code for the phone upload page. */
+internal fun pinCode() = java.util.concurrent.ThreadLocalRandom.current().nextInt(1000, 10000).toString()
+
 /** Picks the current or next photo from [ids], preserving [deck] if the media scan is still pending. */
 internal fun pickFolderPhoto(
     ids: List<Long>,
     currentSaved: Long?,
-    deck: ArrayDeque<Long>,
+    deck: java.util.ArrayDeque<Long>,
     shuffle: (List<Long>) -> List<Long> = { it.shuffled() }
 ): Long? {
     if (ids.isEmpty()) return null
     val all = ids.toHashSet()
     if (currentSaved != null && currentSaved in all) return currentSaved
-    deck.removeAll { it !in all }
+    deck.removeIf { it !in all }
     if (deck.isEmpty()) deck.addAll(shuffle(ids))
-    return deck.removeFirstOrNull()
+    return deck.pollFirst()
 }
 
 /** Whether the Google TV launcher package is active (not debloated or disabled). */
@@ -1740,7 +1758,7 @@ class MainActivity : Activity() {
             extras.forEach { (_, view) -> addView(view) }
             for ((name, tiles) in groups) {
                 name?.let { addView(groupTitle(getString(it))) }
-                tiles.chunked(3).forEach { line ->
+                (tiles.indices step 3).map { tiles.subList(it, minOf(it + 3, tiles.size)) }.forEach { line ->
                     addView(LinearLayout(context).apply {
                         line.forEach { t ->
                             val chosen = t.choice != null && t.choice == current
@@ -2438,7 +2456,7 @@ class MainActivity : Activity() {
     // ---------- folder wallpapers ----------
 
     private var afterPhotoAccess: (() -> Unit)? = null // what asked, while Android's permission prompt is up
-    private val deck = ArrayDeque<Long>() // photos not shown yet this round; io thread only
+    private val deck = java.util.ArrayDeque<Long>() // photos not shown yet this round; io thread only
 
     private fun photoKey(forDark: Boolean = dark) = "wp_photo_light"
     private fun photoAtKey(forDark: Boolean = dark) = "wp_photo_at_light"
@@ -2619,7 +2637,7 @@ class MainActivity : Activity() {
         val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_photo), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File.createTempFile("upload-", ".tmp", cacheDir)) { file, video ->
+            UploadServer(pinCode(), File.createTempFile("upload-", ".tmp", cacheDir)) { file, video ->
                 if (!active.get()) return@UploadServer null
                 val saved = (if (video) importVideoWallpaper(file, dir) else importWallpaper(file, dir)) ?: return@UploadServer null
                 ui.post {
@@ -4440,7 +4458,7 @@ class MainActivity : Activity() {
         val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_app_picture), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File.createTempFile("app-picture-", ".tmp", cacheDir), imagesOnly = true) { file, _ ->
+            UploadServer(pinCode(), File.createTempFile("app-picture-", ".tmp", cacheDir), imagesOnly = true) { file, _ ->
                 if (!active.get()) return@UploadServer null
                 val bitmap = AppPictures.fit(file, banner) ?: return@UploadServer null
                 val saved = try {
@@ -4886,7 +4904,7 @@ class MainActivity : Activity() {
         val at = Rect(0, 0, tile.width, tile.height)
         row.offsetDescendantRectToMyCoords(tile, at) // the tile's place in the row, whatever sits between them
         var pivot = at.exactCenterX()
-        val scroll = generateSequence(row.parent) { it.parent }.firstOrNull { it is HorizontalScrollView } as? HorizontalScrollView
+        val scroll = ancestor<HorizontalScrollView>(row)
         if (scroll != null && (at.left < scroll.scrollX || at.right > scroll.scrollX + scroll.width)) pivot = scroll.scrollX + scroll.width / 2f
         row.pivotX = pivot
         row.pivotY = at.exactCenterY()
@@ -5374,7 +5392,7 @@ class MainActivity : Activity() {
     private fun useGallery(folder: String?) {
         prefs.edit().putString("ss_folder", folder).apply()
         if (folder == null && !paintingsReady(this)) return downloadPaintings { useGallery(null) }
-        if (folder != null) paintingsDir(this).deleteRecursively() // not needed for photos: give the space back
+        if (folder != null) paintingsDir(this).deleteTree() // not needed for photos: give the space back
         if (galleryOn()) return
         if (checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED) {
             // Without the adb permission Plume can't switch it itself; Android's own list has getString(R.string.gallery).
@@ -5390,7 +5408,7 @@ class MainActivity : Activity() {
     private fun stopGallery() {
         if (checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED) return openScreensaverSettings()
         Settings.Secure.putString(contentResolver, "screensaver_components", prefs.getString("prev_screensaver", "") ?: "")
-        paintingsDir(this).deleteRecursively() // another screensaver is in charge: give the space back
+        paintingsDir(this).deleteTree() // another screensaver is in charge: give the space back
     }
 
     private fun readDreamSetting(key: String): String? = if (key == Settings.System.SCREEN_OFF_TIMEOUT)
@@ -5469,16 +5487,16 @@ class MainActivity : Activity() {
         downloading = true
         toast(start)
         Thread {
-            val part = File(dir.path + ".part").apply { deleteRecursively(); mkdirs() }
+            val part = File(dir.path + ".part").apply { deleteTree(); mkdirs() }
             val ok = try {
                 for (f in files) openStream(url + f).use { input ->
                     File(part, f).outputStream().use { input.copyTo(it) }
                 }
-                dir.deleteRecursively()
+                dir.deleteTree()
                 part.renameTo(dir)
             } catch (e: Exception) {
                 android.util.Log.w("Plume", "download from $url failed ($e)")
-                part.deleteRecursively()
+                part.deleteTree()
                 false
             }
             ui.post {

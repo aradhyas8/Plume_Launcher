@@ -62,8 +62,11 @@ internal class UploadServer(val code: String, private val temp: File, private va
         val input = BufferedInputStream(s.getInputStream())
         val out = s.getOutputStream()
         val request = readLine(input) ?: return
-        val headers = generateSequence { readLine(input)?.takeIf { it.isNotEmpty() } }
-            .associate { it.substringBefore(':').trim().lowercase() to it.substringAfter(':').trim() }
+        val headers = HashMap<String, String>()
+        while (true) {
+            val line = readLine(input)?.takeIf { it.isNotEmpty() } ?: break
+            headers[line.substringBefore(':').trim().lowercase()] = line.substringAfter(':').trim()
+        }
         val method = request.substringBefore(' ')
         val path = request.substringAfter(' ').substringBefore(' ')
         when {
@@ -149,7 +152,7 @@ internal class UploadServer(val code: String, private val temp: File, private va
                 b.disabled=false;
               };
             </script></body></html>
-        """.trimIndent()
+        """
 
     }
 }
@@ -200,7 +203,7 @@ internal fun fitWallpaper(allowUhd: Boolean = false, open: () -> InputStream): B
 internal fun importWallpaper(src: File, dir: File): File? {
     val out = fitWallpaper { src.inputStream() } ?: return null
     dir.mkdirs()
-    val file = generateSequence(1) { it + 1 }.map { File(dir, "Photo $it.jpg") }.first { !it.exists() }
+    val file = freeName(dir, "Photo", "jpg")
     file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 85, it) }
     out.recycle()
     return file
@@ -209,7 +212,7 @@ internal fun importWallpaper(src: File, dir: File): File? {
 internal fun importVideoWallpaper(src: File, dir: File): File? {
     if (!validVideo(src)) return null
     dir.mkdirs()
-    val file = generateSequence(1) { it + 1 }.map { File(dir, "Video $it.mp4") }.first { !it.exists() }
+    val file = freeName(dir, "Video", "mp4")
     src.copyTo(file)
     return file
 }
@@ -220,3 +223,10 @@ internal const val UHD_HEIGHT = 2160
 
 internal fun wallpaperWidth(width: Int, height: Int, allowUhd: Boolean): Int =
     if (allowUhd && width >= UHD_WIDTH && height >= UHD_HEIGHT) UHD_WIDTH else WALL_W
+
+/** "Photo 1.jpg", "Photo 2.jpg"…: the first such name not taken in [dir]. */
+private fun freeName(dir: File, name: String, ext: String): File {
+    var i = 1
+    while (File(dir, "$name $i.$ext").exists()) i++
+    return File(dir, "$name $i.$ext")
+}

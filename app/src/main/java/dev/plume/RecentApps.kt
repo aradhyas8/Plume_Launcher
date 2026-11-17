@@ -85,7 +85,7 @@ internal object RecentPreviews {
     fun clear(c: Context) {
         memory.evictAll()
         val d = dir(c)
-        io.execute { d.deleteRecursively() }
+        io.execute { d.deleteTree() }
     }
 
     /** Low memory: drop the pictures in memory; the files stay. */

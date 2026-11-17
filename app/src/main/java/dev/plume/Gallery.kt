@@ -172,7 +172,7 @@ private class GalleryShow(private val context: Context) : SurfaceHolder.Callback
     @Volatile private var current: Slide? = null
     @Volatile private var previous: Slide? = null
     @Volatile private var running = false
-    private var index = paintings.indices.random()
+    private var index = java.util.Random().nextInt(paintings.size)
     @Volatile private var advanceAt = 0L
     private var render: Thread? = null
 

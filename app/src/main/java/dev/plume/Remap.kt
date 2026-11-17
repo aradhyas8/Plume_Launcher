@@ -98,7 +98,7 @@ object Remap {
     fun all(c: Context) = all(store(c))
 
     internal fun all(p: SharedPreferences): LinkedHashMap<String, Entry> = map ?: LinkedHashMap<String, Entry>().also { m ->
-        for (line in p.getString("keymap", "")!!.lines()) {
+        for (line in p.getString("keymap", "")!!.split('\n')) {
             val f = line.split('\t')
             if (f.size == 3) m[f[0]] = Entry(f[1], f[2])
         }

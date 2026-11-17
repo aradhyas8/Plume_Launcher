@@ -579,7 +579,7 @@ internal class GlassLayer(context: Context) : View(context) {
             // its edge: cut it there, or the next tile's frost shows as a grey stub at the screen edge.
             if (!t.scrollerFound) {
                 t.scrollerFound = true
-                t.scroller = (generateSequence(v.parent) { it.parent }.firstOrNull { it is SnapScrollView } as? View)
+                t.scroller = ancestor<SnapScrollView>(v)
                     ?.let { WeakReference(it) }
             }
             val scroller = t.scroller?.get()
