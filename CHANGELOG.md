@@ -19,8 +19,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - **Island.** A glass tile at the top of Home shows what happens now: music, timers, alerts and live scores.
 - Select the island to open it. Press Left or Right on the progress bar to seek in a song.
 - Start a timer, the stopwatch or a sleep timer from the island icon on the top bar. The sleep timer pauses the music.
-- Select **Games now** in **Island** settings to pin a live game. Follow leagues or teams for their scores.
-- The island shows alerts from apps, rain soon, tomorrow's weather, Plume updates, the internet and Bluetooth devices.
+- Select **Games** in **Island** settings. Select **Live now** to pin a game, or **Your teams** to follow a team.
+- The island shows alerts from apps, rain soon and Plume updates.
 - Hold OK on the island to hide an item or turn off an app's alerts.
 - **Recent apps.** Press Home twice to open a row of app windows. Press Left or Right to switch apps. Press Back to return to Plume.
 - Hold OK on All apps, then select Recent apps. You can also assign Plume recent apps to a remote key.

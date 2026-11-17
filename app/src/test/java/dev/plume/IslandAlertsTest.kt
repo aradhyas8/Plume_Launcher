@@ -67,10 +67,4 @@ class IslandAlertsTest {
         assertFalse(islandAlertMayPeek(1_000, 10_999))
         assertTrue(islandAlertMayPeek(1_000, 11_000))
     }
-
-    @Test fun padLowBelowFifteenPercent() {
-        assertTrue(islandPadLow(0.12f))
-        assertFalse(islandPadLow(0.15f))
-        assertFalse(islandPadLow(Float.NaN))
-    }
 }
