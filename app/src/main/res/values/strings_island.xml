@@ -38,7 +38,6 @@
     <string name="isl_sports">Sports</string>
     <string name="help_isl_sports">Live scores of the games you pick and of your teams. Scores come from ESPN.</string>
     <string name="isl_teams">Your teams</string>
-    <string name="isl_games_none">No games now or in the next 3 hours.</string>
     <string name="isl_pinned">On the island</string>
     <string name="isl_n_pinned">%d on the island</string>
     <string name="isl_today">Today</string>
