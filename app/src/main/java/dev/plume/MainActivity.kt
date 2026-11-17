@@ -3014,7 +3014,6 @@ class MainActivity : Activity() {
         rows[R.string.isl_games] = Triple(getString(R.string.isl_games), IslandSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGames() }
         rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", def = false, after = wxAgain)
         rows[R.string.isl_update_row] = islRow(R.string.isl_update_row, "isl_update")
-        rows[R.string.isl_dream_row] = islRow(R.string.isl_dream_row, "isl_dream")
         rows[R.string.isl_bt_row] = Triple(getString(R.string.isl_bt_row), toggle(isl.on("isl_bluetooth", false))) { toggleIslandBluetooth() }
         for (k in listOf(R.string.sort_apps, R.string.weather_units)) steps[k] = { rows[k]!!.third() }
         // Like the layout: behind the PIN. unlock() closes the panel after the PIN, so open it again.
@@ -3045,7 +3044,7 @@ class MainActivity : Activity() {
                     R.string.isl_alerts, R.string.isl_privacy.takeIf { isl.on("isl_alerts") }, R.string.isl_alert_apps.takeIf { isl.on("isl_alerts") },
                     R.string.isl_sports, R.string.isl_games.takeIf { isl.on("isl_sports") },
                     R.string.isl_wx_rain_row,
-                    R.string.isl_update_row, R.string.isl_bt_row, R.string.isl_dream_row)),
+                    R.string.isl_update_row, R.string.isl_bt_row)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
@@ -7131,7 +7130,7 @@ class MainActivity : Activity() {
             R.string.isl_privacy to R.drawable.ms_visibility_off, R.string.isl_alert_apps to R.drawable.ms_checklist, R.string.isl_sports to R.drawable.ms_public,
             R.string.isl_games to R.drawable.ms_play_circle, R.string.isl_wx_rain_row to R.drawable.ms_water,
             R.string.isl_update_row to R.drawable.ms_system_update,
-            R.string.isl_bt_row to R.drawable.ic_isl_bluetooth, R.string.isl_dream_row to R.drawable.ms_bedtime,
+            R.string.isl_bt_row to R.drawable.ic_isl_bluetooth,
         )
         val SECTION_ICONS = mapOf(
             R.string.section_style to R.drawable.ms_palette, R.string.section_clock_weather to R.drawable.ms_partly_cloudy_day,
@@ -7165,7 +7164,6 @@ class MainActivity : Activity() {
             R.string.isl_sports to R.string.help_isl_sports, R.string.isl_games to R.string.help_isl_games,
             R.string.isl_wx_rain_row to R.string.help_isl_wx_rain,
             R.string.isl_update_row to R.string.help_isl_update, R.string.isl_bt_row to R.string.help_isl_bt,
-            R.string.isl_dream_row to R.string.help_isl_dream,
         )
         val ROW_SHOW = linkedMapOf("always" to R.string.always, "down" to R.string.on_down, "never" to R.string.never) // "Show row"
         val CLOCK_SIZES = linkedMapOf(38 to R.string.clock_small, 48 to R.string.clock_medium, 60 to R.string.clock_large) // sp

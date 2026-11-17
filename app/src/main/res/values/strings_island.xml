@@ -49,8 +49,6 @@
     <string name="isl_wx_needs_place">Needs the weather location (Clock &amp; weather).</string>
     <string name="isl_update_row">Plume updates</string>
     <string name="help_isl_update">How far an update of Plume is.</string>
-    <string name="isl_dream_row">On the screensaver</string>
-    <string name="help_isl_dream">The song, a live game or a timer, in a corner of the Gallery screensaver.</string>
     <string name="isl_bt_row">Bluetooth</string>
     <string name="help_isl_bt">Headphones and controllers connecting, and a controller\'s low battery. Android asks to allow Bluetooth.</string>
     <string name="isl_custom">Other length…</string>
