@@ -198,14 +198,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|center_horizontal"
-            android:layout_marginTop="-4dp"
             android:clipChildren="false"
             android:clipToPadding="false"
             android:orientation="vertical"
-            android:paddingStart="6dp"
-            android:paddingTop="6dp"
-            android:paddingEnd="16dp"
-            android:paddingBottom="6dp"
+            android:paddingStart="4dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="4dp"
             android:visibility="gone">
 
                 <!-- Open, with more than one thing on the island: a mark for each, Left and Right pick which one shows. -->
@@ -233,8 +232,8 @@
 
                     <ImageView
                         android:id="@+id/islandArt"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
                         android:importantForAccessibility="no"
                         android:scaleType="centerCrop" />
 
@@ -253,7 +252,7 @@
                             android:fontFamily="sans-serif-medium"
                             android:includeFontPadding="false"
                             android:lineSpacingExtra="2dp"
-                            android:maxWidth="170dp"
+                            android:maxWidth="260dp"
                             android:maxLines="1"
                             android:textSize="13sp" />
 
@@ -291,12 +290,12 @@
                                     android:id="@+id/islandElapsed"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:alpha="0.7"
+                                    android:alpha="0.85"
                                     android:fontFamily="sans-serif"
                                     android:fontFeatureSettings="tnum"
                                     android:includeFontPadding="false"
                                     android:minWidth="30dp"
-                                    android:textSize="11sp" />
+                                    android:textSize="12sp" />
 
                                 <dev.plume.IslandBar
                                     android:id="@+id/islandProgress"
@@ -310,13 +309,13 @@
                                     android:id="@+id/islandLeft"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:alpha="0.7"
+                                    android:alpha="0.85"
                                     android:fontFamily="sans-serif"
                                     android:fontFeatureSettings="tnum"
                                     android:gravity="end"
                                     android:includeFontPadding="false"
                                     android:minWidth="30dp"
-                                    android:textSize="11sp" />
+                                    android:textSize="12sp" />
                             </LinearLayout>
 
                             <!-- The open item's buttons, made for each item. -->

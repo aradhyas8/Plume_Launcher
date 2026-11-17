@@ -340,7 +340,7 @@ internal fun grainShader(): BitmapShader {
  * rectangles: no library, no live blur, nothing for the GPU to redo on each frame.
  */
 internal class GlassLayer(context: Context) : View(context) {
-    private class Tile(val view: WeakReference<View>, val radius: Float) {
+    private class Tile(val view: WeakReference<View>, val radius: Float, val sheen: Boolean) {
         var scroller: WeakReference<View>? = null
         var scrollerFound = false // resolved once, when the tile is attached: its row is there by then
         val area = Rect()
@@ -510,9 +510,10 @@ internal class GlassLayer(context: Context) : View(context) {
         shader = android.graphics.LinearGradient(0f, 0f, 1f, 0f, intArrayOf(0, -1, 0), null, Shader.TileMode.CLAMP)
     }
 
-    fun add(v: View, radius: Float) {
+    /** [sheen] false: no light on the top half, for a big tile that carries text (the island), where it reads as a white haze. */
+    fun add(v: View, radius: Float, sheen: Boolean = true) {
         tiles.removeAll { it.view.get() == null }
-        if (tiles.none { it.view.get() === v }) tiles += Tile(WeakReference(v), radius)
+        if (tiles.none { it.view.get() === v }) tiles += Tile(WeakReference(v), radius, sheen)
         invalidate()
     }
 
@@ -644,7 +645,7 @@ internal class GlassLayer(context: Context) : View(context) {
                     c.drawRoundRect(rect, rx, ry, grainPaint)
                 }
             }
-            light(c, rx, ry, alpha, lit)
+            light(c, rx, ry, alpha, lit, t.sheen)
             if (lit) glint(c, v, rx, ry, alpha)
             c.restore()
         }
@@ -666,12 +667,14 @@ internal class GlassLayer(context: Context) : View(context) {
 
 
     /** The light on the pane: the sheen on its top half, brighter on the focused tile. */
-    private fun light(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean) {
+    private fun light(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean, sheen: Boolean) {
         unit.setScale(1f, rect.height())
         unit.postTranslate(0f, rect.top)
-        sheenPaint.shader.setLocalMatrix(unit)
-        sheenPaint.alpha = (if (lit) alpha else alpha * 3 / 4) / (if (sharpShader != null) 2 else 1) // Clear: its rims show the light, a full sheen hazes it
-        c.drawRoundRect(rect, rx, ry, sheenPaint)
+        if (sheen) {
+            sheenPaint.shader.setLocalMatrix(unit)
+            sheenPaint.alpha = (if (lit) alpha else alpha * 3 / 4) / (if (sharpShader != null) 2 else 1) // Clear: its rims show the light, a full sheen hazes it
+            c.drawRoundRect(rect, rx, ry, sheenPaint)
+        }
         if (edge == 0) return
         edgePaint.alpha = (if (lit) edge + EDGE_LIT else edge) * alpha / 255
         shadePaint.alpha = shade * alpha / 255

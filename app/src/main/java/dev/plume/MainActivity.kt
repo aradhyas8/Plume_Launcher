@@ -7000,26 +7000,26 @@ class MainActivity : Activity() {
      * top sheen; dark mode brightens the glass gradient instead (a white sheen would haze it grey).
      * Only transform/alpha/colour change, so it stays on the GPU and costs no re-layout.
      */
-    internal fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, frost: Boolean = true, rise: Boolean = true, onFocus: ((Boolean) -> Unit)? = null) {
+    internal fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, frost: Boolean = true, rise: Boolean = true, sheen: Boolean = true, onFocus: ((Boolean) -> Unit)? = null) {
         fun gradient(colors: IntArray) = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, colors).apply {
             cornerRadius = radius.toFloat()
             setDither(true)
         }
         val sheenColors = intArrayOf(0x40FFFFFF, 0x00FFFFFF)
-        val sheen = Baked("sheen $radius", gradient(sheenColors)).apply { alpha = 0 }
+        val sheenLayer = Baked("sheen $radius", gradient(sheenColors)).apply { alpha = 0 }
         val rest = if (card) Baked("card $radius ${cardRest.contentToString()}", gradient(cardRest)) else null
         val lit = if (card) Baked("card $radius ${cardLit.contentToString()}", gradient(cardLit)) else null
         val frosted = frost && card && glassActive()
-        if (frosted) glass.add(v, radius.toFloat())
+        if (frosted) glass.add(v, radius.toFloat(), sheen)
         v.background = if (dark && card) rimCard(radius, false, frosted = frosted) else rest ?: GradientDrawable().apply { cornerRadius = radius.toFloat() }
-        if (!dark) v.foreground = sheen
+        if (!dark && sheen) v.foreground = sheenLayer
         v.clipToOutline = true
         v.elevation = if (card) dp(2).toFloat() else 0f
         v.isFocusable = true
         v.isClickable = true
         v.setOnLongClickListener { if (!holdFired) fireHold(v); true }
         v.setOnFocusChangeListener { _, focused ->
-            sheen.alpha = if (focused) 255 else 0
+            sheenLayer.alpha = if (focused) 255 else 0
             if (card && dark) v.background = rimCard(radius, focused, frosted = frosted)
             else if (card) v.background = if (focused) lit else rest
             if (frosted) glass.kick(260) // the lift moves the tile: its blur follows
