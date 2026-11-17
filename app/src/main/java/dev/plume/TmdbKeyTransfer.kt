@@ -102,7 +102,7 @@ internal class TmdbKeyTransfer(address: InetAddress, private val receive: (Strin
               $body
             </main>
             </html>
-        """.trimIndent().encodeToByteArray()
+        """.encodeToByteArray()
         out.write(("HTTP/1.1 $status\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n" +
             "Referrer-Policy: same-origin\r\nContent-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'\r\n" +
             "Content-Length: ${bytes.size}\r\nConnection: close\r\n\r\n").encodeToByteArray())
