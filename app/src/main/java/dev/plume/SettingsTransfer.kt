@@ -46,7 +46,7 @@ internal object SettingsTransfer {
     }
 
     /** Also used before any preference mutation; JSON numbers are converted to their declared preference types. */
-    fun validate(values: Map<String, *>): Map<String, Any> = buildMap {
+    fun validate(values: Map<String, *>): Map<String, Any> = LinkedHashMap<String, Any>().apply {
         for ((key, value) in values) {
             if (key !in SettingsTransfer.keys) continue
             val checked: Any = when {
@@ -116,8 +116,11 @@ internal object SettingsTransfer {
         require(root is JSONObject && parser.nextClean() == '\u0000') { "Invalid settings file" }
         require(root.opt("format") == "plume-settings" && root.opt("version") == 1) { "Unsupported settings file" }
         val settings = root.getJSONObject("settings")
-        val values = settings.keys().asSequence().associateWith { key ->
-            settings.get(key).let { value -> if (value is JSONArray) (0 until value.length()).map(value::get) else value }
+        val values = LinkedHashMap<String, Any?>().apply {
+            for (key in settings.keys()) {
+                val value = settings.get(key)
+                put(key, if (value is JSONArray) (0 until value.length()).map { value.get(it) } else value)
+            }
         }
         return validate(values)
     }
@@ -147,7 +150,7 @@ internal object SettingsTransfer {
         val before = prefs.all.filterKeys { it in keys || it == "geo_time" || it == "wx_time" }
         fun write(values: Map<String, *>): Boolean {
             val edit = prefs.edit()
-            (keys + setOf("geo_time", "wx_time")).forEach(edit::remove)
+            (keys + setOf("geo_time", "wx_time")).forEach { edit.remove(it) }
             for ((key, value) in values) when (value) {
                 is String -> edit.putString(key, value)
                 is Boolean -> edit.putBoolean(key, value)

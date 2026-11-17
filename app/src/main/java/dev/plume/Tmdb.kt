@@ -61,7 +61,7 @@ internal object Tmdb {
         val found = match(titles, title, type) ?: return null
         val images = request("${found.type}/${found.id}/images?include_image_language=null", key)?.getJSONArray("backdrops")
             ?: throw IOException("TMDB rejected the key")
-        return (0 until images.length()).asSequence()
+        return (0 until images.length())
             .map { images.getJSONObject(it) }
             .filter { it.isNull("iso_639_1") && ShowsWall.fits(it.optInt("width"), it.optInt("height")) }
             .filter { imagePath.matches(it.optString("file_path")) }

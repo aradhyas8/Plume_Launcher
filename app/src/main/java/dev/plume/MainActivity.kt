@@ -1740,7 +1740,7 @@ class MainActivity : Activity() {
             extras.forEach { (_, view) -> addView(view) }
             for ((name, tiles) in groups) {
                 name?.let { addView(groupTitle(getString(it))) }
-                tiles.chunked(3).forEach { line ->
+                for (i in tiles.indices step 3) tiles.subList(i, minOf(i + 3, tiles.size)).let { line ->
                     addView(LinearLayout(context).apply {
                         line.forEach { t ->
                             val chosen = t.choice != null && t.choice == current
@@ -4886,7 +4886,7 @@ class MainActivity : Activity() {
         val at = Rect(0, 0, tile.width, tile.height)
         row.offsetDescendantRectToMyCoords(tile, at) // the tile's place in the row, whatever sits between them
         var pivot = at.exactCenterX()
-        val scroll = generateSequence(row.parent) { it.parent }.firstOrNull { it is HorizontalScrollView } as? HorizontalScrollView
+        val scroll = row.ancestor<HorizontalScrollView>()
         if (scroll != null && (at.left < scroll.scrollX || at.right > scroll.scrollX + scroll.width)) pivot = scroll.scrollX + scroll.width / 2f
         row.pivotX = pivot
         row.pivotY = at.exactCenterY()
@@ -5422,7 +5422,7 @@ class MainActivity : Activity() {
                 else resources.getQuantityString(R.plurals.screensaver_minutes, minutes, minutes)
             page(name, if (name == current) CHOSEN else "") {
                 try {
-                    saveScreensaverDelay(minutes, fireTv(), ::readDreamSetting) { key, value ->
+                    saveScreensaverDelay(minutes, fireTv(), { readDreamSetting(it) }) { key, value ->
                         if (key == Settings.System.SCREEN_OFF_TIMEOUT) Settings.System.putString(contentResolver, key, value)
                         else Settings.Secure.putString(contentResolver, key, value)
                     }

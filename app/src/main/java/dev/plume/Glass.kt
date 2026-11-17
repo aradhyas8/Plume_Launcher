@@ -579,7 +579,7 @@ internal class GlassLayer(context: Context) : View(context) {
             // its edge: cut it there, or the next tile's frost shows as a grey stub at the screen edge.
             if (!t.scrollerFound) {
                 t.scrollerFound = true
-                t.scroller = (generateSequence(v.parent) { it.parent }.firstOrNull { it is SnapScrollView } as? View)
+                t.scroller = v.ancestor<SnapScrollView>()
                     ?.let { WeakReference(it) }
             }
             val scroller = t.scroller?.get()
@@ -870,4 +870,11 @@ internal class GlassBox @JvmOverloads constructor(context: Context, attrs: andro
         glass.setBounds(0, 0, width, height)
         glass.draw(c)
     }
+}
+
+/** The nearest parent of type [T], or null. */
+internal inline fun <reified T> android.view.View.ancestor(): T? {
+    var p = parent
+    while (p != null && p !is T) p = p.parent
+    return p as T?
 }
