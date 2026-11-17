@@ -6,8 +6,6 @@ import android.os.Handler
 import android.os.Looper
 import android.text.format.DateFormat
 import org.json.JSONArray
-import org.json.JSONObject
-import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.Executors
 
@@ -18,7 +16,7 @@ import java.util.concurrent.Executors
  * nothing else leaves the TV. Switch: "isl_wx_rain", off by default. The rules themselves are the plain functions at
  * the end of this file, so they can be tested without Android.
  */
-internal object IslandWeather : IslandSource {
+internal object IslandWeather {
     private const val STALE = 25 * 60_000L
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
@@ -125,7 +123,7 @@ internal object IslandWeather : IslandSource {
         return w
     }
 
-    override fun items(now: Long): List<IslandItem> {
+    fun items(now: Long): List<IslandItem> {
         val ctx = app ?: return emptyList()
         val f = forecast ?: return emptyList()
         val p = prefs(ctx)

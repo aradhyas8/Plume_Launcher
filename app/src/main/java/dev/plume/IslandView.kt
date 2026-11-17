@@ -1,118 +1,37 @@
 package dev.plume
 
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
-import android.app.Activity
-import android.app.ActivityOptions
-import android.app.Dialog
-import android.app.PendingIntent
-import android.app.role.RoleManager
-import android.content.ActivityNotFoundException
-import android.content.BroadcastReceiver
 import android.content.ComponentName
-import android.content.ContentResolver
-import android.content.ContentUris
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.content.SharedPreferences
-import android.database.ContentObserver
-import android.content.pm.PackageInstaller
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
-import android.content.res.ColorStateList
 import android.graphics.Bitmap
-import android.graphics.BlurMaskFilter
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Shader
 import android.graphics.Typeface
-import android.graphics.ColorFilter
-import android.graphics.ColorMatrix
 import android.graphics.Outline
-import android.graphics.PixelFormat
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
-import android.graphics.Path
 import android.graphics.Rect
-import android.graphics.RectF
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.drawable.AdaptiveIconDrawable
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.ClipDrawable
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.TransitionDrawable
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
-import android.media.tv.TvContract
-import android.media.tv.TvInputInfo
-import android.media.tv.TvInputManager
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
-import android.os.UserManager
-import android.provider.MediaStore
 import android.provider.Settings
 import android.text.InputType
-import android.text.Editable
 import android.text.InputFilter
 import android.text.SpannableString
-import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.text.TextUtils
-import android.text.TextWatcher
-import android.text.format.DateFormat
-import android.text.style.BulletSpan
-import android.text.style.StyleSpan
-import android.util.LruCache
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.Window
 import android.view.ViewOutlineProvider
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.GridLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.PopupWindow
-import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.TextClock
-import android.widget.Toast
-import android.widget.VideoView
-import android.view.SurfaceView
-import java.io.File
-import java.lang.ref.WeakReference
-import java.io.IOException
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.concurrent.atomic.AtomicBoolean
-import java.net.URLEncoder
-import java.security.MessageDigest
-import java.security.SecureRandom
-import java.util.Calendar
-import java.util.Date
-import java.util.concurrent.Executors
-import org.json.JSONObject
 
 /** The open island is never narrower than this (dp): with less room beside the clock and the icons it opens below the bar. */
 private const val MIN_OPEN = 300
@@ -160,9 +79,8 @@ internal class IslandView(private val a: MainActivity) {
     var updateDone = -1f // the update's download, 0..1, while one runs; -1: none
     val islandHidden = HashSet<String>() // items hidden with Hold OK › Hide, until Plume restarts
     var netWhy = 0 // the string for what is wrong with the network, 0 when nothing is
-    val islandImages = HashMap<String, Bitmap>() // pictures fetched from addresses (logos), by address
-    val islandLoading = HashSet<String>()
-    val islandFailed = HashSet<String>() // addresses with no picture (ESPN has no logo for many teams): asked once only
+    private val loading = HashSet<String>() // pictures on their way, and addresses with none (ESPN has no logo for many teams)
+    private val failed = HashSet<String>()
 
     // Music: the session the island follows.
     var pausedAt = 0L // when the shown track paused (elapsedRealtime), 0 while it plays
@@ -279,12 +197,7 @@ internal class IslandView(private val a: MainActivity) {
             .firstNotNullOfOrNull { m.getString(it)?.takeIf { u -> u.startsWith("http") || u.startsWith("content") || u.startsWith("android.resource") } }
         if (uri != artUri) {
             artUri = uri
-            artSharp = uri?.let { posters.get(it) }
-            if (uri != null && artSharp == null) posterIo.execute {
-                val b = try { decode(uri, dp(160), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } ?: return@execute
-                posters.put(uri, b)
-                ui.post { if (artUri == uri && !isDestroyed) { artSharp = b; showIsland() } }
-            }
+            artSharp = uri?.let { picture(it, dp(160)) { b -> if (artUri == uri) { artSharp = b; showIsland() } } }
         }
         return artSharp ?: m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: m.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
@@ -518,17 +431,22 @@ internal class IslandView(private val a: MainActivity) {
         return if (first != null && second != null) first to second else null to null
     }
 
-    /** A picture fetched from an address (a team logo), kept once it has come; null until then. */
-    fun MainActivity.islandImage(uri: String?): Bitmap? {
-        if (uri == null) return null
-        islandImages[uri]?.let { return it }
-        if (uri in islandFailed) return null
-        if (islandLoading.add(uri)) posterIo.execute {
-            val b = try { decode(uri, dp(136), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } // 2x the open art: sharp
+    /** A team logo, twice the open art's size so it stays sharp; null until it has come. */
+    fun MainActivity.islandImage(uri: String?): Bitmap? = uri?.let { picture(it, dp(136)) { islandItem?.let { i -> bindIsland(i, islandOpen) } } }
+
+    /**
+     * A picture from an address, [px] wide, from the home screen's poster cache (so it is bounded) or fetched once;
+     * null until it comes, then [done] runs on the main thread. An address with no picture is asked once only.
+     */
+    fun MainActivity.picture(uri: String, px: Int, done: (Bitmap) -> Unit): Bitmap? {
+        val key = "$uri@$px"
+        posters.get(key)?.let { return it }
+        if (key in failed || !loading.add(key)) return null
+        posterIo.execute {
+            val b = try { decode(uri, px, Bitmap.Config.ARGB_8888) } catch (e: Exception) { null }
             ui.post {
-                islandLoading.remove(uri)
-                if (b == null) islandFailed += uri
-                else if (!isDestroyed) { islandImages[uri] = b; islandItem?.let { bindIsland(it, islandOpen) } }
+                loading.remove(key)
+                if (b == null) failed += key else if (!isDestroyed) { posters.put(key, b); done(b) }
             }
         }
         return null
@@ -658,8 +576,6 @@ internal class IslandView(private val a: MainActivity) {
     /** A row of items to choose from while the island is open. */
     fun MainActivity.bindMarks(open: Boolean, ink: Int) {
         val item = islandItem
-        // At rest the pill shows one thing only: the others wait in the open tile's row of marks.
-        findViewById<LinearLayout>(R.id.islandMarks).apply { visibility = View.GONE; removeAllViews() }
         val scroll = islandChips.parent as android.widget.HorizontalScrollView
         scroll.visibility = if (open && islandList.size > 1) View.VISIBLE else View.GONE
         islandChips.removeAllViews()
@@ -923,15 +839,11 @@ internal class IslandView(private val a: MainActivity) {
     fun askAccess() = a.askIslandAccess()
     fun customTimer() = a.editTimer()
 
-    /** A logo from an address into [into], from the island's cache or fetched once; 24 dp, for settings rows. */
+    /** A logo from an address into [into], 24 dp, for settings rows. */
     fun logo(url: String, into: ImageView) {
         into.tag = url
         into.scaleType = ImageView.ScaleType.FIT_CENTER
-        islandImages[url]?.let { return into.setImageBitmap(it) }
-        a.posterIo.execute {
-            val b = try { a.decode(url, a.dp(48), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } ?: return@execute
-            a.ui.post { islandImages[url] = b; if (into.tag == url) into.setImageBitmap(b) }
-        }
+        a.picture(url, a.dp(48)) { if (into.tag == url) into.setImageBitmap(it) }?.let(into::setImageBitmap)
     }
 }
 

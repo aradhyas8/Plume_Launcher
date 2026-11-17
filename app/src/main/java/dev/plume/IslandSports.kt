@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
  * every change. Nothing about the user goes out: the requests carry only the league and dates in the URL and a
  * generic User-Agent.
  */
-internal object IslandSports : IslandSource {
+internal object IslandSports {
     /**
      * A league the settings can offer, in the sport folder [group] (a string resource). [query] is added to its
      * scoreboard request. [teams] is false for the leagues with no teams list (races, tennis, golf, fights, cricket):
@@ -37,10 +37,10 @@ internal object IslandSports : IslandSource {
         internal val entry get() = "$sport|$league"
     }
 
-    data class Team(val id: String, val name: String, val abbreviation: String, val logo: String?)
+    class Team(val id: String, val name: String, val abbreviation: String, val logo: String?)
 
     /** A game for the "Games now" page: [title] is the live score or "IND at PHI · 7:30 PM". */
-    data class NowGame(
+    class NowGame(
         val sport: String, val league: String, val leagueName: String, val eventId: String, val title: String,
         val awayLogo: String?, val homeLogo: String?, val live: Boolean, val start: Long, val rank: Int = 2,
         /** Who plays, without the score ("IND at PHI"): kept with a pick, so the settings can name it offline. */
@@ -294,7 +294,7 @@ internal object IslandSports : IslandSource {
         if (gen != generation) return
         val ctx = app ?: return
         val now = System.currentTimeMillis()
-        val before = items(now)
+        val before = items(now).map { it.shown }
         val on = prefs(ctx).getBoolean("isl_on", true) && prefs(ctx).getBoolean(PREF_ON, true)
         trimPins(ctx)
         val teams = if (on) followed(ctx) else emptyList()
@@ -331,7 +331,7 @@ internal object IslandSports : IslandSource {
         val gone = pins.filter { p -> now >= minOf(p.until, picked.firstOrNull { it.game.id == p.eventId }?.until ?: Long.MAX_VALUE) }
             .map { it.eventId }.toSet()
         if (gone.isNotEmpty()) edit(ctx, PREF_GAMES) { set -> set.removeAll { PinnedGame.parse(it)?.eventId in gone } }
-        if (items(now) != before) Island.changed()
+        if (items(now).map { it.shown } != before) Island.changed()
         val watch = picked.map { it.game }
         // With nothing followed (or sports off) there is nothing to wait for; the settings call start() again.
         if (needed.isNotEmpty() && gen == generation) task = io.schedule(Runnable { poll(gen) }, sportsPollMs(watch, now), TimeUnit.MILLISECONDS)
@@ -391,7 +391,7 @@ internal object IslandSports : IslandSource {
 
     // ---------- items ----------
 
-    override fun items(now: Long): List<IslandItem> {
+    fun items(now: Long): List<IslandItem> {
         val ctx = app ?: return emptyList()
         // The games the user picked first, then a followed team's (live before soon), and only as many as the user allows.
         return shown.sortedWith(compareBy<Shown>({ it.source }, { if (it.game.state == "in") 0 else 1 }, { it.game.start }))
@@ -488,7 +488,7 @@ internal const val SPORTS_TEAM = 1
 internal const val SPORTS_LEAGUE = 2
 
 /** One followed team, stored as "sport|league|teamId|abbreviation|name" so the settings can list it offline. */
-internal data class FollowedTeam(val sport: String, val league: String, val teamId: String, val abbreviation: String, val name: String) {
+internal class FollowedTeam(val sport: String, val league: String, val teamId: String, val abbreviation: String, val name: String) {
     // A "|" in a name would break the entry, so it becomes "/".
     val entry get() = listOf(sport, league, teamId, abbreviation, name).joinToString("|") { it.replace('|', '/') }
 
@@ -503,7 +503,7 @@ internal data class FollowedTeam(val sport: String, val league: String, val team
 }
 
 /** One pinned game, stored as "sport|league|eventId|untilMillis"; [until] is when the pin goes at the latest. */
-internal data class PinnedGame(val sport: String, val league: String, val eventId: String, val until: Long,
+internal class PinnedGame(val sport: String, val league: String, val eventId: String, val until: Long,
     /** When it was picked (0 for picks stored before this was kept): the oldest goes first when the island is full. */
     val at: Long = 0L,
     /** Who plays ("IND at PHI"), so the settings can list it without the network. */
@@ -525,14 +525,14 @@ internal data class PinnedGame(val sport: String, val league: String, val eventI
 internal fun sportsPinsToDrop(pins: List<PinnedGame>, max: Int): List<PinnedGame> =
     pins.sortedBy { it.at }.take((pins.size + 1 - max).coerceAtLeast(0))
 
-internal data class SportsSide(val id: String, val abbreviation: String, val name: String, val score: String, val logo: String?)
+internal class SportsSide(val id: String, val abbreviation: String, val name: String, val score: String, val logo: String?)
 
 /**
  * A game from a scoreboard. [league] is "sport/league"; [state] is ESPN's "pre", "in" or "post"; [start] is wall-clock
  * ms. An event with a [name] (a race, a tournament, a fight, a cricket match) shows by that name and its
  * [shortDetail] instead of a score; [away] and [home] may then be missing, and [logo] is the league's picture.
  */
-internal data class SportsGame(
+internal class SportsGame(
     val id: String, val league: String, val start: Long, val state: String, val completed: Boolean,
     val shortDetail: String, val detail: String, val away: SportsSide?, val home: SportsSide?,
     val name: String? = null, val logo: String? = null,
@@ -669,7 +669,7 @@ internal fun cricketScore(g: SportsGame) = sportsSides(g).toList().filterNotNull
  * A live match as parts: who bats and their overs (the side whose score ends "(28.1 ov)"), who won the toss, and
  * ESPN's summary when it says more than the toss or the status ([note]). [runs]: a side has scored.
  */
-internal data class CricketState(val batting: String?, val overs: String?, val toss: String?, val note: String?, val runs: Boolean)
+internal class CricketState(val batting: String?, val overs: String?, val toss: String?, val note: String?, val runs: Boolean)
 
 internal fun cricketState(g: SportsGame): CricketState {
     val sides = listOfNotNull(g.away, g.home)

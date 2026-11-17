@@ -347,16 +347,6 @@
                         android:layout_height="12dp"
                         android:layout_marginStart="12dp" />
 
-                    <!-- At rest: small marks for the other things on the island. -->
-                    <LinearLayout
-                        android:id="@+id/islandMarks"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:visibility="gone" />
-
                     <!-- The playing app's mark, as the Shows row shows it. Only while open. -->
                     <ImageView
                         android:id="@+id/islandApp"

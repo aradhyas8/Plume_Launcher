@@ -21,7 +21,6 @@
     <string name="isl_timer">Timer</string>
     <string name="isl_stopwatch">Stopwatch</string>
     <string name="isl_sleep_timer">Sleep timer</string>
-    <string name="isl_sleep_help">Pauses the music and videos that play when it ends.</string>
     <plurals name="isl_minutes">
         <item quantity="one">%d min</item>
         <item quantity="other">%d min</item>

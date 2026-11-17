@@ -33,7 +33,7 @@ internal class IslandAction(val icon: Int = 0, val label: String? = null, val de
  * is shown, and no more. Before [peekUntil] the island opens by itself to show the item, without taking focus. After
  * [until] the item is gone.
  */
-internal data class IslandItem(
+internal class IslandItem(
     val key: String,
     val kind: IslandKind,
     val title: String,
@@ -50,11 +50,13 @@ internal data class IslandItem(
     val peekUntil: Long = 0L,
     val actions: List<IslandAction> = emptyList(),
     val description: String? = null,
-)
+) {
+    /** The same item with another second line (a battery level that lands after the connect). */
+    fun withSub(sub: String?) = IslandItem(key, kind, title, sub, icon, mono, image, imageUri, image2Uri, progress, tick, since, until,
+        peekUntil, actions, description)
 
-/** A source of island items. [items] is cheap: it reads state the source keeps, it never waits on the network. */
-internal interface IslandSource {
-    fun items(now: Long): List<IslandItem>
+    /** What the island shows of it: the same text and times mean nothing to redraw. */
+    val shown get() = "$key|$kind|$title|$sub|$progress|$since|$until|$peekUntil"
 }
 
 /** The items still current at [now], the pill's first: lowest rank, then newest. */

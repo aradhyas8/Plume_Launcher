@@ -19,7 +19,7 @@ import android.view.InputDevice
  * island items. Off unless the user turns on "isl_bluetooth", because most people pair a device once and never need
  * to be told again. The home screen calls [start] while it is shown and [stop] when it is not.
  */
-internal object IslandBluetooth : IslandSource {
+internal object IslandBluetooth {
     private const val BATTERY_CHANGED = "android.bluetooth.device.action.BATTERY_LEVEL_CHANGED"
     private const val EXTRA_BATTERY = "android.bluetooth.device.extra.BATTERY_LEVEL"
 
@@ -28,7 +28,7 @@ internal object IslandBluetooth : IslandSource {
     private var app: Context? = null
     private var input: InputManager? = null
 
-    @Synchronized override fun items(now: Long): List<IslandItem> {
+    @Synchronized fun items(now: Long): List<IslandItem> {
         shown.values.removeAll { now >= it.until }
         return shown.values.toList()
     }
@@ -81,7 +81,7 @@ internal object IslandBluetooth : IslandSource {
                         val key = "bt:${device.address}"
                         val item = shown[key]
                         if (item != null && item.peekUntil > 0 && level >= 0) {
-                            shown[key] = item.copy(sub = context.getString(R.string.isl_bt_battery, level))
+                            shown[key] = item.withSub(context.getString(R.string.isl_bt_battery, level))
                             Island.changed()
                         }
                     }
@@ -137,7 +137,7 @@ internal object IslandBluetooth : IslandSource {
             val old = shown[key]
             val sub = c.getString(R.string.isl_bt_percent, percent)
             if (old != null && old.sub == sub) continue
-            shown[key] = old?.copy(sub = sub) ?: IslandItem(
+            shown[key] = old?.withSub(sub) ?: IslandItem(
                 key = key,
                 kind = IslandKind.BLUETOOTH,
                 title = c.getString(R.string.isl_bt_pad_low),

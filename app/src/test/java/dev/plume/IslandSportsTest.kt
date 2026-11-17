@@ -47,14 +47,14 @@ class IslandSportsTest {
 
     @Test fun followedEntryRoundTrips() {
         val t = FollowedTeam("basketball", "nba", "20", "PHI", "Philadelphia 76ers")
-        assertEquals(t, FollowedTeam.parse(t.entry))
+        assertEquals(t.entry, FollowedTeam.parse(t.entry)?.entry)
     }
     @Test fun pipeInNameIsKept() = assertEquals("A/B", FollowedTeam.parse(FollowedTeam("s", "l", "1", "AB", "A|B").entry)?.name)
     @Test fun brokenEntryIsSkipped() = assertNull(FollowedTeam.parse("basketball|nba"))
 
     @Test fun pinnedEntryRoundTrips() {
         val p = PinnedGame("soccer", "eng.1", "401", 1_000L)
-        assertEquals(p, PinnedGame.parse(p.entry))
+        assertEquals(p.entry, PinnedGame.parse(p.entry)?.entry)
     }
     @Test fun pinWithoutEndIsSkipped() = assertNull(PinnedGame.parse("soccer|eng.1|401|soon"))
 
@@ -95,7 +95,8 @@ class IslandSportsTest {
     @Test fun playingTodayIsLocalDay() {
         val utc = ZoneId.of("UTC")
         val today = game("pre", start = noonNy + 5 * hour) // 23:00 UTC, still 15 November
-        val tomorrow = game("pre", start = noonNy + 7 * hour).copy(away = SportsSide("1", "A", "A", "", null), home = SportsSide("2", "B", "B", "", null))
+        val tomorrow = SportsGame("1", "basketball/nba", noonNy + 7 * hour, "pre", false, "9:00 - 2nd", "9:00 - 2nd Quarter",
+            SportsSide("1", "A", "A", "", null), SportsSide("2", "B", "B", "", null))
         assertEquals(setOf("11", "20"), sportsPlayingToday(listOf(today, tomorrow), noonNy, utc))
     }
     @Test fun liveFromYesterdayPlaysToday() = assertEquals(setOf("11", "20"), sportsPlayingToday(listOf(game("in", start = 0L)), noonNy, ZoneId.of("UTC")))
@@ -121,7 +122,9 @@ class IslandSportsTest {
 
     @Test fun cricketFollowsTheMatchName() {
         // ESPN sends ABT as home, but names the match "ABT v HYD-R": ABT comes first.
-        val g = cricket("", "", "").copy(away = SportsSide("2", "HYD-R", "Hyderabad R", "121", null), home = SportsSide("1", "ABT", "Abbottabad", "118/4 (28.1 ov)", null))
+        val g = SportsGame("2", "cricket/scorepanel", 0L, "in", false, "", "",
+            SportsSide("2", "HYD-R", "Hyderabad R", "121", null), SportsSide("1", "ABT", "Abbottabad", "118/4 (28.1 ov)", null),
+            name = "ABT v HYD-R", cricket = true)
         assertEquals("ABT 118/4 · HYD-R 121", cricketScore(g).replace('\u00A0', ' '))
         assertEquals("ABT", sportsSides(g).first?.abbreviation)
     }
@@ -158,11 +161,11 @@ class IslandSportsTest {
     @Test fun smallerLimitDropsMore() = assertEquals(listOf("2", "1", "3"),sportsPinsToDrop(listOf(pin("1", 30), pin("2", 10), pin("3", 50)), 1).map { it.eventId })
 
     @Test fun pickKeepsItsNameAndTime() {
-        val p = pin("7", 42).copy(name = "A|B at C")
-        assertEquals(p.copy(name = "A/B at C"), PinnedGame.parse(p.entry))
+        val p = PinnedGame("nba", "nba", "7", 9_000L, 42, "A|B at C")
+        assertEquals(PinnedGame("nba", "nba", "7", 9_000L, 42, "A/B at C").entry, PinnedGame.parse(p.entry)?.entry)
     }
 
-    @Test fun oldPickStillReads() = assertEquals(PinnedGame("nba", "nba", "7", 9_000L), PinnedGame.parse("nba|nba|7|9000"))
+    @Test fun oldPickStillReads() = assertEquals(PinnedGame("nba", "nba", "7", 9_000L).entry, PinnedGame.parse("nba|nba|7|9000")?.entry)
 
     // ---------- Live now order ----------
 

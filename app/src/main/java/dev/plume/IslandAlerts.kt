@@ -20,7 +20,7 @@ internal object IslandAlerts {
     private const val PEEK_MS = 6_000L
     private const val LAST_MS = 120_000L
 
-    internal data class CachedAlert(val pkg: String, val privacy: String, val item: IslandItem) {
+    internal class CachedAlert(val pkg: String, val privacy: String, val item: IslandItem) {
         fun visible(now: Long, currentPrivacy: String?, muted: Set<String>) =
             now < item.until && privacy == currentPrivacy && pkg !in muted
     }

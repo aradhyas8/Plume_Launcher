@@ -52,7 +52,7 @@ internal fun islSleepCount(left: Long): Long =
  *
  * Call [init] at start and every control on the main thread, because the Toasts and the Handler need it.
  */
-internal object IslandTimers : IslandSource {
+internal object IslandTimers {
     private const val T_STATE = "isl_t_state"
     private const val T_END = "isl_t_end"
     private const val T_LEFT = "isl_t_left"
@@ -154,7 +154,7 @@ internal object IslandTimers : IslandSource {
 
     fun cancelSleep(ctx: Context) = edit(ctx) { clearSleep() }
 
-    override fun items(now: Long): List<IslandItem> {
+    fun items(now: Long): List<IslandItem> {
         val c = app ?: return emptyList()
         val p = prefs(c)
         val out = ArrayList<IslandItem>(3)
