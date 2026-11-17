@@ -74,11 +74,8 @@ internal class IslandView(private val a: MainActivity) {
     val peeksShown = HashSet<String>()
     var seekTo = -1L // a seek still being chosen: shown at once, sent once the keys stop
     private var seekTrack: List<String?>? = null
-    var netDownAt = 0L // when the network went away (0: it is up), and when it came back
-    var netBackAt = 0L
     var updateDone = -1f // the update's download, 0..1, while one runs; -1: none
     val islandHidden = HashSet<String>() // items hidden with Hold OK › Hide, until Plume restarts
-    var netWhy = 0 // the string for what is wrong with the network, 0 when nothing is
     private val loading = HashSet<String>() // pictures on their way, and addresses with none (ESPN has no logo for many teams)
     private val failed = HashSet<String>()
 
@@ -246,16 +243,8 @@ internal class IslandView(private val a: MainActivity) {
             description = listOfNotNull(title, who, app).joinToString(", "))
     }
 
-    /** The network and Plume's own update, which the home screen knows itself. */
+    /** Plume's own update, which the home screen knows itself. The network is not here: the Wi-Fi icon shows it. */
     fun MainActivity.systemItems(now: Long): List<IslandItem> = listOfNotNull(
-        // Gone for 10 s first: Wi-Fi coming up after a wake would flash it for nothing.
-        if (on("isl_net") && netDownAt > 0 && now >= netDownAt + ISLAND_NETWORK_GRACE)
-            IslandItem("net", IslandKind.NETWORK, getString(netWhy.takeIf { it != 0 } ?: R.string.isl_net_down),
-                getString(if (netWhy == R.string.isl_net_captive) R.string.isl_net_captive_sub else R.string.isl_net_down_sub), R.drawable.ic_isl_wifi_off,
-                since = netDownAt, peekUntil = netDownAt + 16_000,
-                actions = listOf(IslandAction(label = getString(R.string.isl_net_wifi)) { openSettings(Settings.ACTION_WIFI_SETTINGS) })) else null,
-        if (on("isl_net") && netBackAt > 0 && now - netBackAt < 5_000)
-            IslandItem("net", IslandKind.NETWORK, getString(R.string.isl_net_back), null, R.drawable.ic_wifi, since = netBackAt, until = netBackAt + 5_000) else null,
         if (on("isl_update") && updateDone >= 0f)
             IslandItem("update", IslandKind.UPDATE, getString(R.string.isl_update_title),
                 if (updateDone >= 1f) getString(R.string.isl_update_installing) else getString(R.string.isl_update_progress, availableUpdate() ?: "", (updateDone * 100).toInt()),
@@ -294,15 +283,12 @@ internal class IslandView(private val a: MainActivity) {
         val now = System.currentTimeMillis()
         islandList = islandAll(now)
         ui.removeCallbacks(islandTick)
-        val networkDeadline = (netDownAt + ISLAND_NETWORK_GRACE)
-            .takeIf { on("isl_on") && on("isl_net") && netDownAt > 0 && it > now }
         if (islandList.isEmpty()) {
             if (island.isFocused) findViewById<View?>(shownTop().first())?.requestFocus()
             if (lastTop === island) lastTop = null
             island.visibility = View.GONE
             islandOpen = false
             islandWant = null
-            networkDeadline?.let { ui.postDelayed(islandTick, it - now) }
             return
         }
         // An alert opens the island by itself for a moment, only while nothing else is going on on the screen.
@@ -326,7 +312,7 @@ internal class IslandView(private val a: MainActivity) {
         island.visibility = View.VISIBLE
         if (islandWant == null && open == islandOpen) bindIsland(item, open) else shapeIsland(open)
         // Look again when something changes by itself: a second passes on a timer, or an item or a peek runs out.
-        val next = (islandList.flatMap { listOf(it.until, it.peekUntil) } + listOfNotNull(networkDeadline)).filter { it > now }.minOrNull()
+        val next = islandList.flatMap { listOf(it.until, it.peekUntil) }.filter { it > now }.minOrNull()
         // Each item says how often its text changes; open, the music's bar and times move every second.
         val period = (islandList.mapNotNull { it.tick.takeIf { t -> t > 0 } } + listOfNotNull(1000L.takeIf { open && (media != null || item.progress != null) })).minOrNull()
         val wait = minOf(period ?: Long.MAX_VALUE, next?.let { it - now + 50 } ?: Long.MAX_VALUE)
@@ -592,7 +578,6 @@ internal class IslandView(private val a: MainActivity) {
                             IslandKind.TIMER, IslandKind.TIMER_DONE -> R.string.isl_timer
                             IslandKind.STOPWATCH -> R.string.isl_stopwatch
                             IslandKind.SLEEP -> R.string.isl_sleep_timer
-                            IslandKind.NETWORK -> R.string.isl_net_row
                             IslandKind.MEDIA, IslandKind.MEDIA_PAUSED -> R.string.isl_music
                             IslandKind.SPORTS, IslandKind.SPORTS_LIVE -> R.string.isl_games
                             IslandKind.UPDATE -> R.string.isl_update_row

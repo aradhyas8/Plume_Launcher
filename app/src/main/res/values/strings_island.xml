@@ -51,8 +51,6 @@
     <string name="help_isl_update">How far an update of Plume is.</string>
     <string name="isl_dream_row">On the screensaver</string>
     <string name="help_isl_dream">The song, a live game or a timer, in a corner of the Gallery screensaver.</string>
-    <string name="isl_net_row">Internet</string>
-    <string name="help_isl_net">When the internet goes, and when it comes back.</string>
     <string name="isl_bt_row">Bluetooth</string>
     <string name="help_isl_bt">Headphones and controllers connecting, and a controller\'s low battery. Android asks to allow Bluetooth.</string>
     <string name="isl_custom">Other length…</string>
@@ -68,13 +66,6 @@
     <string name="isl_access_card_title">Music and alerts on the island</string>
     <string name="isl_access_card_body">Allow notification access, and the island shows what plays in Spotify and other apps, with calls and doorbell alerts. Plume sends nothing anywhere.</string>
     <string name="isl_access_give">Give access</string>
-    <string name="isl_net_captive">Sign-in needed</string>
-    <string name="isl_net_captive_sub">This Wi-Fi asks you to sign in on a web page</string>
-    <string name="isl_net_noint">Connected, no internet</string>
-    <string name="isl_net_wifi">Wi-Fi</string>
-    <string name="isl_net_down">No internet</string>
-    <string name="isl_net_down_sub">Apps and streams can\'t load</string>
-    <string name="isl_net_back">Back online</string>
     <string name="isl_update_title">Updating Plume</string>
     <string name="isl_update_progress">%1$s · %2$d%%</string>
     <string name="isl_update_installing">Installing…</string>

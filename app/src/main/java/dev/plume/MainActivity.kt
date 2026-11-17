@@ -3015,7 +3015,6 @@ class MainActivity : Activity() {
         rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", def = false, after = wxAgain)
         rows[R.string.isl_update_row] = islRow(R.string.isl_update_row, "isl_update")
         rows[R.string.isl_dream_row] = islRow(R.string.isl_dream_row, "isl_dream")
-        rows[R.string.isl_net_row] = islRow(R.string.isl_net_row, "isl_net")
         rows[R.string.isl_bt_row] = Triple(getString(R.string.isl_bt_row), toggle(isl.on("isl_bluetooth", false))) { toggleIslandBluetooth() }
         for (k in listOf(R.string.sort_apps, R.string.weather_units)) steps[k] = { rows[k]!!.third() }
         // Like the layout: behind the PIN. unlock() closes the panel after the PIN, so open it again.
@@ -3046,7 +3045,7 @@ class MainActivity : Activity() {
                     R.string.isl_alerts, R.string.isl_privacy.takeIf { isl.on("isl_alerts") }, R.string.isl_alert_apps.takeIf { isl.on("isl_alerts") },
                     R.string.isl_sports, R.string.isl_games.takeIf { isl.on("isl_sports") },
                     R.string.isl_wx_rain_row,
-                    R.string.isl_update_row, R.string.isl_net_row, R.string.isl_bt_row, R.string.isl_dream_row)),
+                    R.string.isl_update_row, R.string.isl_bt_row, R.string.isl_dream_row)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
@@ -4025,19 +4024,6 @@ class MainActivity : Activity() {
         iconShadow(wifi) // the shadow takes the new picture's shape
         // Dim only the icon: the focus ring is the background and should stay full strength.
         wifi.imageAlpha = if (caps == null) 90 else 255
-        // The island says so when the internet goes, and when it comes back after it did.
-        val up = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-        // Three different troubles: no network, a hotel or guest Wi-Fi asking to sign in, or a network with no internet.
-        isl.netWhy = when {
-            caps == null -> R.string.isl_net_down
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL) -> R.string.isl_net_captive
-            !up -> R.string.isl_net_noint
-            else -> 0
-        }
-        val now = System.currentTimeMillis()
-        if (!up && isl.netDownAt == 0L) isl.netDownAt = now
-        if (up && isl.netDownAt > 0L) { if (now - isl.netDownAt >= ISLAND_NETWORK_GRACE) isl.netBackAt = now; isl.netDownAt = 0L }
-        isl.show()
     }
 
     internal fun openSettings(action: String, data: Uri? = null) {
@@ -7144,7 +7130,7 @@ class MainActivity : Activity() {
             R.string.isl_music to R.drawable.ic_music_note, R.string.isl_idle to R.drawable.ms_schedule, R.string.isl_alerts to R.drawable.ms_badge,
             R.string.isl_privacy to R.drawable.ms_visibility_off, R.string.isl_alert_apps to R.drawable.ms_checklist, R.string.isl_sports to R.drawable.ms_public,
             R.string.isl_games to R.drawable.ms_play_circle, R.string.isl_wx_rain_row to R.drawable.ms_water,
-            R.string.isl_update_row to R.drawable.ms_system_update, R.string.isl_net_row to R.drawable.ic_wifi,
+            R.string.isl_update_row to R.drawable.ms_system_update,
             R.string.isl_bt_row to R.drawable.ic_isl_bluetooth, R.string.isl_dream_row to R.drawable.ms_bedtime,
         )
         val SECTION_ICONS = mapOf(
@@ -7178,7 +7164,7 @@ class MainActivity : Activity() {
             R.string.isl_alerts to R.string.help_isl_alerts, R.string.isl_privacy to R.string.help_isl_privacy, R.string.isl_alert_apps to R.string.help_isl_alert_apps,
             R.string.isl_sports to R.string.help_isl_sports, R.string.isl_games to R.string.help_isl_games,
             R.string.isl_wx_rain_row to R.string.help_isl_wx_rain,
-            R.string.isl_update_row to R.string.help_isl_update, R.string.isl_net_row to R.string.help_isl_net, R.string.isl_bt_row to R.string.help_isl_bt,
+            R.string.isl_update_row to R.string.help_isl_update, R.string.isl_bt_row to R.string.help_isl_bt,
             R.string.isl_dream_row to R.string.help_isl_dream,
         )
         val ROW_SHOW = linkedMapOf("always" to R.string.always, "down" to R.string.on_down, "never" to R.string.never) // "Show row"
