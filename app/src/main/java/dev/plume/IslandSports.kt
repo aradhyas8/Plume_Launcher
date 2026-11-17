@@ -408,34 +408,36 @@ internal object IslandSports {
         val since = sportsSince(s.source, live, if (g.state == "pre") -g.start else s.changed)
         // Cricket names its match home side first ("ABT v HYD-R"): the pictures follow the order of the words.
         val (first, second) = sportsSides(g)
-        val away = first?.logo ?: g.logo
-        val home = second?.logo
-        // Many teams (most domestic cricket) have no logo at ESPN: then the sport's icon stands in (see islandPictures).
-        val icon = sportIcon(g.league.substringBefore('/'))
+        // Both teams' logos (ESPN's 500 px), else the league's own logo: many teams (most domestic cricket) have none
+        // at ESPN. With no logo at all, the Games icon stands in.
+        val pair = first?.logo != null && second?.logo != null
+        val away = if (pair) first?.logo else g.logo
+        val home = if (pair) second?.logo else null
+        val icon = R.drawable.ms_play_circle
         return when {
             g.state == "pre" && sportsSoon(g.start, now) -> {
                 val zone = ZoneId.systemDefault()
                 val tomorrow = Instant.ofEpochMilli(g.start).atZone(zone).toLocalDate() != Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
                 val sub = ctx.getString(if (tomorrow) R.string.isl_sports_tomorrow else R.string.isl_sports_today, clock(ctx, g.start))
-                IslandItem(key = key, kind = kind, title = label(ctx, g), sub = sub, mono = false, imageUri = away,
+                IslandItem(key = key, kind = kind, title = label(ctx, g), sub = sub, imageUri = away,
                     image2Uri = home, icon = icon, since = since,
                     description = g.name?.let { "$it, $sub" } ?: ctx.getString(R.string.isl_sports_desc_pre, g.away?.name, g.home?.name, sub))
             }
             live && g.cricket -> {
                 val line = cricketLine(ctx, g)
-                IslandItem(key = key, kind = kind, title = cricketScore(g), sub = ctx.getString(R.string.isl_score_live, line), mono = false, imageUri = away,
+                IslandItem(key = key, kind = kind, title = cricketScore(g), sub = ctx.getString(R.string.isl_score_live, line), imageUri = away,
                     image2Uri = home, icon = icon, since = since, peekUntil = s.peekUntil,
                     description = "${g.away?.name} ${g.away?.score}, ${g.home?.name} ${g.home?.score}, $line")
             }
             live -> IslandItem(key = key, kind = kind, title = g.name ?: sportsScore(g),
-                sub = ctx.getString(R.string.isl_score_live, if (g.name != null) g.shortDetail else sportsDetail(g.shortDetail)), mono = false, imageUri = away,
+                sub = ctx.getString(R.string.isl_score_live, if (g.name != null) g.shortDetail else sportsDetail(g.shortDetail)), imageUri = away,
                 image2Uri = home, icon = icon, since = since, peekUntil = s.peekUntil,
                 description = describe(ctx, g, if (g.name != null) g.detail else sportsDetail(g.detail)))
             // A postponed or cancelled game is "post" but not completed; it has no result to show.
             g.state == "post" && g.completed -> {
                 val final = if (g.name != null) g.shortDetail else ctx.getString(R.string.isl_sports_final)
                 IslandItem(key = key, kind = kind, title = if (g.cricket) cricketScore(g) else g.name ?: sportsScore(g), sub = final,
-                    mono = false, imageUri = away, image2Uri = home, icon = icon, since = since, until = s.until, peekUntil = s.peekUntil,
+                    imageUri = away, image2Uri = home, icon = icon, since = since, until = s.until, peekUntil = s.peekUntil,
                     description = describe(ctx, g, final))
             }
             else -> null
@@ -679,21 +681,6 @@ internal fun cricketState(g: SportsGame): CricketState {
     val toss = Regex("""^(.+?) won (the )?toss""", RegexOption.IGNORE_CASE).find(summary)?.groupValues?.get(1)
     val plain = toss != null || summary.isEmpty() || summary.equals("Live", true) || summary.startsWith("Starts", true)
     return CricketState(bat?.abbreviation, overs, toss, summary.takeUnless { plain }, sides.any { cricketRuns(it.score).isNotEmpty() })
-}
-
-/** A sport's icon (Material Symbols, filled): sharp at any size, for a game with no logos. */
-internal fun sportIcon(sport: String) = when (sport) {
-    "cricket" -> R.drawable.ms_sports_cricket_fill
-    "soccer" -> R.drawable.ms_sports_soccer_fill
-    "basketball" -> R.drawable.ms_sports_basketball_fill
-    "baseball" -> R.drawable.ms_sports_baseball_fill
-    "football" -> R.drawable.ms_sports_football_fill
-    "hockey" -> R.drawable.ms_sports_hockey_fill
-    "tennis" -> R.drawable.ms_sports_tennis_fill
-    "golf" -> R.drawable.ms_sports_golf_fill
-    "racing" -> R.drawable.ms_sports_motorsports_fill
-    "mma" -> R.drawable.ms_sports_mma_fill
-    else -> R.drawable.ms_sports_soccer_fill
 }
 
 /**

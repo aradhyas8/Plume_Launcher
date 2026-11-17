@@ -422,7 +422,7 @@ internal class IslandView(private val a: MainActivity) {
 
     /**
      * An item's pictures. A game shows its two logos only when both have come (ESPN's 500 px logos); with one missing
-     * (ESPN has none for many teams) it shows neither, and the item's sharp vector icon (its sport) stands in.
+     * it shows neither, and the item's icon stands in. (Sports send the league's logo instead when a team has none.)
      */
     fun MainActivity.islandPictures(o: IslandItem): Pair<Bitmap?, Bitmap?> {
         val first = o.image ?: islandImage(o.imageUri)
