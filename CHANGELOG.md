@@ -16,6 +16,12 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Island.** A glass tile at the top of Home shows what happens now: music, timers, alerts and live scores.
+- Select the island to open it. Press Left or Right on the progress bar to seek in a song.
+- Start a timer, the stopwatch or a sleep timer from the island icon on the top bar. The sleep timer pauses the music.
+- Select **Games** in **Island** settings. Select **Live now** to pin a game, or **Your teams** to follow a team.
+- The island shows alerts from apps, rain soon and Plume updates.
+- Hold OK on the island to hide an item or turn off an app's alerts.
 - **Recent apps.** Press Home twice to open a row of app windows. Press Left or Right to switch apps. Press Back to return to Plume.
 - Hold OK on All apps, then select Recent apps. You can also assign Plume recent apps to a remote key.
 - Enable **App window previews** to show each app's last screen on Android 11 and later. Plume keeps them on the TV after a restart.

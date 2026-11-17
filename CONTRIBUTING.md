@@ -6,7 +6,7 @@ Thanks for wanting to help. Plume is a small project with one maintainer, so thi
 
 Plume is a minimal home screen for Android TV and Google TV. Every change is weighed against these principles:
 
-- **Small and light.** A 0.4 MB APK, about 50–70 MB of RAM, no third-party libraries, no extra background services.
+- **Small and light.** A 0.4 MB APK, about 50–70 MB of RAM, no third-party libraries, no extra background services unless this guide lists them.
 - **Simple home screen.** One calm screen with your apps and what you watch. Nothing competes for attention.
 - **Yours, not ours.** No ads, no sponsored content, no analytics, no account.
 - **Quiet on the network.** Plume only goes online for the things listed under [Privacy](README.md#privacy). Anything new that connects to the internet must be optional and off until the user turns it on.
@@ -17,7 +17,8 @@ These will be declined, however well they're built:
 
 - Ads, analytics, crash reporting services, or accounts
 - New third-party libraries or SDKs (AndroidX included)
-- Services, workers or alarms that run while Plume isn't on screen. One exception: on a Fire TV, the Home button service sets a single alarm for "now" after each Home press, to skip Android's 5-second hold on app starts (see `HomeAlarm`). It fires once, and nothing repeats or waits in the background
+- Services, workers or alarms that run while Plume isn't on screen. One exception: on a Fire TV, the Home button service sets a single alarm for "now" after each Home press, to skip Android's 5-second hold on app starts (see `HomeAlarm`). It fires once, and nothing repeats or waits in the background.
+- The Island uses Android's notification listener only with permission for media sessions and alerts. It sets a one-shot alarm only when a user starts a timer or sleep timer. Android can delay the alarm if Plume's process no longer runs.
 - Online metadata services that need an API key, such as TMDB
 - Rows, widgets or sections that copy the scrolling layouts of other launchers
 

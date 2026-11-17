@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Bluetooth on the island: headphones and controllers connecting. Android 12+ asks the user first. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- In-app updates from GitHub releases. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -115,6 +116,22 @@
             <intent-filter>
                 <action android:name="android.service.dreams.DreamService" />
                 <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <!-- The island's timers and sleep timer end here when Plume's own clock was not running. -->
+        <receiver
+            android:name=".IslandAlarm"
+            android:exported="false" />
+
+        <!-- Notification access: the island reads what other apps play, and their alerts. -->
+        <service
+            android:name=".MediaListener"
+            android:exported="true"
+            android:label="Plume"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
 

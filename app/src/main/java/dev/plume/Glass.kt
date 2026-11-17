@@ -340,7 +340,7 @@ internal fun grainShader(): BitmapShader {
  * rectangles: no library, no live blur, nothing for the GPU to redo on each frame.
  */
 internal class GlassLayer(context: Context) : View(context) {
-    private class Tile(val view: WeakReference<View>, val radius: Float) {
+    private class Tile(val view: WeakReference<View>, val radius: Float, val sheen: Boolean) {
         var scroller: WeakReference<View>? = null
         var scrollerFound = false // resolved once, when the tile is attached: its row is there by then
         val area = Rect()
@@ -348,6 +348,9 @@ internal class GlassLayer(context: Context) : View(context) {
         var image: Bitmap? = null
         var imageShader: BitmapShader? = null // set with image; drawn as a rounded rect so corners stay smooth
         var readyAt = 0L
+        var prevShader: BitmapShader? = null // the image before this one, for the new one to fade in over
+        var prevW = 0
+        var prevH = 0
     }
 
     private val tiles = ArrayList<Tile>()
@@ -407,7 +410,7 @@ internal class GlassLayer(context: Context) : View(context) {
         cacheVersion++
         sharpBase.setScale(width / sharpSize.first, height / sharpSize.second)
         sh?.setLocalMatrix(sharpBase)
-        tiles.forEach { it.image = null; it.imageShader = null; it.bakedArea.setEmpty() }
+        tiles.forEach { it.image = null; it.imageShader = null; it.prevShader = null; it.bakedArea.setEmpty() }
         lensPaint.shader = sh
         invalidate()
     }
@@ -463,6 +466,9 @@ internal class GlassLayer(context: Context) : View(context) {
                                 visibleTiles.size == tiles.count { !it.area.isEmpty }) {
                                 cacheFailed = failed // Keep the plain lens after failure; retry on the next wallpaper or style change.
                                 for ((tile, area, image) in results) if (tile in tiles && tile.area == area) {
+                                    tile.prevShader = tile.imageShader
+                                    tile.prevW = tile.image?.width ?: 0
+                                    tile.prevH = tile.image?.height ?: 0
                                     tile.image = image
                                     tile.imageShader = BitmapShader(image, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
                                     tile.bakedArea.set(area)
@@ -510,9 +516,10 @@ internal class GlassLayer(context: Context) : View(context) {
         shader = android.graphics.LinearGradient(0f, 0f, 1f, 0f, intArrayOf(0, -1, 0), null, Shader.TileMode.CLAMP)
     }
 
-    fun add(v: View, radius: Float) {
+    /** [sheen] false: no light on the top half, for a big tile that carries text (the island), where it reads as a white haze. */
+    fun add(v: View, radius: Float, sheen: Boolean = true) {
         tiles.removeAll { it.view.get() == null }
-        if (tiles.none { it.view.get() === v }) tiles += Tile(WeakReference(v), radius)
+        if (tiles.none { it.view.get() === v }) tiles += Tile(WeakReference(v), radius, sheen)
         invalidate()
     }
 
@@ -547,7 +554,7 @@ internal class GlassLayer(context: Context) : View(context) {
         cacheVersion++
         removeCallbacks(bake)
         bakeQueued = false
-        tiles.forEach { it.image = null; it.imageShader = null; it.area.setEmpty() }
+        tiles.forEach { it.image = null; it.imageShader = null; it.prevShader = null; it.area.setEmpty() }
         viewTreeObserver.removeOnGlobalLayoutListener(moved)
         super.onDetachedFromWindow()
     }
@@ -572,7 +579,7 @@ internal class GlassLayer(context: Context) : View(context) {
             val v = t.view.get() ?: continue
             val alpha = alphaOf(v)
             if (alpha == 0 || !v.isShown || !v.getGlobalVisibleRect(visible)) {
-                t.image = null; t.imageShader = null; t.area.setEmpty()
+                t.image = null; t.imageShader = null; t.prevShader = null; t.area.setEmpty()
                 continue
             }
             // A row scroller doesn't clip its children (room for the focus lift), so the visible rect runs past
@@ -584,7 +591,7 @@ internal class GlassLayer(context: Context) : View(context) {
             }
             val scroller = t.scroller?.get()
             if (scroller != null && (!scroller.getGlobalVisibleRect(row) || !visible.intersect(row))) {
-                t.image = null; t.imageShader = null; t.area.setEmpty()
+                t.image = null; t.imageShader = null; t.prevShader = null; t.area.setEmpty()
                 continue
             }
             // A row also scales (it settles after an app closes): the frost must grow with the tile, or it slips.
@@ -613,10 +620,24 @@ internal class GlassLayer(context: Context) : View(context) {
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
             val sh = sharpShader
             if (sh != null) {
-                val image = t.image?.takeIf { t.bakedArea == t.area }
-                val imageAlpha = if (image == null) 0 else clearImageAlpha(SystemClock.uptimeMillis() - t.readyAt, alpha,
+                // A tile that moves or changes size (the row sliding down as focus goes up, the island opening) keeps
+                // its last image, moved and stretched with it, until the new one is baked; the new one then fades in
+                // over the old. The live lens on every tile, on every frame of a slide, made a slow TV's frames ~6 ms
+                // too long. It is drawn only for a tile that has never had an image.
+                val stale = t.image?.takeIf { t.bakedArea != t.area }
+                val image = t.image?.takeIf { t.bakedArea == t.area } ?: stale
+                val imageAlpha = if (image == null) 0 else if (stale != null) alpha else clearImageAlpha(SystemClock.uptimeMillis() - t.readyAt, alpha,
                     android.animation.ValueAnimator.areAnimatorsEnabled())
-                if (imageAlpha < alpha) {
+                if (imageAlpha == alpha) t.prevShader = null // faded in: the old image can go
+                val prev = t.prevShader
+                if (imageAlpha < alpha && prev != null) {
+                    imageBox.set(0f, 0f, t.prevW.toFloat(), t.prevH.toFloat())
+                    matrix.setRectToRect(imageBox, rect, Matrix.ScaleToFit.FILL)
+                    prev.setLocalMatrix(matrix)
+                    lensPaint.shader = prev
+                    lensPaint.alpha = clearBaseAlpha(alpha, imageAlpha)
+                    c.drawRoundRect(rect, rx, ry, lensPaint)
+                } else if (imageAlpha < alpha) {
                     matrix.set(sharpBase)
                     matrix.postScale(lens, lens, rect.centerX(), rect.centerY())
                     sh.setLocalMatrix(matrix)
@@ -644,7 +665,7 @@ internal class GlassLayer(context: Context) : View(context) {
                     c.drawRoundRect(rect, rx, ry, grainPaint)
                 }
             }
-            light(c, rx, ry, alpha, lit)
+            light(c, rx, ry, alpha, lit, t.sheen)
             if (lit) glint(c, v, rx, ry, alpha)
             c.restore()
         }
@@ -666,12 +687,14 @@ internal class GlassLayer(context: Context) : View(context) {
 
 
     /** The light on the pane: the sheen on its top half, brighter on the focused tile. */
-    private fun light(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean) {
+    private fun light(c: Canvas, rx: Float, ry: Float, alpha: Int, lit: Boolean, sheen: Boolean) {
         unit.setScale(1f, rect.height())
         unit.postTranslate(0f, rect.top)
-        sheenPaint.shader.setLocalMatrix(unit)
-        sheenPaint.alpha = (if (lit) alpha else alpha * 3 / 4) / (if (sharpShader != null) 2 else 1) // Clear: its rims show the light, a full sheen hazes it
-        c.drawRoundRect(rect, rx, ry, sheenPaint)
+        if (sheen) {
+            sheenPaint.shader.setLocalMatrix(unit)
+            sheenPaint.alpha = (if (lit) alpha else alpha * 3 / 4) / (if (sharpShader != null) 2 else 1) // Clear: its rims show the light, a full sheen hazes it
+            c.drawRoundRect(rect, rx, ry, sheenPaint)
+        }
         if (edge == 0) return
         edgePaint.alpha = (if (lit) edge + EDGE_LIT else edge) * alpha / 255
         shadePaint.alpha = shade * alpha / 255
