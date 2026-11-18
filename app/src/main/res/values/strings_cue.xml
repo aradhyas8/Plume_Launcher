@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The island itself, its system items and its settings page. -->
-    <string name="isl_section">Island</string>
+    <!-- Cue itself, its system items and its settings page. -->
+    <string name="isl_section">Cue</string>
     <string name="help_isl_section">Music, timers, alerts and scores at the top of the home screen.</string>
-    <string name="isl_on">Island</string>
-    <string name="help_isl_on">Off: the island never shows. Timers still run.</string>
+    <string name="isl_on">Cue</string>
+    <string name="help_isl_on">Off: Cue never shows. Timers still run.</string>
     <string name="isl_access">Notification access</string>
     <string name="isl_access_on">Allowed</string>
     <string name="isl_access_off">Give access</string>
-    <string name="help_isl_access">Needed for music and alerts from other apps. Plume reads only what the island shows and sends nothing.</string>
+    <string name="help_isl_access">Needed for music and alerts from other apps. Plume reads only what Cue shows and sends nothing.</string>
     <string name="isl_access_steps">This TV has no screen for notification access. On a computer on the same network, run:\nadb shell cmd notification allow_listener dev.plume/dev.plume.MediaListener</string>
     <string name="isl_music">Music</string>
     <string name="help_isl_music">Music that plays in other apps, with its controls.</string>
     <string name="isl_idle">Hide music when paused</string>
-    <string name="help_isl_idle">How long a paused song stays on the island.</string>
+    <string name="help_isl_idle">How long a paused song stays on Cue.</string>
     <string name="isl_idle_1">After 1 min</string>
     <string name="isl_idle_5">After 5 min</string>
     <string name="isl_timers">Timers</string>
@@ -32,13 +32,13 @@
     <string name="isl_privacy_app">App only</string>
     <string name="isl_privacy_hidden">Calls only</string>
     <string name="isl_alert_apps">Alert apps</string>
-    <string name="help_isl_alert_apps">Turn off the apps you don\'t want on the island.</string>
+    <string name="help_isl_alert_apps">Turn off the apps you don\'t want on Cue.</string>
     <string name="isl_alert_apps_none">Apps show here once they send an alert.</string>
     <string name="isl_sports">Sports</string>
     <string name="help_isl_sports">Live scores of your games and teams, from ESPN.</string>
     <string name="isl_teams">Your teams</string>
-    <string name="isl_pinned">On the island</string>
-    <string name="isl_n_pinned">%d on the island</string>
+    <string name="isl_pinned">On Cue</string>
+    <string name="isl_n_pinned">%d on Cue</string>
     <string name="isl_today">Today</string>
     <string name="isl_teams_loading">Loading teams…</string>
     <string name="isl_teams_failed">Couldn\'t load teams. Check the internet and try again.</string>
@@ -52,14 +52,14 @@
     <string name="isl_custom_hint">Minutes</string>
     <string name="isl_start">Start</string>
     <string name="isl_games_now">Live now</string>
-    <string name="isl_tip">Timers and Games now are on the island icon. To add it: hold OK on a top-bar icon, then select Add icon.</string>
+    <string name="isl_tip">Timers and Games now are on the Cue icon. To add it: hold OK on a top-bar icon, then select Add icon.</string>
     <string name="isl_menu_hide">Hide this</string>
     <string name="isl_menu_mute">Turn off alerts from %1$s</string>
     <string name="isl_menu_unfollow">Stop following</string>
     <string name="isl_menu_wx_off">Turn off this weather note</string>
-    <string name="isl_menu_settings">Island settings</string>
-    <string name="isl_access_card_title">Music and alerts on the island</string>
-    <string name="isl_access_card_body">Allow notification access, and the island shows what plays in Spotify and other apps, with calls and doorbell alerts. Plume sends nothing anywhere.</string>
+    <string name="isl_menu_settings">Cue settings</string>
+    <string name="isl_access_card_title">Music and alerts on Cue</string>
+    <string name="isl_access_card_body">Allow notification access, and Cue shows what plays in Spotify and other apps, with calls and doorbell alerts. Plume sends nothing anywhere.</string>
     <string name="isl_access_give">Give access</string>
     <string name="isl_update_title">Updating Plume</string>
     <string name="isl_update_progress">%1$s · %2$d%%</string>
@@ -77,7 +77,7 @@
     <string name="isl_sports_today">Today %1$s</string>
     <string name="isl_sports_tomorrow">Tomorrow %1$s</string>
     <string name="isl_sports_final">Final</string>
-    <string name="isl_games_max">Show on the island</string>
+    <string name="isl_games_max">Show on Cue</string>
     <plurals name="isl_n_games">
         <item quantity="one">%d game</item>
         <item quantity="other">Up to %d games</item>
@@ -111,7 +111,7 @@
     <string name="isl_sports_unfollowed">Unfollowed %1$s</string>
 
     <!-- Timers -->
-    <!-- The island's timer and stopwatch: see IslandTimers. -->
+    <!-- Cue's timer and stopwatch: see CueTimers. -->
     <string name="isl_timer_sub">Timer · %s</string>
     <string name="isl_timer_sub_paused">Paused · %s timer</string>
     <string name="isl_timer_minutes">%d min</string>
@@ -122,7 +122,7 @@
     <string name="isl_timer_paused">Paused</string>
     <string name="isl_timer_plus1">+1</string>
 
-    <!-- Spoken by screen readers for the island's buttons. -->
+    <!-- Spoken by screen readers for Cue's buttons. -->
     <string name="isl_timer_add_minute">Add 1 minute</string>
     <string name="isl_timer_again">Start a 1 minute timer</string>
     <string name="isl_timer_pause">Pause</string>

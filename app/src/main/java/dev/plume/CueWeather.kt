@@ -10,13 +10,13 @@ import java.util.Date
 import java.util.concurrent.Executors
 
 /**
- * Weather for the island: only rain or snow starting or stopping within the hour. The top bar already shows the
- * weather, so the island never repeats it; it speaks only when something is about to change. One Open-Meteo request
+ * Weather for Cue: only rain or snow starting or stopping within the hour. The top bar already shows the
+ * weather, so Cue never repeats it; it speaks only when something is about to change. One Open-Meteo request
  * every 30 minutes while the home screen is shown, with the same coordinates the top bar's weather already uses;
  * nothing else leaves the TV. Switch: "isl_wx_rain", off by default. The rules themselves are the plain functions at
  * the end of this file, so they can be tested without Android.
  */
-internal object IslandWeather {
+internal object CueWeather {
     private const val STALE = 25 * 60_000L
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
@@ -60,7 +60,7 @@ internal object IslandWeather {
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("home", Context.MODE_PRIVATE)
 
-    // "weather" is off/c/f; "wx_unit" keeps the unit while the top bar's weather is off. The island follows it either way.
+    // "weather" is off/c/f; "wx_unit" keeps the unit while the top bar's weather is off. Cue follows it either way.
     private fun fahrenheit(p: SharedPreferences): Boolean {
         val w = p.getString("weather", "off")
         return (if (w == "off") p.getString("wx_unit", "c") else w) == "f"
@@ -86,9 +86,9 @@ internal object IslandWeather {
             if (!enabled(p)) return@execute
             try {
                 forecast = fetch(lat, lon, wantF)
-                Island.changed()
+                Cue.changed()
             } catch (e: Exception) {
-                android.util.Log.w("TvHome", "island weather failed ($e)") // keep the last forecast; next tick retries
+                android.util.Log.w("TvHome", "Cue weather failed ($e)") // keep the last forecast; next tick retries
             }
         }
     }
@@ -103,7 +103,7 @@ internal object IslandWeather {
             "&minutely_15=precipitation,snowfall&forecast_minutely_15=12" +
             "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
             "&timezone=auto&forecast_days=2&timeformat=unixtime" + if (f) "&temperature_unit=fahrenheit" else ""
-        val j = islandJson(url)
+        val j = cueJson(url)
         val m = j.getJSONObject("minutely_15")
         val d = j.getJSONObject("daily")
         fun JSONArray.times() = List(length()) { getLong(it) * 1000 }
@@ -123,7 +123,7 @@ internal object IslandWeather {
         return w
     }
 
-    fun items(now: Long): List<IslandItem> {
+    fun items(now: Long): List<CueItem> {
         val ctx = app ?: return emptyList()
         val f = forecast ?: return emptyList()
         val p = prefs(ctx)
@@ -135,7 +135,7 @@ internal object IslandWeather {
         return listOfNotNull(rain(ctx, f, now))
     }
 
-    private fun rain(ctx: Context, f: Forecast, now: Long): IslandItem? {
+    private fun rain(ctx: Context, f: Forecast, now: Long): CueItem? {
         val e = wxPrecip(f.slots, f.mm, f.snow, now)
         val id = e?.let { "${it.stops}/${it.snow}" }
         if (id != seen) {
@@ -160,9 +160,9 @@ internal object IslandWeather {
             // DateFormat.getTimeFormat follows the TV's 12 or 24 hour setting.
             e.endsAt?.let { ctx.getString(R.string.isl_wx_until, kind, DateFormat.getTimeFormat(ctx).format(Date(it))) } ?: kind
         }
-        // The minutes count down, so the island asks again while it shows this.
-        return IslandItem(
-            "wx:rain", IslandKind.WEATHER, title, sub,
+        // The minutes count down, so Cue asks again while it shows this.
+        return CueItem(
+            "wx:rain", CueKind.WEATHER, title, sub,
             icon = if (e.snow) R.drawable.ms_weather_snowy_fill else R.drawable.ms_rainy_fill, mono = true,
             tick = 60_000L, since = seenAt, until = e.at, peekUntil = seenAt + 6_000L,
         )
@@ -215,7 +215,7 @@ internal fun wxLevel(mm: Double) = when {
 /** Whole minutes until [at], rounded up, so it never says "in 0 min" before it happens. */
 internal fun wxMinutes(at: Long, now: Long) = ((at - now + 59_999) / 60_000).toInt()
 
-/** A WMO weather code's icon, for the top bar's weather and the island's ([day]: the sun, else the moon). */
+/** A WMO weather code's icon, for the top bar's weather and Cue's ([day]: the sun, else the moon). */
 internal fun weatherIcon(code: Int, day: Boolean) = when (code) {
     0 -> if (day) R.drawable.ms_light_mode_fill else R.drawable.ms_dark_mode_fill
     1, 2 -> if (day) R.drawable.ms_partly_cloudy_day_fill else R.drawable.ms_partly_cloudy_night_fill

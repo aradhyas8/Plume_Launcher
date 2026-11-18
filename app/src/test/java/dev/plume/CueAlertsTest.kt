@@ -6,11 +6,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class IslandAlertsTest {
+class CueAlertsTest {
     private fun passes(
         pkg: String = "com.ring.app", summary: Boolean = false, media: Boolean = false, ongoing: Boolean = false,
         category: String? = null, hasText: Boolean = true, importance: Int? = 3, dndAll: Boolean = true,
-    ) = islandAlertPasses(pkg, summary, media, ongoing, category, hasText, importance, dndAll)
+    ) = cueAlertPasses(pkg, summary, media, ongoing, category, hasText, importance, dndAll)
 
     @Test fun anOrdinaryAlertPasses() = assertTrue(passes())
     @Test fun systemNoiseIsSkipped() {
@@ -42,11 +42,11 @@ class IslandAlertsTest {
     }
 
     private fun text(privacy: String, call: Boolean = false) =
-        islandAlertText(privacy, call, "Ring", "Front door", "Someone is at the door", "Incoming call", "New notification")
+        cueAlertText(privacy, call, "Ring", "Front door", "Someone is at the door", "Incoming call", "New notification")
 
     @Test fun fullShowsWhatItSays() = assertEquals("Front door" to "Someone is at the door", text("full"))
     @Test fun fullWithoutTitleUsesText() =
-        assertEquals("Hi" to null, islandAlertText("full", false, "Ring", "", "Hi", "Incoming call", "New notification"))
+        assertEquals("Hi" to null, cueAlertText("full", false, "Ring", "", "Hi", "Incoming call", "New notification"))
     @Test fun appShowsOnlyTheApp() = assertEquals("Ring" to "New notification", text("app"))
     @Test fun appHidesTheCaller() = assertEquals("Ring" to "Incoming call", text("app", call = true))
     @Test fun hiddenShowsNothingButCalls() {
@@ -55,16 +55,16 @@ class IslandAlertsTest {
     }
 
     @Test fun cachedFullAlertDisappearsWhenPrivacyTightensOrAppIsMuted() {
-        val alert = IslandAlerts.CachedAlert("com.ring.app", "full", IslandItem("doorbell", IslandKind.ALERT, "Front door", until = 2_000))
+        val alert = CueAlerts.CachedAlert("com.ring.app", "full", CueItem("doorbell", CueKind.ALERT, "Front door", until = 2_000))
         assertTrue(alert.visible(1_000, "full", emptySet()))
         assertFalse(alert.visible(1_000, "app", emptySet()))
         assertFalse(alert.visible(1_000, "full", setOf("com.ring.app")))
         assertFalse(alert.visible(2_000, "full", emptySet()))
     }
 
-    @Test fun firstPeekIsAllowed() = assertTrue(islandAlertMayPeek(null, 1_000))
+    @Test fun firstPeekIsAllowed() = assertTrue(cueAlertMayPeek(null, 1_000))
     @Test fun secondPeekWaitsTenSeconds() {
-        assertFalse(islandAlertMayPeek(1_000, 10_999))
-        assertTrue(islandAlertMayPeek(1_000, 11_000))
+        assertFalse(cueAlertMayPeek(1_000, 10_999))
+        assertTrue(cueAlertMayPeek(1_000, 11_000))
     }
 }

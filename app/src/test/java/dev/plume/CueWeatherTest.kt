@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-class IslandWeatherTest {
+class CueWeatherTest {
     private val t0 = 1_794_768_300_000L
     private val min = 60_000L
 

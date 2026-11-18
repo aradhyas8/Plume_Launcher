@@ -516,7 +516,7 @@ internal class GlassLayer(context: Context) : View(context) {
         shader = android.graphics.LinearGradient(0f, 0f, 1f, 0f, intArrayOf(0, -1, 0), null, Shader.TileMode.CLAMP)
     }
 
-    /** [sheen] false: no light on the top half, for a big tile that carries text (the island), where it reads as a white haze. */
+    /** [sheen] false: no light on the top half, for a big tile that carries text (Cue), where it reads as a white haze. */
     fun add(v: View, radius: Float, sheen: Boolean = true) {
         tiles.removeAll { it.view.get() == null }
         if (tiles.none { it.view.get() === v }) tiles += Tile(WeakReference(v), radius, sheen)
@@ -620,7 +620,7 @@ internal class GlassLayer(context: Context) : View(context) {
             c.clipRect(visible.left - ox.toFloat(), visible.top - oy.toFloat(), visible.right - ox.toFloat(), visible.bottom - oy.toFloat())
             val sh = sharpShader
             if (sh != null) {
-                // A tile that moves or changes size (the row sliding down as focus goes up, the island opening) keeps
+                // A tile that moves or changes size (the row sliding down as focus goes up, Cue opening) keeps
                 // its last image, moved and stretched with it, until the new one is baked; the new one then fades in
                 // over the old. The live lens on every tile, on every frame of a slide, made a slow TV's frames ~6 ms
                 // too long. It is drawn only for a tile that has never had an image.

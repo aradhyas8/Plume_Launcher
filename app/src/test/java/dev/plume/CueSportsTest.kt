@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
 
-class IslandSportsTest {
+class CueSportsTest {
     private val min = 60_000L
     private val hour = 60 * min
 

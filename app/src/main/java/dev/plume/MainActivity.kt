@@ -327,7 +327,7 @@ class MainActivity : Activity() {
     /** What the shows row holds: the [sources] it is split in (none when mixed), the one on show and its cards. */
     private class Cards(val sources: List<CardSource>, val current: CardSource?, val list: List<Prog>, val ahead: List<String> = emptyList())
 
-    internal val isl by lazy { IslandView(this) }
+    internal val isl by lazy { CueView(this) }
     internal val prefs by lazy { getSharedPreferences("home", MODE_PRIVATE) }
     private val io = Executors.newSingleThreadExecutor()
     /** Small wallpaper pictures for the settings grids, by choice and size; 8 MB holds every built-in twice over. */
@@ -3207,12 +3207,12 @@ class MainActivity : Activity() {
                 renderSettings(R.string.show_icons)
             },
             R.string.isl_idle to { d ->
-                prefs.edit().putLong("isl_idle", ISLAND_IDLES.step(prefs.getLong("isl_idle", ISLAND_IDLE_MS), d)).apply()
+                prefs.edit().putLong("isl_idle", CUE_IDLES.step(prefs.getLong("isl_idle", CUE_IDLE_MS), d)).apply()
                 isl.show()
                 renderSettings(R.string.isl_idle)
             },
             R.string.isl_privacy to { d ->
-                prefs.edit().putString("isl_alert_privacy", ISLAND_PRIVACY.step(prefs.getString("isl_alert_privacy", "app")!!, d)).apply()
+                prefs.edit().putString("isl_alert_privacy", CUE_PRIVACY.step(prefs.getString("isl_alert_privacy", "app")!!, d)).apply()
                 isl.show()
                 renderSettings(R.string.isl_privacy)
             },
@@ -3346,34 +3346,34 @@ class MainActivity : Activity() {
                 renderSettings(R.string.lock_layout)
             },
         )
-        // The island's rows: most are switches that take effect at once.
+        // Cue's rows: most are switches that take effect at once.
         fun islRow(k: Int, pref: String, def: Boolean = true, after: () -> Unit = {}) = Triple(getString(k), toggle(isl.on(pref, def))) {
             prefs.edit().putBoolean(pref, !isl.on(pref, def)).apply()
             after()
             isl.show()
             renderSettings(k)
         }
-        val wxAgain = { IslandWeather.stop(); IslandWeather.start(this) }
+        val wxAgain = { CueWeather.stop(); CueWeather.start(this) }
         rows[R.string.isl_on] = islRow(R.string.isl_on, "isl_on") {
             wxAgain()
-            IslandSports.start(this)
+            CueSports.start(this)
         }
         rows[R.string.isl_access] = Triple(getString(R.string.isl_access), getString(if (listenerOn()) R.string.isl_access_on else R.string.isl_access_off)) { openListenerAccess() }
         rows[R.string.isl_music] = islRow(R.string.isl_music, "isl_music")
-        rows[R.string.isl_idle] = Triple(getString(R.string.isl_idle), getString(ISLAND_IDLE_NAMES[ISLAND_IDLES.indexOf(prefs.getLong("isl_idle", ISLAND_IDLE_MS)).coerceAtLeast(0)])) {
+        rows[R.string.isl_idle] = Triple(getString(R.string.isl_idle), getString(CUE_IDLE_NAMES[CUE_IDLES.indexOf(prefs.getLong("isl_idle", CUE_IDLE_MS)).coerceAtLeast(0)])) {
             steps[R.string.isl_idle]!!(1)
         }
-        rows[R.string.isl_timers] = Triple(getString(R.string.isl_timers), "›") { pickIslandTimer() }
+        rows[R.string.isl_timers] = Triple(getString(R.string.isl_timers), "›") { pickCueTimer() }
         rows[R.string.isl_alerts] = islRow(R.string.isl_alerts, "isl_alerts")
         rows[R.string.isl_privacy] = Triple(getString(R.string.isl_privacy),
-            getString(ISLAND_PRIVACY_NAMES[ISLAND_PRIVACY.indexOf(prefs.getString("isl_alert_privacy", "app")).coerceAtLeast(0)])) { steps[R.string.isl_privacy]!!(1) }
+            getString(CUE_PRIVACY_NAMES[CUE_PRIVACY.indexOf(prefs.getString("isl_alert_privacy", "app")).coerceAtLeast(0)])) { steps[R.string.isl_privacy]!!(1) }
         rows[R.string.isl_alert_apps] = Triple(getString(R.string.isl_alert_apps), prefs.getStringSet("isl_alert_seen", emptySet())!!.let { seen ->
             val off = prefs.getStringSet("isl_alert_off", emptySet())!!.count { it in seen }
             if (seen.isEmpty()) "" else if (off == 0) getString(R.string.all_on) else getString(R.string.n_off, off)
         }) { pickAlertApps() }
-        rows[R.string.isl_sports] = islRow(R.string.isl_sports, "isl_sports") { IslandSports.start(this) }
+        rows[R.string.isl_sports] = islRow(R.string.isl_sports, "isl_sports") { CueSports.start(this) }
         // Everything about games on one page: the picks, where to pick them, your teams and how many fit.
-        rows[R.string.isl_games] = Triple(getString(R.string.isl_games), IslandSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGames() }
+        rows[R.string.isl_games] = Triple(getString(R.string.isl_games), CueSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGames() }
         rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", def = false, after = wxAgain)
         rows[R.string.isl_update_row] = islRow(R.string.isl_update_row, "isl_update")
         for (k in listOf(R.string.sort_apps, R.string.weather_units)) steps[k] = { rows[k]!!.third() }
@@ -3425,7 +3425,7 @@ class MainActivity : Activity() {
                     k == R.string.glass && glassStyle() == GlassStyle.CLEAR && currentWallpaper().startsWith("video:") -> getString(R.string.glass_clear_video)
                     // Fire OS never passes the Home key to Plume, so it can't see a double press there.
                     k == R.string.home_button && fireTv() -> getString(R.string.help_home_button_fire)
-                    k in ISLAND_WX_ROWS && !prefs.contains("geo_lat") -> getString(R.string.isl_wx_needs_place)
+                    k in CUE_WX_ROWS && !prefs.contains("geo_lat") -> getString(R.string.isl_wx_needs_place)
                     else -> ROW_HELP[k]?.let { getString(it) }
                 }
             }
@@ -3442,8 +3442,8 @@ class MainActivity : Activity() {
                 R.string.apps_when_hidden to listOf(R.string.stays_put, R.string.moves_down).map { getString(it) to null },
                 R.string.show_icons to listOf(R.string.monochrome, R.string.colour).map { getString(it) to null },
                 R.string.weather_units to listOf("°C" to null, "°F" to null),
-                R.string.isl_idle to ISLAND_IDLE_NAMES.map { getString(it) to null },
-                R.string.isl_privacy to ISLAND_PRIVACY_NAMES.map { getString(it) to null },
+                R.string.isl_idle to CUE_IDLE_NAMES.map { getString(it) to null },
+                R.string.isl_privacy to CUE_PRIVACY_NAMES.map { getString(it) to null },
                 R.string.clock_style to CLOCK_STYLES.values.map { getString(it) to null },
                 R.string.clock_size to CLOCK_SIZES.values.map { getString(it) to null },
             )
@@ -3492,7 +3492,7 @@ class MainActivity : Activity() {
 
     private var lastSettings = 0 // section used last, focused when settings open again
 
-    // ---------- the island's settings pages ----------
+    // ---------- Cue's settings pages ----------
 
     internal fun listenerOn(): Boolean = if (Build.VERSION.SDK_INT >= 27) getSystemService(android.app.NotificationManager::class.java).isNotificationListenerAccessGranted(isl.mediaAccess)
         else Settings.Secure.getString(contentResolver, "enabled_notification_listeners")?.contains(isl.mediaAccess.flattenToString()) == true
@@ -3506,17 +3506,17 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Timer and stopwatch. Starting one closes the panel, so it shows on the island at once. */
-    internal fun pickIslandTimer(focus: Int = 0) {
+    /** Timer and stopwatch. Starting one closes the panel, so it shows on Cue at once. */
+    internal fun pickCueTimer(focus: Int = 0) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
         fun start(key: String, go: () -> Unit) { closeLauncherSettings(); go(); isl.started(key) }
         showPage(getString(R.string.isl_timers), listOf(
             page(getString(R.string.isl_timer), "›") {
-                showPage(getString(R.string.isl_timer), ISLAND_TIMERS.map { m -> page(mins(m)) { closeLauncherSettings(); isl.startTimer(m) } } +
+                showPage(getString(R.string.isl_timer), CUE_TIMERS.map { m -> page(mins(m)) { closeLauncherSettings(); isl.startTimer(m) } } +
                     page(getString(R.string.isl_custom), "›") { isl.customTimer() },
-                    crumb = getString(R.string.isl_timers)) { pickIslandTimer(0) }
+                    crumb = getString(R.string.isl_timers)) { pickCueTimer(0) }
             },
-            page(getString(R.string.isl_stopwatch)) { start("stopwatch") { IslandTimers.startStopwatch(this) } },
+            page(getString(R.string.isl_stopwatch)) { start("stopwatch") { CueTimers.startStopwatch(this) } },
         ), focus, crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_timers) }
     }
 
@@ -3529,18 +3529,18 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Games: one page for all of it, like Apple's "Follow live" and "My Sports". First the games on the island now (OK
+     * Games: one page for all of it, like Apple's "Follow live" and "My Sports". First the games on Cue now (OK
      * takes one off), then Games now (a sport, a league, then its games) to pick one, then Your teams (every game they
-     * play shows by itself), then how many games fit. A pick when the island is full takes the place of the oldest one.
+     * play shows by itself), then how many games fit. A pick when Cue is full takes the place of the oldest one.
      */
     internal fun pickGames(focus: Int = 0) {
-        if (IslandSports.trimPins(this)) gamesChanged()
-        val pins = IslandSports.pinned(this).sortedBy { it.at }
-        val max = IslandSports.max(this)
-        val teams = IslandSports.followed(this)
+        if (CueSports.trimPins(this)) gamesChanged()
+        val pins = CueSports.pinned(this).sortedBy { it.at }
+        val max = CueSports.max(this)
+        val teams = CueSports.followed(this)
         val rows = pins.map { p ->
-            page(IslandSports.pinName(this, p) ?: getString(R.string.isl_game), getString(R.string.isl_pinned)) {
-                IslandSports.unpinGame(this, p.eventId)
+            page(CueSports.pinName(this, p) ?: getString(R.string.isl_game), getString(R.string.isl_pinned)) {
+                CueSports.unpinGame(this, p.eventId)
                 gamesChanged()
                 pickGames()
             }
@@ -3558,32 +3558,32 @@ class MainActivity : Activity() {
     }
 
     private fun gamesChanged() {
-        IslandSports.start(this)
+        CueSports.start(this)
         isl.show()
     }
 
-    /** OK on a game row: takes it off the island, or puts it on (in place of the oldest pick when the island is full). */
-    private fun toggleGame(g: IslandSports.NowGame) {
-        if (IslandSports.pinned(this).any { it.eventId == g.eventId }) IslandSports.unpinGame(this, g.eventId)
-        else IslandSports.pinGame(this, g).firstOrNull()?.let { toast(getString(R.string.isl_game_replaced, IslandSports.pinName(this, it) ?: getString(R.string.isl_game))) }
+    /** OK on a game row: takes it off Cue, or puts it on (in place of the oldest pick when Cue is full). */
+    private fun toggleGame(g: CueSports.NowGame) {
+        if (CueSports.pinned(this).any { it.eventId == g.eventId }) CueSports.unpinGame(this, g.eventId)
+        else CueSports.pinGame(this, g).firstOrNull()?.let { toast(getString(R.string.isl_game_replaced, CueSports.pinName(this, it) ?: getString(R.string.isl_game))) }
         gamesChanged()
     }
 
-    /** A list of games to pick from: "On the island" beside the picked ones, else the league or the start time. */
-    private fun showGames(title: String, list: List<IslandSports.NowGame>, focus: Int, crumb: String, again: (Int) -> Unit, back: () -> Unit,
-                          note: (IslandSports.NowGame) -> String? = { null }) {
-        val pins = IslandSports.pinned(this).map { it.eventId }.toSet()
+    /** A list of games to pick from: "On Cue" beside the picked ones, else the league or the start time. */
+    private fun showGames(title: String, list: List<CueSports.NowGame>, focus: Int, crumb: String, again: (Int) -> Unit, back: () -> Unit,
+                          note: (CueSports.NowGame) -> String? = { null }) {
+        val pins = CueSports.pinned(this).map { it.eventId }.toSet()
         showPage(title, list.mapIndexed { i, g ->
             page(g.title, if (g.eventId in pins) getString(R.string.isl_pinned) else note(g) ?: g.leagueName) { toggleGame(g); again(i) }
         }, focus, styles = list.map { RowStyle(logo = it.awayLogo ?: it.homeLogo) }, crumb = crumb, back = back)
     }
 
     /** One league's games (Games now): live, or starting within a day. */
-    private fun pickLeagueGames(l: IslandSports.League, focus: Int = 0, list: List<IslandSports.NowGame>? = null, back: () -> Unit) {
+    private fun pickLeagueGames(l: CueSports.League, focus: Int = 0, list: List<CueSports.NowGame>? = null, back: () -> Unit) {
         val crumb = getString(R.string.isl_games_now)
         if (list == null) {
             showPage(l.name, listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = crumb, back = back)
-            return IslandSports.leagueGames(this, l) { games ->
+            return CueSports.leagueGames(this, l) { games ->
                 if (isDestroyed || settingsScrim.visibility != View.VISIBLE) return@leagueGames
                 when {
                     games == null -> showPage(l.name, listOf(page(getString(R.string.isl_games_failed)) { pickLeagueGames(l, back = back) }), crumb = crumb, back = back)
@@ -3597,10 +3597,10 @@ class MainActivity : Activity() {
 
     /** Sport folders (Football, Basketball, Motorsport…), so no list is long. [teams]: the way to Your teams, else Games now. */
     internal fun pickSport(teams: Boolean, focus: Int = 0) {
-        val groups = IslandSports.LEAGUES.filter { !teams || it.teams }.groupBy { it.group }
+        val groups = CueSports.LEAGUES.filter { !teams || it.teams }.groupBy { it.group }
         val title = getString(if (teams) R.string.isl_teams else R.string.isl_games_now)
-        val mine = if (teams) IslandSports.followed(this).map { "${it.sport}/${it.league}" } else IslandSports.pinned(this).map { "${it.sport}/${it.league}" }
-        val pins = IslandSports.pinned(this).size
+        val mine = if (teams) CueSports.followed(this).map { "${it.sport}/${it.league}" } else CueSports.pinned(this).map { "${it.sport}/${it.league}" }
+        val pins = CueSports.pinned(this).size
         showPage(title, groups.entries.mapIndexed { i, (group, leagues) ->
             val n = mine.count { m -> leagues.any { it.key == m } }
             page(getString(group), if (n == 0) "›" else getString(if (teams) R.string.n_on else R.string.isl_n_pinned, n)) { pickSportLeagues(teams, leagues, i) }
@@ -3608,8 +3608,8 @@ class MainActivity : Activity() {
     }
 
     /** One sport's leagues: for Your teams, OK opens its teams; for Games now, its games. */
-    private fun pickSportLeagues(teams: Boolean, leagues: List<IslandSports.League>, groupAt: Int, focus: Int = 0) {
-        val followed = IslandSports.followed(this)
+    private fun pickSportLeagues(teams: Boolean, leagues: List<CueSports.League>, groupAt: Int, focus: Int = 0) {
+        val followed = CueSports.followed(this)
         showPage(getString(leagues.first().group), leagues.mapIndexed { i, l ->
             if (teams) page(l.name, followed.filter { it.sport == l.sport && it.league == l.league }.joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) {
                 pickTeams(l) { pickSportLeagues(true, leagues, groupAt, i) }
@@ -3621,18 +3621,18 @@ class MainActivity : Activity() {
      * One league's teams, playing today first (marked Today), then A to Z. OK follows or unfollows; Left and Right
      * jump to the next or previous first letter, so a long list is a few presses.
      */
-    private fun pickTeams(l: IslandSports.League, focus: Int = 0, list: List<IslandSports.Team>? = null, back: () -> Unit) {
+    private fun pickTeams(l: CueSports.League, focus: Int = 0, list: List<CueSports.Team>? = null, back: () -> Unit) {
         if (list == null) {
             showPage(l.name, listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = getString(R.string.isl_teams), back = back)
-            return IslandSports.teams(l.sport, l.league) { teams ->
+            return CueSports.teams(l.sport, l.league) { teams ->
                 if (isDestroyed || settingsScrim.visibility != View.VISIBLE) return@teams
                 if (teams.isEmpty()) showPage(l.name, listOf(page(getString(R.string.isl_teams_failed)) { pickTeams(l, back = back) }),
                     crumb = getString(R.string.isl_teams), back = back)
                 else pickTeams(l, 0, teams, back)
             }
         }
-        val ids = IslandSports.followed(this).filter { it.sport == l.sport && it.league == l.league }.map { it.teamId }.toSet()
-        val today = IslandSports.playingToday(l.sport, l.league)
+        val ids = CueSports.followed(this).filter { it.sport == l.sport && it.league == l.league }.map { it.teamId }.toSet()
+        val today = CueSports.playingToday(l.sport, l.league)
         val jump = { from: Int, d: Int ->
             val letter = list[from].name.first().uppercaseChar()
             val to = if (d > 0) list.indices.drop(from + 1).firstOrNull { list[it].name.first().uppercaseChar() != letter && list[it].id !in today }
@@ -3644,8 +3644,8 @@ class MainActivity : Activity() {
         }
         showPage(l.name, list.mapIndexed { i, t ->
             page(t.name, when { t.id in ids -> getString(R.string.isl_following); t.id in today -> getString(R.string.isl_today); else -> "" }) {
-                if (t.id in ids) IslandSports.unfollow(this, l.sport, l.league, t.id) else IslandSports.follow(this, l.sport, l.league, t)
-                IslandSports.start(this)
+                if (t.id in ids) CueSports.unfollow(this, l.sport, l.league, t.id) else CueSports.follow(this, l.sport, l.league, t)
+                CueSports.start(this)
                 pickTeams(l, i, list, back)
             }
         }, focus, steps = list.indices.map { i -> { d: Int -> jump(i, d) } }, styles = list.map { RowStyle(logo = it.logo) },
@@ -4085,7 +4085,7 @@ class MainActivity : Activity() {
         val restyle = mutableListOf<(Boolean) -> Unit>()
         val name = label(title, 16f).apply { setTextColor(restInk()); panelShadow() }
         val sub = style?.sub?.let { label(it, 13f).apply { setTextColor(valueInk()); panelShadow() } }
-        // A team's or an event's logo, fetched once and kept (see IslandView.logo); else the row's icon.
+        // A team's or an event's logo, fetched once and kept (see CueView.logo); else the row's icon.
         val iconView = style?.logo?.let { url -> ImageView(this).apply { isl.logo(url, this) } } ?: style?.icon?.let { icon(it, 24, iconInk(false)) }
         val line = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -4942,7 +4942,7 @@ class MainActivity : Activity() {
             pageSource(if (e.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1)
         ) return true
         if (e.action == KeyEvent.ACTION_DOWN && settingsScrim.visibility != View.VISIBLE && allApps.visibility != View.VISIBLE) {
-            isl.islandRepeat = e.repeatCount
+            isl.cueRepeat = e.repeatCount
             currentFocus?.let { homeNav(it, e.keyCode) }?.let { it.requestFocus(); return true }
         }
         return super.dispatchKeyEvent(e)
@@ -4961,9 +4961,9 @@ class MainActivity : Activity() {
             else alive(lastCard) ?: (watchRow.getChildAt(0) as? ViewGroup)?.getChildAt(0)
         val top = alive(lastTop) ?: findViewById(R.id.launcherSettings)
         val title = watchTitle.takeIf { it.isFocusable && it.visibility == View.VISIBLE }
-        val isle = isl.island.takeIf { it.visibility == View.VISIBLE }
+        val isle = isl.cue.takeIf { it.visibility == View.VISIBLE }
         return when {
-            v === isl.island -> isl.key(key, apps ?: cards) // its rows and cells (see islandKey)
+            v === isl.cue -> isl.key(key, apps ?: cards) // its rows and cells (see cueKey)
             v.parent === wifi.parent -> when (key) { // top bar
                 KeyEvent.KEYCODE_DPAD_DOWN -> apps ?: cards ?: v // the apps row can be empty (all hidden)
                 KeyEvent.KEYCODE_DPAD_UP -> v
@@ -5024,7 +5024,7 @@ class MainActivity : Activity() {
             v.parent === wifi.parent -> topMenu(v)
             v.parent === appRow -> appMenu(v)
             v.getTag(R.id.watchRow) is Prog -> watchMenu(v, v.getTag(R.id.watchRow) as Prog)
-            v === isl.island -> isl.hold()
+            v === isl.cue -> isl.hold()
         }
     }
 
@@ -6549,7 +6549,7 @@ class MainActivity : Activity() {
         io.execute {
             val ok = try {
                 apk.delete()
-                // Copied by hand, not copyTo, so the island can show how far the download is.
+                // Copied by hand, not copyTo, so Cue can show how far the download is.
                 val conn = URL("https://github.com/$REPO/releases/download/v$ver/Plume.apk").openConnection() as HttpURLConnection
                 conn.connectTimeout = 5000
                 conn.readTimeout = 5000
@@ -6751,7 +6751,7 @@ class MainActivity : Activity() {
             page(c.name, c.where) {
                 prefs.edit().putBoolean("geo_manual", true).putString("geo_city", c.name)
                     .putFloat("geo_lat", c.lat).putFloat("geo_lon", c.lon).remove("wx_time").apply()
-                IslandWeather.start(this)
+                CueWeather.start(this)
                 isl.show()
                 refreshWeather()
                 renderSettings(R.string.weather_location)
@@ -7675,10 +7675,10 @@ class MainActivity : Activity() {
     internal fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     internal companion object {
-        val ISLAND_IDLE_NAMES = listOf(R.string.isl_idle_1, R.string.isl_idle_5, R.string.never)
-        val ISLAND_PRIVACY = listOf("full", "app", "hidden")
-        val ISLAND_PRIVACY_NAMES = listOf(R.string.isl_privacy_full, R.string.isl_privacy_app, R.string.isl_privacy_hidden)
-        val ISLAND_WX_ROWS = setOf(R.string.isl_wx_rain_row)
+        val CUE_IDLE_NAMES = listOf(R.string.isl_idle_1, R.string.isl_idle_5, R.string.never)
+        val CUE_PRIVACY = listOf("full", "app", "hidden")
+        val CUE_PRIVACY_NAMES = listOf(R.string.isl_privacy_full, R.string.isl_privacy_app, R.string.isl_privacy_hidden)
+        val CUE_WX_ROWS = setOf(R.string.isl_wx_rain_row)
         var fakeDevice: String? = null // debug builds: see fakeSetup()
         var fakeSdk = 0
         const val TV_LISTINGS = "android.permission.READ_TV_LISTINGS"

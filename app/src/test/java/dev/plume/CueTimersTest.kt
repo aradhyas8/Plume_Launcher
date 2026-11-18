@@ -3,7 +3,7 @@ package dev.plume
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class IslandTimersTest {
+class CueTimersTest {
     @Test fun timeLeftNeverGoesBelowZero() {
         assertEquals(4_000L, islLeft(10_000L, 6_000L))
         assertEquals(0L, islLeft(10_000L, 12_000L))
@@ -35,8 +35,8 @@ class IslandTimersTest {
     }
 
     @Test fun theTimerIconListsTheLastFourLengthsUsed() {
-        assertEquals(listOf(3, 1, 5, 10), islRecent(ISLAND_RECENT, 3))
-        assertEquals(listOf(10, 1, 5, 30), islRecent(ISLAND_RECENT, 10)) // a repeat moves up, not in twice
+        assertEquals(listOf(3, 1, 5, 10), islRecent(CUE_RECENT, 3))
+        assertEquals(listOf(10, 1, 5, 30), islRecent(CUE_RECENT, 10)) // a repeat moves up, not in twice
         assertEquals(listOf(7), islRecent(emptyList(), 7))
     }
 }

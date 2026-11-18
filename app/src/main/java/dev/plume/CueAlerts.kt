@@ -12,15 +12,15 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 
 /**
- * Other apps' notifications as island alerts. [MediaListener] hands every posted and removed notification here; this
+ * Other apps' notifications as Cue alerts. [MediaListener] hands every posted and removed notification here; this
  * keeps one item per notification key. A TV is shared and most of what it posts is system noise, so the filter is
  * strict, and the privacy setting decides how much of a notification the room gets to read.
  */
-internal object IslandAlerts {
+internal object CueAlerts {
     private const val PEEK_MS = 6_000L
     private const val LAST_MS = 120_000L
 
-    internal class CachedAlert(val pkg: String, val privacy: String, val item: IslandItem) {
+    internal class CachedAlert(val pkg: String, val privacy: String, val item: CueItem) {
         fun visible(now: Long, currentPrivacy: String?, muted: Set<String>) =
             now < item.until && privacy == currentPrivacy && pkg !in muted
     }
@@ -28,7 +28,7 @@ internal object IslandAlerts {
     private val shown = LinkedHashMap<String, CachedAlert>()
     private val lastPeek = HashMap<String, Long>()
 
-    @Synchronized fun items(now: Long, prefs: SharedPreferences): List<IslandItem> {
+    @Synchronized fun items(now: Long, prefs: SharedPreferences): List<CueItem> {
         val privacy = prefs.getString("isl_alert_privacy", "app")
         val muted = prefs.getStringSet("isl_alert_off", null).orEmpty()
         if (!prefs.getBoolean("isl_alerts", true)) shown.clear()
@@ -47,7 +47,7 @@ internal object IslandAlerts {
     @Synchronized fun disconnected() {
         if (shown.isEmpty()) return
         shown.clear()
-        Island.changed()
+        Cue.changed()
     }
 
     fun posted(ctx: Context, sbn: StatusBarNotification, ranking: NotificationListenerService.RankingMap?, interruption: Int) {
@@ -60,7 +60,7 @@ internal object IslandAlerts {
         val importance = ranking?.let { map ->
             NotificationListenerService.Ranking().takeIf { map.getRanking(sbn.key, it) }?.importance
         }
-        val pass = prefs.getBoolean("isl_alerts", true) && islandAlertPasses(
+        val pass = prefs.getBoolean("isl_alerts", true) && cueAlertPasses(
             pkg = pkg,
             summary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0,
             media = ex?.containsKey(Notification.EXTRA_MEDIA_SESSION) == true,
@@ -85,7 +85,7 @@ internal object IslandAlerts {
         // from there first, so an alert never shows a bare package name.
         val info = noteApp(ex)
         val label = info?.let { ctx.packageManager.getApplicationLabel(it).toString() } ?: appLabel(ctx, pkg) ?: pkg
-        val (shownTitle, sub) = islandAlertText(privacy, call, label, title, text,
+        val (shownTitle, sub) = cueAlertText(privacy, call, label, title, text,
             ctx.getString(R.string.isl_alert_call), ctx.getString(R.string.isl_alert_new)) ?: return removed(sbn.key)
 
         val now = System.currentTimeMillis()
@@ -93,21 +93,21 @@ internal object IslandAlerts {
         val full = privacy == "full"
         val picture = if (full) bigPicture(ex) ?: largeIcon(ctx, n) else null
         val image = picture ?: appIcon(ctx, info, pkg)
-        // Reply actions need a keyboard the island does not have, so an alert keeps only the plain buttons.
+        // Reply actions need a keyboard Cue does not have, so an alert keeps only the plain buttons.
         val actions = (n.actions?.takeIf { full } ?: emptyArray())
             .filter { it.actionIntent != null && !it.title.isNullOrBlank() && (call || it.remoteInputs.isNullOrEmpty()) }
             .take(2)
-            .map { a -> IslandAction(label = a.title.toString()) { try { a.actionIntent.send() } catch (_: PendingIntent.CanceledException) {} } }
+            .map { a -> CueAction(label = a.title.toString()) { try { a.actionIntent.send() } catch (_: PendingIntent.CanceledException) {} } }
 
         synchronized(this) {
             val peekUntil = when {
                 call -> Long.MAX_VALUE // a ringing call stays open until it is answered or missed
-                islandAlertMayPeek(lastPeek[pkg], now) -> { lastPeek[pkg] = now; post + PEEK_MS }
+                cueAlertMayPeek(lastPeek[pkg], now) -> { lastPeek[pkg] = now; post + PEEK_MS }
                 else -> shown[sbn.key]?.item?.peekUntil ?: 0L // too soon after the last peek: update quietly
             }
-            shown[sbn.key] = CachedAlert(pkg, privacy, IslandItem(
+            shown[sbn.key] = CachedAlert(pkg, privacy, CueItem(
                 key = sbn.key,
-                kind = if (call) IslandKind.CALL else IslandKind.ALERT,
+                kind = if (call) CueKind.CALL else CueKind.ALERT,
                 title = shownTitle,
                 sub = sub,
                 mono = image == null,
@@ -119,11 +119,11 @@ internal object IslandAlerts {
                 description = "$label: ${if (shownTitle == label) sub else shownTitle}",
             ))
         }
-        Island.changed()
+        Cue.changed()
     }
 
     @Synchronized fun removed(key: String) {
-        if (shown.remove(key) != null) Island.changed()
+        if (shown.remove(key) != null) Cue.changed()
     }
 
     @Suppress("DEPRECATION")
@@ -140,7 +140,7 @@ internal object IslandAlerts {
     private fun noteApp(ex: android.os.Bundle?): android.content.pm.ApplicationInfo? =
         try { ex?.getParcelable<android.os.Parcelable>("android.appInfo") as? android.content.pm.ApplicationInfo } catch (_: Exception) { null }
 
-    /** Adaptive and vector icons have no bitmap of their own, so they are drawn once at a size the island can use. */
+    /** Adaptive and vector icons have no bitmap of their own, so they are drawn once at a size Cue can use. */
     private fun toBitmap(d: Drawable): Bitmap? {
         if (d is BitmapDrawable && d.bitmap != null) return d.bitmap
         val w = d.intrinsicWidth.takeIf { it > 0 } ?: 192
@@ -159,10 +159,10 @@ private val ALERT_NOISE = setOf(
 )
 
 /**
- * Whether a notification may become an island alert. Plain values only, so the rules can be tested without Android.
+ * Whether a notification may become a Cue alert. Plain values only, so the rules can be tested without Android.
  * [importance] is null when the ranking is unknown; [dndAll] is false while Do Not Disturb holds back interruptions.
  */
-internal fun islandAlertPasses(
+internal fun cueAlertPasses(
     pkg: String, summary: Boolean, media: Boolean, ongoing: Boolean, category: String?,
     hasText: Boolean, importance: Int?, dndAll: Boolean,
 ): Boolean {
@@ -172,7 +172,7 @@ internal fun islandAlertPasses(
         summary || media || category == "transport" -> false
         ongoing && !call -> false
         !hasText -> false
-        // 3 is IMPORTANCE_DEFAULT: anything quieter is not meant to interrupt, and the island is an interruption.
+        // 3 is IMPORTANCE_DEFAULT: anything quieter is not meant to interrupt, and Cue is an interruption.
         !call && importance != null && importance < 3 -> false
         !dndAll && !call && category != "alarm" -> false
         else -> true
@@ -183,7 +183,7 @@ internal fun islandAlertPasses(
  * The pill's title and sub for a notification under a [privacy] setting ("full", "app" or "hidden"), or null when the
  * setting hides it. Only "full" shows what the notification says; calls always show, but name the caller only in full.
  */
-internal fun islandAlertText(
+internal fun cueAlertText(
     privacy: String, call: Boolean, app: String, title: String, text: String, incomingCall: String, newNotification: String,
 ): Pair<String, String?>? = when {
     privacy == "full" -> if (title.isNotEmpty()) title to text.ifEmpty { null } else text to null
@@ -192,5 +192,5 @@ internal fun islandAlertText(
     else -> app to newNotification
 }
 
-/** One peek per app in ten seconds, so a chatty app cannot keep the island open. */
-internal fun islandAlertMayPeek(lastPeek: Long?, now: Long) = lastPeek == null || now - lastPeek >= 10_000L
+/** One peek per app in ten seconds, so a chatty app cannot keep Cue open. */
+internal fun cueAlertMayPeek(lastPeek: Long?, now: Long) = lastPeek == null || now - lastPeek >= 10_000L

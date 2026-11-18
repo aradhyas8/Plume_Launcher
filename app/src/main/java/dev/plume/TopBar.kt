@@ -5,7 +5,7 @@ package dev.plume
  * the home screen turns the keys into its views.
  */
 internal object TopBar {
-    /** The most icons the bar shows: more crowd the clock and the island. */
+    /** The most icons the bar shows: more crowd the clock and Cue. */
     const val MAX = 5
 
     /** The first [MAX] of the icons on screen. [required] stays on even when it is further along: it takes the last place. */
