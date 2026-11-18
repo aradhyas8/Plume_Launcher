@@ -230,7 +230,7 @@ Fire TV does not send Home presses to the service. Smooth volume can also turn H
   ```
 
 - **Aerial Views screensaver:** **Plume settings → Screensaver → Screensaver → Aerial Views**. It uses the scenes you downloaded for the wallpaper, so nothing downloads twice. Press ◀ or ▶ to skip.
-- **Your shows:** Choose **Wallpaper → Your shows**. Plume skips images below 1920 × 1080 after cropping and uses native 4K when the image and TV support it. To find more backdrops, open **Wallpaper → TMDB artwork** and add a [TMDB API key (v3)](https://www.themoviedb.org/settings/api). Select **Send key from phone** to paste the key on your phone. Use trusted Wi-Fi, then select **Done** on the TV.
+- **Your shows:** Choose **Wallpaper → Your shows**. Plume skips images below 1920 × 1080 after cropping and uses native 4K when the image and TV support it. For TMDB backdrops, open **Wallpaper → TMDB artwork** and add a [TMDB API key (v3)](https://www.themoviedb.org/settings/api). Plume tries TMDB first, then uses the app's picture if no usable backdrop is available. Select **Send key from phone** to paste the key on your phone. Use trusted Wi-Fi, then select **Done** on the TV.
 - **Gallery screensaver:** public-domain landscape paintings (4.7 MB), downloaded only while you use it.
 
 Plume shows every wallpaper as it is, with no dark fades on top.

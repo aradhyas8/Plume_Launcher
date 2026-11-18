@@ -6,7 +6,7 @@ import java.io.File
 
 /**
  * The "Shows from your apps" wallpaper: the picture of a show that an app publishes (Watch Next, or a home channel),
- * one at a time. If the user adds a key, TMDB can supply a backdrop when the app has no suitable picture.
+ * one at a time. With a key, Plume tries TMDB first, then the app's pictures if no usable backdrop is found.
  * Plume keeps one picture on disk. Choosing another wallpaper deletes it.
  */
 internal object ShowsWall {
