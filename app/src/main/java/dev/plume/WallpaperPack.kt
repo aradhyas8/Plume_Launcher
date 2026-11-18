@@ -14,6 +14,15 @@ internal fun packFileName(name: String) = name.matches(Regex("[A-Za-z0-9][A-Za-z
 internal fun packPhotoName(file: String) = file.substringBeforeLast('.').replace(Regex("^\\d+[_-]"), "")
     .replace('_', ' ').replace('-', ' ')
 
+internal fun wallpaperAfterAuroraRemoval(saved: String?, packDir: File): String = when (saved) {
+    null -> Bing.CHOICE
+    "res:Arctic Aurora" -> {
+        val file = "05_Arctic_Aurora.webp"
+        if (File(packDir, file).isFile) "pack:$file" else Bing.CHOICE
+    }
+    else -> saved
+}
+
 internal data class PackPhoto(val file: String, val size: Long, val sha: String) {
     init {
         require(packFileName(file) && size in 12..50_000_000 && sha.matches(Regex("[a-f0-9]{40}")))

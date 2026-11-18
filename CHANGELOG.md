@@ -17,6 +17,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 ## Unreleased
 
 - **Wallpaper gallery.** Browse wallpapers by source. Select photos from a TV or USB folder and preview the slideshow before you apply it.
+- Plume uses the **Bing picture of the day** on first install. It downloads the picture when the TV connects to the internet.
 
 - **Island.** A glass tile at the top of Home shows what happens now: music, timers, alerts and live scores.
 - Select the island to open it. Press Left or Right on the progress bar to seek in a song.

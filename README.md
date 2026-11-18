@@ -47,7 +47,7 @@ Plume replaces the cluttered stock home screen with the two things you actually 
     <img src="docs/readme/focus.webp" alt="The selected tile rises and its edge catches the light" width="80%">
   </p>
 - **Live wallpapers and Aerial Views, built in.** 250+ Apple, Amazon and NASA scenes as your wallpaper or screensaver, or your own MP4. Each scene downloads once, only when you pick it.
-- **Wallpapers your way.** Built-in photos, an optional 4K pack, Bing's photo of the day, pictures of your shows, a photo folder or USB drive, or photos sent from your phone by QR code. The **Wallpaper** theme picks light or dark from the picture.
+- **Wallpapers your way.** New installs use Bing's photo of the day. You can also use the optional 4K pack, pictures of your shows, a photo folder or USB drive, or photos sent from your phone by QR code. The **Wallpaper** theme picks light or dark from the picture.
 - **Continue Watching** from Android TV's Watch Next list and from apps with their own channel, such as Stremio and Nuvio.
 - **Clean apps row.** Monochrome logos, colour logos or banners in three sizes. Rearrange, hide, or sort by most used. A PIN keeps the layout safe from small hands.
 - **Home button on Google TV**, even where the stock launcher can't be replaced. Holding Home still opens the Google TV dashboard.
@@ -281,7 +281,7 @@ Plume has no analytics, no ads and no account. It only connects to the internet 
 - check this repository's GitHub releases for a new version, once a day, and download it when you choose to update
 - download the Gallery paintings from this repository, **only if you choose that screensaver**
 - check this repository for wallpapers **when you open Built-in**. Plume updates photos you already downloaded. New photos download only when you select them.
-- get the Bing picture of the day (about 300 KB), **only if you choose it as your wallpaper**. Plume sends a request to [bing.com](https://www.bing.com) when the home screen opens: once a day, or once an hour until the picture has changed that day. Bing sees the TV's IP address and its language and country. Plume keeps one picture and deletes it when you choose another wallpaper.
+- get the Bing picture of the day (about 300 KB) while it is your wallpaper. New installs use this option by default. Plume sends a request to [bing.com](https://www.bing.com) while Home is open. It retries once a minute until it has the first picture, then once an hour until it has the new picture for that day. Bing sees the TV's IP address and its language and country. Plume keeps one picture and deletes it when you choose another wallpaper.
 - fetch game scores and team logos from ESPN when you browse Island games, pin a game, or follow a team. Plume polls your picks only while the Island is on and Home is open.
 - fetch precipitation from Open-Meteo when you enable Island rain alerts. Plume uses your saved weather coordinates and stops requesting forecasts when the Island is off.
 - find artwork through [TMDB](https://www.themoviedb.org) **only if you add an API key and use Your shows**. TMDB receives the key to authenticate requests and the show title when Plume needs a backdrop. Plume stores the key on the TV and excludes it from backups. The QR form sends it over unencrypted HTTP on your local network. Select **Turn off TMDB and remove key** to stop lookups.
