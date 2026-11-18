@@ -2553,13 +2553,7 @@ class MainActivity : Activity() {
                 if (ShowsWall.skipped(showFailed, k, now)) continue
                 val p = byKey[k] ?: continue
                 var result = FETCH_DEAD
-                for (uri in p.wallpaperArt) {
-                    val fetched = fetchShow(uri)
-                    if (fetched == FETCH_OK) { result = fetched; break }
-                    if (fetched == FETCH_NETWORK) result = fetched
-                }
-                if (result != FETCH_OK && key != null && p.tmdbType != "") {
-                    if (!tmdbAvailable || lookups >= 5) continue
+                if (key != null && p.tmdbType != "" && tmdbAvailable && lookups < 5) {
                     lookups++
                     try {
                         val backdrop = Tmdb.backdrop(p.title, p.tmdbType, key, preferUhd)
@@ -2567,6 +2561,13 @@ class MainActivity : Activity() {
                     } catch (_: Exception) {
                         tmdbAvailable = false
                         result = FETCH_NETWORK
+                    }
+                }
+                if (result != FETCH_OK) {
+                    for (uri in p.wallpaperArt) {
+                        val fetched = fetchShow(uri)
+                        if (fetched == FETCH_OK) { result = fetched; break }
+                        if (fetched == FETCH_NETWORK) result = fetched
                     }
                 }
                 when (result) {
