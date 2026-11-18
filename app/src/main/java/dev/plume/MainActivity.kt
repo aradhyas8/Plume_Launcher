@@ -609,13 +609,6 @@ class MainActivity : Activity() {
     }
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
-        if (code == BT_REQUEST) {
-            val ok = results.firstOrNull() == PackageManager.PERMISSION_GRANTED
-            prefs.edit().putBoolean("isl_bluetooth", ok).apply()
-            if (ok) { IslandBluetooth.stop(this); IslandBluetooth.start(this) }
-            if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.isl_bt_row)
-            return
-        }
         if (code != MEDIA_REQUEST) return refreshWatchNext()
         if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) afterPhotoAccess?.invoke()
         else toast(getString(R.string.photos_permission), long = true)
@@ -1762,7 +1755,7 @@ class MainActivity : Activity() {
             extras.forEach { (_, view) -> addView(view) }
             for ((name, tiles) in groups) {
                 name?.let { addView(groupTitle(getString(it))) }
-                tiles.chunked(3).forEach { line ->
+                for (i in tiles.indices step 3) tiles.subList(i, minOf(i + 3, tiles.size)).let { line ->
                     addView(LinearLayout(context).apply {
                         line.forEach { t ->
                             val chosen = t.choice != null && t.choice == current
@@ -2994,7 +2987,10 @@ class MainActivity : Activity() {
             renderSettings(k)
         }
         val wxAgain = { IslandWeather.stop(); IslandWeather.start(this) }
-        rows[R.string.isl_on] = islRow(R.string.isl_on, "isl_on")
+        rows[R.string.isl_on] = islRow(R.string.isl_on, "isl_on") {
+            wxAgain()
+            IslandSports.start(this)
+        }
         rows[R.string.isl_access] = Triple(getString(R.string.isl_access), getString(if (listenerOn()) R.string.isl_access_on else R.string.isl_access_off)) { openListenerAccess() }
         rows[R.string.isl_music] = islRow(R.string.isl_music, "isl_music")
         rows[R.string.isl_idle] = Triple(getString(R.string.isl_idle), getString(ISLAND_IDLE_NAMES[ISLAND_IDLES.indexOf(prefs.getLong("isl_idle", ISLAND_IDLE_MS)).coerceAtLeast(0)])) {
@@ -3009,20 +3005,10 @@ class MainActivity : Activity() {
             if (seen.isEmpty()) "" else if (off == 0) getString(R.string.all_on) else getString(R.string.n_off, off)
         }) { pickAlertApps() }
         rows[R.string.isl_sports] = islRow(R.string.isl_sports, "isl_sports") { IslandSports.start(this) }
-        rows[R.string.isl_games_now] = Triple(getString(R.string.isl_games_now), IslandSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGamesNow() }
-        rows[R.string.isl_leagues] = Triple(getString(R.string.isl_leagues), IslandSports.followedLeagues(this).joinToString(", ") { it.name }.ifEmpty { "›" }) { pickSport(teams = false) }
-        // How many games the island holds at once: one by default, so the island is never a list of scores.
-        rows[R.string.isl_games_max] = Triple(getString(R.string.isl_games_max), IslandSports.max(this).toString()) {
-            prefs.edit().putInt("isl_sports_max", IslandSports.max(this) % 3 + 1).apply()
-            isl.show()
-            renderSettings(R.string.isl_games_max)
-        }
-        rows[R.string.isl_teams] = Triple(getString(R.string.isl_teams), IslandSports.followed(this).joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) { pickSport(teams = true) }
-        rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", after = wxAgain)
+        // Everything about games on one page: the picks, where to pick them, your teams and how many fit.
+        rows[R.string.isl_games] = Triple(getString(R.string.isl_games), IslandSports.pinned(this).size.let { if (it == 0) "›" else getString(R.string.isl_n_pinned, it) }) { pickGames() }
+        rows[R.string.isl_wx_rain_row] = islRow(R.string.isl_wx_rain_row, "isl_wx_rain", def = false, after = wxAgain)
         rows[R.string.isl_update_row] = islRow(R.string.isl_update_row, "isl_update")
-        rows[R.string.isl_dream_row] = islRow(R.string.isl_dream_row, "isl_dream")
-        rows[R.string.isl_net_row] = islRow(R.string.isl_net_row, "isl_net")
-        rows[R.string.isl_bt_row] = Triple(getString(R.string.isl_bt_row), toggle(isl.on("isl_bluetooth", false))) { toggleIslandBluetooth() }
         for (k in listOf(R.string.sort_apps, R.string.weather_units)) steps[k] = { rows[k]!!.third() }
         // Like the layout: behind the PIN. unlock() closes the panel after the PIN, so open it again.
         rows[R.string.section_keys] = page(getString(R.string.section_keys), "${keysSummary()}  ›") {
@@ -3050,10 +3036,9 @@ class MainActivity : Activity() {
                 else listOfNotNull(R.string.isl_on, R.string.isl_access, R.string.isl_timers,
                     R.string.isl_music, R.string.isl_idle.takeIf { isl.on("isl_music") },
                     R.string.isl_alerts, R.string.isl_privacy.takeIf { isl.on("isl_alerts") }, R.string.isl_alert_apps.takeIf { isl.on("isl_alerts") },
-                    R.string.isl_sports, R.string.isl_games_now.takeIf { isl.on("isl_sports") }, R.string.isl_leagues.takeIf { isl.on("isl_sports") },
-                    R.string.isl_teams.takeIf { isl.on("isl_sports") }, R.string.isl_games_max.takeIf { isl.on("isl_sports") },
+                    R.string.isl_sports, R.string.isl_games.takeIf { isl.on("isl_sports") },
                     R.string.isl_wx_rain_row,
-                    R.string.isl_update_row, R.string.isl_net_row, R.string.isl_bt_row, R.string.isl_dream_row)),
+                    R.string.isl_update_row)),
             Triple(R.string.section_screensaver, rows[R.string.screensaver]!!.second, listOf(R.string.screensaver, R.string.test_screensaver, R.string.screensaver_timing)),
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
@@ -3152,29 +3137,17 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Bluetooth needs Android's own yes on Android 12 and later; asked only when it is switched on. */
-    private fun toggleIslandBluetooth() {
-        val on = !isl.on("isl_bluetooth", false)
-        if (on && Build.VERSION.SDK_INT >= 31 && checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
-            return requestPermissions(arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT), BT_REQUEST)
-        prefs.edit().putBoolean("isl_bluetooth", on).apply()
-        IslandBluetooth.stop(this)
-        if (on) IslandBluetooth.start(this)
-        isl.show()
-        renderSettings(R.string.isl_bt_row)
-    }
-
     /** Timer and stopwatch. Starting one closes the panel, so it shows on the island at once. */
     internal fun pickIslandTimer(focus: Int = 0) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
-        fun start(go: () -> Unit) { closeLauncherSettings(); go(); isl.started() }
+        fun start(key: String, go: () -> Unit) { closeLauncherSettings(); go(); isl.started(key) }
         showPage(getString(R.string.isl_timers), listOf(
             page(getString(R.string.isl_timer), "›") {
                 showPage(getString(R.string.isl_timer), ISLAND_TIMERS.map { m -> page(mins(m)) { closeLauncherSettings(); isl.startTimer(m) } } +
                     page(getString(R.string.isl_custom), "›") { isl.customTimer() },
                     crumb = getString(R.string.isl_timers)) { pickIslandTimer(0) }
             },
-            page(getString(R.string.isl_stopwatch)) { start { IslandTimers.startStopwatch(this) } },
+            page(getString(R.string.isl_stopwatch)) { start("stopwatch") { IslandTimers.startStopwatch(this) } },
         ), focus, crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_timers) }
     }
 
@@ -3187,54 +3160,92 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Games now: what is live or starts within 3 h, in every league, live first. OK pins a game; it leaves the island
-     * by itself after the final. The quickest way to a game: no teams, no leagues.
+     * Games: one page for all of it, like Apple's "Follow live" and "My Sports". First the games on the island now (OK
+     * takes one off), then Games now (a sport, a league, then its games) to pick one, then Your teams (every game they
+     * play shows by itself), then how many games fit. A pick when the island is full takes the place of the oldest one.
      */
-    internal fun pickGamesNow(focus: Int = 0, list: List<IslandSports.NowGame>? = null) {
-        val crumb = getString(R.string.isl_section)
+    internal fun pickGames(focus: Int = 0) {
+        if (IslandSports.trimPins(this)) gamesChanged()
+        val pins = IslandSports.pinned(this).sortedBy { it.at }
+        val max = IslandSports.max(this)
+        val teams = IslandSports.followed(this)
+        val rows = pins.map { p ->
+            page(IslandSports.pinName(this, p) ?: getString(R.string.isl_game), getString(R.string.isl_pinned)) {
+                IslandSports.unpinGame(this, p.eventId)
+                gamesChanged()
+                pickGames()
+            }
+        } + listOf(
+            page(getString(R.string.isl_games_now), "›") { pickSport(teams = false) },
+            page(getString(R.string.isl_teams), teams.joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) { pickSport(teams = true) },
+            page(getString(R.string.isl_games_max), resources.getQuantityString(R.plurals.isl_n_games, max, max)) {
+                prefs.edit().putInt("isl_sports_max", max % 3 + 1).apply()
+                gamesChanged()
+                // Going from 3 back to 1 drops the oldest picks, so the focus stays on this row by its place from the end.
+                pickGames(pins.size + 2 - (pins.size - minOf(pins.size, max % 3 + 1)))
+            },
+        )
+        showPage(getString(R.string.isl_games), rows, focus.coerceIn(0, rows.size - 1), crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_games) }
+    }
+
+    private fun gamesChanged() {
+        IslandSports.start(this)
+        isl.show()
+    }
+
+    /** OK on a game row: takes it off the island, or puts it on (in place of the oldest pick when the island is full). */
+    private fun toggleGame(g: IslandSports.NowGame) {
+        if (IslandSports.pinned(this).any { it.eventId == g.eventId }) IslandSports.unpinGame(this, g.eventId)
+        else IslandSports.pinGame(this, g).firstOrNull()?.let { toast(getString(R.string.isl_game_replaced, IslandSports.pinName(this, it) ?: getString(R.string.isl_game))) }
+        gamesChanged()
+    }
+
+    /** A list of games to pick from: "On the island" beside the picked ones, else the league or the start time. */
+    private fun showGames(title: String, list: List<IslandSports.NowGame>, focus: Int, crumb: String, again: (Int) -> Unit, back: () -> Unit,
+                          note: (IslandSports.NowGame) -> String? = { null }) {
+        val pins = IslandSports.pinned(this).map { it.eventId }.toSet()
+        showPage(title, list.mapIndexed { i, g ->
+            page(g.title, if (g.eventId in pins) getString(R.string.isl_pinned) else note(g) ?: g.leagueName) { toggleGame(g); again(i) }
+        }, focus, styles = list.map { RowStyle(logo = it.awayLogo ?: it.homeLogo) }, crumb = crumb, back = back)
+    }
+
+    /** One league's games (Games now): live, or starting within a day. */
+    private fun pickLeagueGames(l: IslandSports.League, focus: Int = 0, list: List<IslandSports.NowGame>? = null, back: () -> Unit) {
+        val crumb = getString(R.string.isl_games_now)
         if (list == null) {
-            showPage(getString(R.string.isl_games_now), listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = crumb) { renderSettings(R.string.isl_games_now) }
-            return IslandSports.gamesNow(this) { games ->
-                if (isDestroyed || settingsScrim.visibility != View.VISIBLE) return@gamesNow
-                if (games.isEmpty()) showPage(getString(R.string.isl_games_now), listOf(page(getString(R.string.isl_games_none)) {}), crumb = crumb) { renderSettings(R.string.isl_games_now) }
-                else pickGamesNow(0, games)
+            showPage(l.name, listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = crumb, back = back)
+            return IslandSports.leagueGames(this, l) { games ->
+                if (isDestroyed || settingsScrim.visibility != View.VISIBLE) return@leagueGames
+                when {
+                    games == null -> showPage(l.name, listOf(page(getString(R.string.isl_games_failed)) { pickLeagueGames(l, back = back) }), crumb = crumb, back = back)
+                    games.isEmpty() -> showPage(l.name, listOf(page(getString(R.string.isl_league_none)) {}), crumb = crumb, back = back)
+                    else -> pickLeagueGames(l, 0, games, back)
+                }
             }
         }
-        val pins = IslandSports.pinned(this).map { it.eventId }.toSet()
-        showPage(getString(R.string.isl_games_now), list.mapIndexed { i, g ->
-            page(g.title, if (g.eventId in pins) getString(R.string.isl_pinned) else g.leagueName) {
-                if (g.eventId in pins) IslandSports.unpinGame(this, g.eventId) else IslandSports.pinGame(this, g)
-                IslandSports.start(this)
-                isl.show()
-                pickGamesNow(i, list)
-            }
-        }, focus, styles = list.map { RowStyle(logo = it.awayLogo ?: it.homeLogo) }, crumb = crumb) { renderSettings(R.string.isl_games_now) }
+        showGames(l.name, list, focus, crumb, { pickLeagueGames(l, it, list, back) }, back)
     }
 
-    /** Sport folders (Football, Basketball, Motorsport…), so no list is long. [teams]: the way to Teams, else to Leagues. */
-    private fun pickSport(teams: Boolean, focus: Int = 0) {
+    /** Sport folders (Football, Basketball, Motorsport…), so no list is long. [teams]: the way to Your teams, else Games now. */
+    internal fun pickSport(teams: Boolean, focus: Int = 0) {
         val groups = IslandSports.LEAGUES.filter { !teams || it.teams }.groupBy { it.group }
-        val title = getString(if (teams) R.string.isl_teams else R.string.isl_leagues)
-        val mine = if (teams) IslandSports.followed(this).map { "${it.sport}/${it.league}" } else IslandSports.followedLeagues(this).map { it.key }
+        val title = getString(if (teams) R.string.isl_teams else R.string.isl_games_now)
+        val mine = if (teams) IslandSports.followed(this).map { "${it.sport}/${it.league}" } else IslandSports.pinned(this).map { "${it.sport}/${it.league}" }
+        val pins = IslandSports.pinned(this).size
         showPage(title, groups.entries.mapIndexed { i, (group, leagues) ->
-            val n = leagues.count { it.key in mine }
-            page(getString(group), if (n == 0) "›" else getString(R.string.n_on, n)) { pickSportLeagues(teams, leagues, i) }
-        }, focus, crumb = getString(R.string.isl_section)) { renderSettings(if (teams) R.string.isl_teams else R.string.isl_leagues) }
+            val n = mine.count { m -> leagues.any { it.key == m } }
+            page(getString(group), if (n == 0) "›" else getString(if (teams) R.string.n_on else R.string.isl_n_pinned, n)) { pickSportLeagues(teams, leagues, i) }
+        }, focus, crumb = getString(R.string.isl_games)) { pickGames(pins + if (teams) 1 else 0) }
     }
 
-    /** One sport's leagues: for Leagues, OK follows the league; for Teams, OK opens its teams. */
+    /** One sport's leagues: for Your teams, OK opens its teams; for Games now, its games. */
     private fun pickSportLeagues(teams: Boolean, leagues: List<IslandSports.League>, groupAt: Int, focus: Int = 0) {
         val followed = IslandSports.followed(this)
-        val mine = IslandSports.followedLeagues(this).map { it.key }.toSet()
         showPage(getString(leagues.first().group), leagues.mapIndexed { i, l ->
             if (teams) page(l.name, followed.filter { it.sport == l.sport && it.league == l.league }.joinToString(", ") { it.abbreviation }.ifEmpty { "›" }) {
                 pickTeams(l) { pickSportLeagues(true, leagues, groupAt, i) }
-            } else page(l.name, if (l.key in mine) getString(R.string.isl_following) else "") {
-                if (l.key in mine) IslandSports.unfollowLeague(this, l) else IslandSports.followLeague(this, l)
-                IslandSports.start(this)
-                pickSportLeagues(false, leagues, groupAt, i)
-            }
-        }, focus, crumb = getString(if (teams) R.string.isl_teams else R.string.isl_leagues)) { pickSport(teams, groupAt) }
+            } else page(l.name, "›") { pickLeagueGames(l) { pickSportLeagues(false, leagues, groupAt, i) } }
+        }, focus, crumb = getString(if (teams) R.string.isl_teams else R.string.isl_games_now)) { pickSport(teams, groupAt) }
     }
 
     /**
@@ -3980,19 +3991,6 @@ class MainActivity : Activity() {
         iconShadow(wifi) // the shadow takes the new picture's shape
         // Dim only the icon: the focus ring is the background and should stay full strength.
         wifi.imageAlpha = if (caps == null) 90 else 255
-        // The island says so when the internet goes, and when it comes back after it did.
-        val up = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-        // Three different troubles: no network, a hotel or guest Wi-Fi asking to sign in, or a network with no internet.
-        isl.netWhy = when {
-            caps == null -> R.string.isl_net_down
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL) -> R.string.isl_net_captive
-            !up -> R.string.isl_net_noint
-            else -> 0
-        }
-        val now = System.currentTimeMillis()
-        if (!up && isl.netDownAt == 0L) isl.netDownAt = now
-        if (up && isl.netDownAt > 0L) { if (now - isl.netDownAt > 10_000) isl.netBackAt = now; isl.netDownAt = 0L }
-        isl.show()
     }
 
     internal fun openSettings(action: String, data: Uri? = null) {
@@ -5331,7 +5329,7 @@ class MainActivity : Activity() {
         val at = Rect(0, 0, tile.width, tile.height)
         row.offsetDescendantRectToMyCoords(tile, at) // the tile's place in the row, whatever sits between them
         var pivot = at.exactCenterX()
-        val scroll = generateSequence(row.parent) { it.parent }.firstOrNull { it is HorizontalScrollView } as? HorizontalScrollView
+        val scroll = row.ancestor<HorizontalScrollView>()
         if (scroll != null && (at.left < scroll.scrollX || at.right > scroll.scrollX + scroll.width)) pivot = scroll.scrollX + scroll.width / 2f
         row.pivotX = pivot
         row.pivotY = at.exactCenterY()
@@ -5867,7 +5865,7 @@ class MainActivity : Activity() {
                 else resources.getQuantityString(R.plurals.screensaver_minutes, minutes, minutes)
             page(name, if (name == current) CHOSEN else "") {
                 try {
-                    saveScreensaverDelay(minutes, fireTv(), ::readDreamSetting) { key, value ->
+                    saveScreensaverDelay(minutes, fireTv(), { readDreamSetting(it) }) { key, value ->
                         if (key == Settings.System.SCREEN_OFF_TIMEOUT) Settings.System.putString(contentResolver, key, value)
                         else Settings.Secure.putString(contentResolver, key, value)
                     }
@@ -6331,6 +6329,8 @@ class MainActivity : Activity() {
             page(c.name, c.where) {
                 prefs.edit().putBoolean("geo_manual", true).putString("geo_city", c.name)
                     .putFloat("geo_lat", c.lat).putFloat("geo_lon", c.lon).remove("wx_time").apply()
+                IslandWeather.start(this)
+                isl.show()
                 refreshWeather()
                 renderSettings(R.string.weather_location)
             }
@@ -7145,26 +7145,26 @@ class MainActivity : Activity() {
      * top sheen; dark mode brightens the glass gradient instead (a white sheen would haze it grey).
      * Only transform/alpha/colour change, so it stays on the GPU and costs no re-layout.
      */
-    internal fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, frost: Boolean = true, rise: Boolean = true, onFocus: ((Boolean) -> Unit)? = null) {
+    internal fun style(v: View, radius: Int, card: Boolean, lift: Float = 1.08f, frost: Boolean = true, rise: Boolean = true, sheen: Boolean = true, onFocus: ((Boolean) -> Unit)? = null) {
         fun gradient(colors: IntArray) = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, colors).apply {
             cornerRadius = radius.toFloat()
             setDither(true)
         }
         val sheenColors = intArrayOf(0x40FFFFFF, 0x00FFFFFF)
-        val sheen = Baked("sheen $radius", gradient(sheenColors)).apply { alpha = 0 }
+        val sheenLayer = Baked("sheen $radius", gradient(sheenColors)).apply { alpha = 0 }
         val rest = if (card) Baked("card $radius ${cardRest.contentToString()}", gradient(cardRest)) else null
         val lit = if (card) Baked("card $radius ${cardLit.contentToString()}", gradient(cardLit)) else null
         val frosted = frost && card && glassActive()
-        if (frosted) glass.add(v, radius.toFloat())
+        if (frosted) glass.add(v, radius.toFloat(), sheen)
         v.background = if (dark && card) rimCard(radius, false, frosted = frosted) else rest ?: GradientDrawable().apply { cornerRadius = radius.toFloat() }
-        if (!dark) v.foreground = sheen
+        if (!dark && sheen) v.foreground = sheenLayer
         v.clipToOutline = true
         v.elevation = if (card) dp(2).toFloat() else 0f
         v.isFocusable = true
         v.isClickable = true
         v.setOnLongClickListener { if (!holdFired) fireHold(v); true }
         v.setOnFocusChangeListener { _, focused ->
-            sheen.alpha = if (focused) 255 else 0
+            sheenLayer.alpha = if (focused) 255 else 0
             if (card && dark) v.background = rimCard(radius, focused, frosted = frosted)
             else if (card) v.background = if (focused) lit else rest
             if (frosted) glass.kick(260) // the lift moves the tile: its blur follows
@@ -7260,7 +7260,6 @@ class MainActivity : Activity() {
         val ISLAND_PRIVACY = listOf("full", "app", "hidden")
         val ISLAND_PRIVACY_NAMES = listOf(R.string.isl_privacy_full, R.string.isl_privacy_app, R.string.isl_privacy_hidden)
         val ISLAND_WX_ROWS = setOf(R.string.isl_wx_rain_row)
-        const val BT_REQUEST = 7311
         var fakeDevice: String? = null // debug builds: see fakeSetup()
         var fakeSdk = 0
         const val TV_LISTINGS = "android.permission.READ_TV_LISTINGS"
@@ -7309,9 +7308,8 @@ class MainActivity : Activity() {
             R.string.isl_on to R.drawable.ms_widgets, R.string.isl_access to R.drawable.ms_lock, R.string.isl_timers to R.drawable.ms_timer,
             R.string.isl_music to R.drawable.ic_music_note, R.string.isl_idle to R.drawable.ms_schedule, R.string.isl_alerts to R.drawable.ms_badge,
             R.string.isl_privacy to R.drawable.ms_visibility_off, R.string.isl_alert_apps to R.drawable.ms_checklist, R.string.isl_sports to R.drawable.ms_public,
-            R.string.isl_teams to R.drawable.ms_checklist, R.string.isl_games_now to R.drawable.ms_play_circle, R.string.isl_leagues to R.drawable.ms_view_carousel, R.string.isl_wx_rain_row to R.drawable.ms_water,
-            R.string.isl_games_max to R.drawable.ms_filter_list, R.string.isl_update_row to R.drawable.ms_system_update, R.string.isl_net_row to R.drawable.ic_wifi,
-            R.string.isl_bt_row to R.drawable.ic_isl_bluetooth, R.string.isl_dream_row to R.drawable.ms_bedtime,
+            R.string.isl_games to R.drawable.ms_play_circle, R.string.isl_wx_rain_row to R.drawable.ms_water,
+            R.string.isl_update_row to R.drawable.ms_system_update,
         )
         val SECTION_ICONS = mapOf(
             R.string.section_style to R.drawable.ms_palette, R.string.section_clock_weather to R.drawable.ms_partly_cloudy_day,
@@ -7342,11 +7340,9 @@ class MainActivity : Activity() {
             R.string.isl_section to R.string.help_isl_section, R.string.isl_on to R.string.help_isl_on, R.string.isl_access to R.string.help_isl_access,
             R.string.isl_music to R.string.help_isl_music, R.string.isl_idle to R.string.help_isl_idle, R.string.isl_timers to R.string.help_isl_timers,
             R.string.isl_alerts to R.string.help_isl_alerts, R.string.isl_privacy to R.string.help_isl_privacy, R.string.isl_alert_apps to R.string.help_isl_alert_apps,
-            R.string.isl_sports to R.string.help_isl_sports, R.string.isl_teams to R.string.help_isl_teams,
-            R.string.isl_games_now to R.string.help_isl_games_now, R.string.isl_leagues to R.string.help_isl_leagues,
-            R.string.isl_wx_rain_row to R.string.help_isl_wx_rain, R.string.isl_games_max to R.string.help_isl_games_max,
-            R.string.isl_update_row to R.string.help_isl_update, R.string.isl_net_row to R.string.help_isl_net, R.string.isl_bt_row to R.string.help_isl_bt,
-            R.string.isl_dream_row to R.string.help_isl_dream,
+            R.string.isl_sports to R.string.help_isl_sports, R.string.isl_games to R.string.help_isl_games,
+            R.string.isl_wx_rain_row to R.string.help_isl_wx_rain,
+            R.string.isl_update_row to R.string.help_isl_update,
         )
         val ROW_SHOW = linkedMapOf("always" to R.string.always, "down" to R.string.on_down, "never" to R.string.never) // "Show row"
         val CLOCK_SIZES = linkedMapOf(38 to R.string.clock_small, 48 to R.string.clock_medium, 60 to R.string.clock_large) // sp

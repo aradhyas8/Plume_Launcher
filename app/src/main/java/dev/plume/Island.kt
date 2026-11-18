@@ -11,14 +11,14 @@ import java.net.URL
 /**
  * The island's shared model. Each source (music, timers, alerts, sports, weather, system) turns what it knows into
  * [IslandItem]s; the home screen asks every source for its items, [islandArrange] orders them, and the island shows
- * the first in its pill and the rest as small marks beside it. Plain Kotlin apart from the picture types, so the
+ * the first in its pill and the rest in the open tile. Plain Kotlin apart from the picture types, so the
  * rules can be tested without Android.
  */
 
 /** What an item is. A lower [rank] wins the pill; items of the same rank go newest first. */
 internal enum class IslandKind(val rank: Int) {
-    CALL(0), TIMER_DONE(1), ALERT(2), NETWORK(3), MEDIA(4), SPORTS_LIVE(5),
-    TIMER(6), STOPWATCH(6), UPDATE(7), SPORTS(8), WEATHER(9), BLUETOOTH(10), MEDIA_PAUSED(11),
+    CALL(0), TIMER_DONE(1), ALERT(2), MEDIA(4), SPORTS_LIVE(5),
+    TIMER(6), STOPWATCH(6), UPDATE(7), SPORTS(8), WEATHER(9), MEDIA_PAUSED(11),
 }
 
 /** A button in the open island: a drawable [icon], or a short [label] when there is no fitting icon. */
@@ -33,7 +33,7 @@ internal class IslandAction(val icon: Int = 0, val label: String? = null, val de
  * is shown, and no more. Before [peekUntil] the island opens by itself to show the item, without taking focus. After
  * [until] the item is gone.
  */
-internal data class IslandItem(
+internal class IslandItem(
     val key: String,
     val kind: IslandKind,
     val title: String,
@@ -50,11 +50,13 @@ internal data class IslandItem(
     val peekUntil: Long = 0L,
     val actions: List<IslandAction> = emptyList(),
     val description: String? = null,
-)
+) {
+    /** The same item with another second line (a battery level that lands after the connect). */
+    fun withSub(sub: String?) = IslandItem(key, kind, title, sub, icon, mono, image, imageUri, image2Uri, progress, tick, since, until,
+        peekUntil, actions, description)
 
-/** A source of island items. [items] is cheap: it reads state the source keeps, it never waits on the network. */
-internal interface IslandSource {
-    fun items(now: Long): List<IslandItem>
+    /** What the island shows of it: the same text and times mean nothing to redraw. */
+    val shown get() = "$key|$kind|$title|$sub|$progress|$since|$until|$peekUntil"
 }
 
 /** The items still current at [now], the pill's first: lowest rank, then newest. */

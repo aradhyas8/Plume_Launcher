@@ -1,120 +1,37 @@
 package dev.plume
 
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
-import android.app.Activity
-import android.app.ActivityOptions
-import android.app.Dialog
-import android.app.PendingIntent
-import android.app.role.RoleManager
-import android.content.ActivityNotFoundException
-import android.content.BroadcastReceiver
 import android.content.ComponentName
-import android.content.ContentResolver
-import android.content.ContentUris
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.content.SharedPreferences
-import android.database.ContentObserver
-import android.content.pm.PackageInstaller
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
-import android.content.res.ColorStateList
 import android.graphics.Bitmap
-import android.graphics.BlurMaskFilter
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Shader
 import android.graphics.Typeface
-import android.graphics.ColorFilter
-import android.graphics.ColorMatrix
 import android.graphics.Outline
-import android.graphics.PixelFormat
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
-import android.graphics.Path
 import android.graphics.Rect
-import android.graphics.RectF
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.drawable.AdaptiveIconDrawable
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.ClipDrawable
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.LayerDrawable
-import android.graphics.drawable.TransitionDrawable
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
-import android.media.tv.TvContract
-import android.media.tv.TvInputInfo
-import android.media.tv.TvInputManager
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
-import android.os.UserManager
-import android.provider.MediaStore
 import android.provider.Settings
 import android.text.InputType
-import android.text.Editable
 import android.text.InputFilter
 import android.text.SpannableString
-import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.text.TextUtils
-import android.text.TextWatcher
-import android.text.format.DateFormat
-import android.text.style.BulletSpan
-import android.text.style.StyleSpan
-import android.util.LruCache
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.Window
 import android.view.ViewOutlineProvider
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.GridLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.PopupWindow
-import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.TextClock
-import android.widget.Toast
-import android.widget.VideoView
-import android.view.SurfaceView
-import java.io.File
-import java.lang.ref.WeakReference
-import java.io.IOException
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.concurrent.atomic.AtomicBoolean
-import java.net.URLEncoder
-import java.security.MessageDigest
-import java.security.SecureRandom
-import java.util.Calendar
-import java.util.Date
-import java.util.concurrent.Executors
-import org.json.JSONObject
 
 /** The open island is never narrower than this (dp): with less room beside the clock and the icons it opens below the bar. */
 private const val MIN_OPEN = 300
@@ -146,6 +63,7 @@ internal class IslandView(private val a: MainActivity) {
     var islandOpen = false // the shape the tile has now; the wanted shape can be ahead of it while content fades
     var islandWant: Boolean? = null // the shape the running fade is heading for
     var islandInk = 0 // the ink last picked, for the progress between full refreshes
+    var accent = 0 // the music art's colour (else the ink): its bars, its progress and its picked button
     var islandList: List<IslandItem> = emptyList() // everything on the island, in order, as last shown
     var islandItem: IslandItem? = null // the one the tile shows
     var islandPick: String? = null // the key of the thing picked with the marks, while the island is open
@@ -155,14 +73,11 @@ internal class IslandView(private val a: MainActivity) {
     var peekKey: String? = null // the item the island opened for by itself, and the peeks already shown
     val peeksShown = HashSet<String>()
     var seekTo = -1L // a seek still being chosen: shown at once, sent once the keys stop
-    var netDownAt = 0L // when the network went away (0: it is up), and when it came back
-    var netBackAt = 0L
+    private var seekTrack: List<String?>? = null
     var updateDone = -1f // the update's download, 0..1, while one runs; -1: none
     val islandHidden = HashSet<String>() // items hidden with Hold OK › Hide, until Plume restarts
-    var netWhy = 0 // the string for what is wrong with the network, 0 when nothing is
-    val islandImages = HashMap<String, Bitmap>() // pictures fetched from addresses (logos), by address
-    val islandLoading = HashSet<String>()
-    val islandFailed = HashSet<String>() // addresses with no picture (ESPN has no logo for many teams): asked once only
+    private val loading = HashSet<String>() // pictures on their way, and addresses with none (ESPN has no logo for many teams)
+    private val failed = HashSet<String>()
 
     // Music: the session the island follows.
     var pausedAt = 0L // when the shown track paused (elapsedRealtime), 0 while it plays
@@ -179,17 +94,31 @@ internal class IslandView(private val a: MainActivity) {
         override fun onSessionDestroyed() = a.refreshMedia()
     }
     val islandTick = Runnable { a.showIsland() }
+    val seekClear = Runnable { seekTo = -1L; seekTrack = null; a.showProgress() }
     val seekSend = Runnable {
-        if (seekTo >= 0) media?.transportControls?.seekTo(seekTo)
-        a.ui.postDelayed({ seekTo = -1L; a.showProgress() }, 1500) // until the app reports the new place
+        val player = media
+        if (seekTo >= 0 && player?.track() == seekTrack) player?.transportControls?.seekTo(seekTo)
+        a.ui.postDelayed(seekClear, 1500)
+    }
+
+    private fun MediaController.track() = metadata?.let {
+        listOf(it.getString(MediaMetadata.METADATA_KEY_MEDIA_ID), it.getString(MediaMetadata.METADATA_KEY_TITLE),
+            it.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE), it.getString(MediaMetadata.METADATA_KEY_ARTIST))
+    }
+
+    private fun MainActivity.clearSeek() {
+        ui.removeCallbacks(seekSend)
+        ui.removeCallbacks(seekClear)
+        seekTo = -1L
+        seekTrack = null
     }
 
     fun on(key: String, default: Boolean = true) = a.prefs.getBoolean(key, default)
 
     fun MainActivity.setUpIsland() {
-        // Corners that follow the tile's: a circle in the pill, a soft square in the open tile.
+        // The art is a cover: a soft square, a little rounder open.
         islandArt.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, if (v.width < dp(40)) v.width / 2f else dp(10).toFloat())
+            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, dp(if (v.width < dp(40)) 8 else 12).toFloat())
         }
         islandArt.clipToOutline = true
         styleIsland()
@@ -198,7 +127,7 @@ internal class IslandView(private val a: MainActivity) {
 
     /** A glass tile like the app row's, open or not: the same Glass style, theme, tint and focus light. */
     fun MainActivity.styleIsland() {
-        style(island, dp(ISLAND_ROUND), card = true, lift = 1f, rise = false) { focused ->
+        style(island, dp(ISLAND_ROUND), card = true, lift = 1f, rise = false, sheen = false) { focused ->
             if (focused) {
                 lastTop = island
                 peekKey?.let { peeksShown += it } // selected while it peeked: it has been seen
@@ -216,7 +145,6 @@ internal class IslandView(private val a: MainActivity) {
         IslandTimers.init(this)
         IslandWeather.start(this)
         IslandSports.start(this)
-        IslandBluetooth.start(this)
         try {
             mediaSessions.addOnActiveSessionsChangedListener(sessionsChanged, mediaAccess, ui)
         } catch (e: SecurityException) {
@@ -229,10 +157,10 @@ internal class IslandView(private val a: MainActivity) {
         Island.listener = null
         IslandWeather.stop()
         IslandSports.stop()
-        IslandBluetooth.stop(this)
         mediaSessions.removeOnActiveSessionsChangedListener(sessionsChanged)
         media?.unregisterCallback(mediaChanged)
         media = null
+        clearSeek()
         ui.removeCallbacks(islandTick)
     }
 
@@ -241,11 +169,12 @@ internal class IslandView(private val a: MainActivity) {
     fun MainActivity.pickMedia(list: List<MediaController>) {
         val pick = islandPick(list, { a.mediaPlaying(it) }) { mediaTitle(it.metadata) != null }
         if (pick?.sessionToken != media?.sessionToken) {
+            clearSeek()
             media?.unregisterCallback(mediaChanged)
             media = pick
             pausedAt = 0L
             pick?.registerCallback(mediaChanged, ui)
-        }
+        } else if (seekTo >= 0 && media?.track() != seekTrack) clearSeek()
         showIsland()
     }
 
@@ -263,12 +192,7 @@ internal class IslandView(private val a: MainActivity) {
             .firstNotNullOfOrNull { m.getString(it)?.takeIf { u -> u.startsWith("http") || u.startsWith("content") || u.startsWith("android.resource") } }
         if (uri != artUri) {
             artUri = uri
-            artSharp = uri?.let { posters.get(it) }
-            if (uri != null && artSharp == null) posterIo.execute {
-                val b = try { decode(uri, dp(68), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } ?: return@execute
-                posters.put(uri, b)
-                ui.post { if (artUri == uri && !isDestroyed) { artSharp = b; showIsland() } }
-            }
+            artSharp = uri?.let { picture(it, dp(160)) { b -> if (artUri == uri) { artSharp = b; showIsland() } } }
         }
         return artSharp ?: m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: m.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
@@ -308,6 +232,7 @@ internal class IslandView(private val a: MainActivity) {
         val next = can == 0L || can and PlaybackState.ACTION_SKIP_TO_NEXT != 0L
         return IslandItem("media", if (playing) IslandKind.MEDIA else IslandKind.MEDIA_PAUSED, title, who,
             icon = R.drawable.ic_music_note, mono = art == null, image = art, since = now,
+            until = if (!playing && !island.isFocused && idle > 0L) now + (idle - (clock - pausedAt)) else Long.MAX_VALUE,
             actions = listOfNotNull(
                 IslandAction(R.drawable.ic_skip_previous, description = getString(R.string.media_previous)) { t.skipToPrevious() }.takeIf { prev },
                 IslandAction(if (playing) R.drawable.ic_pause else R.drawable.ic_play, description = getString(R.string.media_play_pause)) { if (mediaPlaying(media)) t.pause() else t.play() },
@@ -316,16 +241,8 @@ internal class IslandView(private val a: MainActivity) {
             description = listOfNotNull(title, who, app).joinToString(", "))
     }
 
-    /** The network and Plume's own update, which the home screen knows itself. */
+    /** Plume's own update, which the home screen knows itself. The network is not here: the Wi-Fi icon shows it. */
     fun MainActivity.systemItems(now: Long): List<IslandItem> = listOfNotNull(
-        // Gone for 10 s first: Wi-Fi coming up after a wake would flash it for nothing.
-        if (on("isl_net") && netDownAt > 0 && now - netDownAt > 10_000)
-            IslandItem("net", IslandKind.NETWORK, getString(netWhy.takeIf { it != 0 } ?: R.string.isl_net_down),
-                getString(if (netWhy == R.string.isl_net_captive) R.string.isl_net_captive_sub else R.string.isl_net_down_sub), R.drawable.ic_isl_wifi_off,
-                since = netDownAt, peekUntil = netDownAt + 16_000,
-                actions = listOf(IslandAction(label = getString(R.string.isl_net_wifi)) { openSettings(Settings.ACTION_WIFI_SETTINGS) })) else null,
-        if (on("isl_net") && netBackAt > 0 && now - netBackAt < 5_000)
-            IslandItem("net", IslandKind.NETWORK, getString(R.string.isl_net_back), null, R.drawable.ic_wifi, since = netBackAt, until = netBackAt + 5_000) else null,
         if (on("isl_update") && updateDone >= 0f)
             IslandItem("update", IslandKind.UPDATE, getString(R.string.isl_update_title),
                 if (updateDone >= 1f) getString(R.string.isl_update_installing) else getString(R.string.isl_update_progress, availableUpdate() ?: "", (updateDone * 100).toInt()),
@@ -341,10 +258,9 @@ internal class IslandView(private val a: MainActivity) {
         val all = ArrayList<IslandItem>()
         mediaItem(now)?.let { all += it }
         all += IslandTimers.items(now)
-        if (on("isl_alerts")) all += IslandAlerts.items(now)
+        all += IslandAlerts.items(now, prefs)
         if (on("isl_sports")) all += IslandSports.items(now)
         all += IslandWeather.items(now)
-        if (on("isl_bluetooth", false)) all += IslandBluetooth.items(now)
         all += systemItems(now)
         return islandArrange(all.filter { hideKey(it) !in islandHidden }, now)
     }
@@ -393,7 +309,7 @@ internal class IslandView(private val a: MainActivity) {
         island.visibility = View.VISIBLE
         if (islandWant == null && open == islandOpen) bindIsland(item, open) else shapeIsland(open)
         // Look again when something changes by itself: a second passes on a timer, or an item or a peek runs out.
-        val next = (islandList.flatMap { listOf(it.until, it.peekUntil) } + listOfNotNull(peek?.peekUntil)).filter { it > now }.minOrNull()
+        val next = islandList.flatMap { listOf(it.until, it.peekUntil) }.filter { it > now }.minOrNull()
         // Each item says how often its text changes; open, the music's bar and times move every second.
         val period = (islandList.mapNotNull { it.tick.takeIf { t -> t > 0 } } + listOfNotNull(1000L.takeIf { open && (media != null || item.progress != null) })).minOrNull()
         val wait = minOf(period ?: Long.MAX_VALUE, next?.let { it - now + 50 } ?: Long.MAX_VALUE)
@@ -408,9 +324,9 @@ internal class IslandView(private val a: MainActivity) {
         if (islandWant == open) return
         islandWant = open
         for (v in listOf(islandTop, islandMore, islandChips)) v.animate().cancel()
-        islandChips.animate().alpha(0f).setStartDelay(0).setDuration(90).start()
-        islandMore.animate().alpha(0f).setStartDelay(0).setDuration(90).start()
-        islandTop.animate().alpha(0f).setStartDelay(0).setDuration(90).withEndAction {
+        islandChips.animate().alpha(0f).setStartDelay(0).setDuration(70).start()
+        islandMore.animate().alpha(0f).setStartDelay(0).setDuration(70).start()
+        islandTop.animate().alpha(0f).setStartDelay(0).setDuration(70).withEndAction {
             val want = islandWant ?: return@withEndAction
             islandWant = null
             reshapeIsland(want)
@@ -421,26 +337,24 @@ internal class IslandView(private val a: MainActivity) {
         val item = islandItem ?: return
         islandOpen = open
         android.transition.TransitionManager.beginDelayedTransition(island.parent as ViewGroup,
-            android.transition.ChangeBounds().setDuration(280).setInterpolator(MainActivity.DECELERATE))
+            android.transition.ChangeBounds().setDuration(240).setInterpolator(ISLAND_EASE))
         val fit = if (open) islandOpenWidth() else 0
         island.layoutParams.width = if (open) fit.coerceAtLeast(dp(MIN_OPEN)) else ViewGroup.LayoutParams.WRAP_CONTENT
         // Too little room beside the clock and the icons: the open tile comes down below the top bar, not over it.
         val below = open && fit < dp(MIN_OPEN)
+        // At rest the pill is one line, as high as the top bar's icons (36 dp), on their line.
         (island.layoutParams as FrameLayout.LayoutParams).topMargin = if (below) (island.parent as View).height else 0
-        if (open) island.setPadding(dp(18), dp(18), dp(18), dp(14)) else island.setPadding(dp(5), dp(5), dp(14), dp(5))
+        if (open) island.setPadding(dp(14), dp(14), dp(16), dp(14)) else island.setPadding(dp(4), dp(4), dp(14), dp(4))
         islandTop.layoutParams.width = if (open) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
-        val size = dp(if (open) 68 else 26)
-        islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
-        islandArt2.layoutParams = islandArt2.layoutParams.apply { width = dp(if (open) 48 else 26); height = dp(if (open) 48 else 26) }
+        islandArt2.layoutParams = islandArt2.layoutParams.apply { width = dp(if (open) 48 else 28); height = dp(if (open) 48 else 28) }
         findViewById<View>(R.id.islandText).layoutParams = (findViewById<View>(R.id.islandText).layoutParams as LinearLayout.LayoutParams).apply {
-            marginStart = dp(if (open) 16 else 10)
+            marginStart = dp(if (open) 14 else 9)
             width = if (open) 0 else ViewGroup.LayoutParams.WRAP_CONTENT
             weight = if (open) 1f else 0f
         }
         findViewById<TextView>(R.id.islandTitle).apply {
-            textSize = if (open) 18f else 13f
             maxLines = if (open) 2 else 1
-            maxWidth = dp(if (open) 400 else 170)
+            maxWidth = dp(if (open) 400 else 260)
         }
         bindIsland(item, open)
         // The tile hangs over the screen: its extra height is taken back by the margin, so the rows below never move.
@@ -449,9 +363,9 @@ internal class IslandView(private val a: MainActivity) {
         islandHang()
         island.requestLayout()
         glass.kick(500) // the glass under it follows the new size
-        islandChips.animate().alpha(1f).setStartDelay(170).setDuration(180).start()
-        islandTop.animate().alpha(1f).setStartDelay(170).setDuration(180).withEndAction(null).start()
-        islandMore.animate().alpha(1f).setStartDelay(210).setDuration(180).start()
+        islandChips.animate().alpha(1f).setStartDelay(140).setDuration(150).start()
+        islandTop.animate().alpha(1f).setStartDelay(140).setDuration(150).withEndAction(null).start()
+        islandMore.animate().alpha(1f).setStartDelay(170).setDuration(150).start()
         ui.postDelayed({ if (!isDestroyed) islandItem?.let { bindIsland(it, islandOpen) } }, 320) // the ink again, over the new size
     }
 
@@ -491,7 +405,7 @@ internal class IslandView(private val a: MainActivity) {
 
     /**
      * An item's pictures. A game shows its two logos only when both have come (ESPN's 500 px logos); with one missing
-     * (ESPN has none for many teams) it shows neither, and the item's sharp vector icon (its sport) stands in.
+     * it shows neither, and the item's icon stands in. (Sports send the league's logo instead when a team has none.)
      */
     fun MainActivity.islandPictures(o: IslandItem): Pair<Bitmap?, Bitmap?> {
         val first = o.image ?: islandImage(o.imageUri)
@@ -500,17 +414,22 @@ internal class IslandView(private val a: MainActivity) {
         return if (first != null && second != null) first to second else null to null
     }
 
-    /** A picture fetched from an address (a team logo), kept once it has come; null until then. */
-    fun MainActivity.islandImage(uri: String?): Bitmap? {
-        if (uri == null) return null
-        islandImages[uri]?.let { return it }
-        if (uri in islandFailed) return null
-        if (islandLoading.add(uri)) posterIo.execute {
-            val b = try { decode(uri, dp(136), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } // 2x the open art: sharp
+    /** A team logo, twice the open art's size so it stays sharp; null until it has come. */
+    fun MainActivity.islandImage(uri: String?): Bitmap? = uri?.let { picture(it, dp(136)) { islandItem?.let { i -> bindIsland(i, islandOpen) } } }
+
+    /**
+     * A picture from an address, [px] wide, from the home screen's poster cache (so it is bounded) or fetched once;
+     * null until it comes, then [done] runs on the main thread. An address with no picture is asked once only.
+     */
+    fun MainActivity.picture(uri: String, px: Int, done: (Bitmap) -> Unit): Bitmap? {
+        val key = "$uri@$px"
+        posters.get(key)?.let { return it }
+        if (key in failed || !loading.add(key)) return null
+        posterIo.execute {
+            val b = try { decode(uri, px, Bitmap.Config.ARGB_8888) } catch (e: Exception) { null }
             ui.post {
-                islandLoading.remove(uri)
-                if (b == null) islandFailed += uri
-                else if (!isDestroyed) { islandImages[uri] = b; islandItem?.let { bindIsland(it, islandOpen) } }
+                loading.remove(key)
+                if (b == null) failed += key else if (!isDestroyed) { posters.put(key, b); done(b) }
             }
         }
         return null
@@ -524,21 +443,31 @@ internal class IslandView(private val a: MainActivity) {
         val glassy = glassActive()
         val ink = if (!glassy) fg else if (island.isShown && island.width > 0) inkBehind(listOf(island)) else iconInk
         islandInk = ink
+        val sports = item.kind == IslandKind.SPORTS || item.kind == IslandKind.SPORTS_LIVE
         fun TextView.inked() = if (glassy) ink(this, ink) else { setShadowLayer(0f, 0f, 0f, 0); setTextColor(fg) }
         val music = item.kind == IslandKind.MEDIA || item.kind == IslandKind.MEDIA_PAUSED
         findViewById<TextView>(R.id.islandTitle).apply {
-            text = item.title
+            // At rest the music is one line: the title, then the artist a little dimmer.
+            text = if (!open && music && !item.sub.isNullOrEmpty()) android.text.SpannableString("${item.title}  ·  ${item.sub}").apply {
+                setSpan(android.text.style.ForegroundColorSpan(ink and 0xFFFFFF or 0xB3000000.toInt()), item.title.length, length, 0)
+            } else item.title
+            textSize = if (!open) 13f else if (sports) 22f else 16f
             fontFeatureSettings = if (item.tick > 0 || item.kind == IslandKind.SPORTS_LIVE) "tnum" else null // numbers that change keep their width
             inked()
         }
         findViewById<TextView>(R.id.islandArtist).apply {
             text = item.sub.orEmpty()
             visibility = if (open && !item.sub.isNullOrEmpty()) View.VISIBLE else View.GONE
-            maxLines = 2 // a match's state ("ABT batting · 28.1 ov · Zimbabwe lead by 291 runs") can take two lines
+            textSize = if (open) 13f else 11f
+            maxLines = if (open) 2 else 1 // a match's state ("ABT batting · 28.1 ov · Zimbabwe lead by 291 runs") can take two lines
             inked()
         }
         island.contentDescription = item.description ?: listOfNotNull(item.title, item.sub).joinToString(", ")
         val (picture, picture2) = islandPictures(item)
+        val size = dp(if (!open) 28 else if (sports) 40 else 80)
+        if (islandArt.layoutParams.width != size) {
+            islandArt.layoutParams = islandArt.layoutParams.apply { width = size; height = size }
+        }
         when {
             picture != null -> { islandArt.clearColorFilter(); islandArt.setImageBitmap(picture); islandArt.background = null; islandArt.setPadding(0, 0, 0, 0) }
             item.icon != 0 -> {
@@ -546,13 +475,18 @@ internal class IslandView(private val a: MainActivity) {
                 if (item.mono) islandArt.setColorFilter(ink) else islandArt.clearColorFilter()
                 // An icon sits on a soft disc of the ink, the size of the picture it stands in for.
                 islandArt.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ink and 0xFFFFFF or 0x26000000) }
-                val pad = dp(if (open) 16 else 5)
+                val pad = dp(if (!open) 5 else if (sports) 8 else 20)
                 islandArt.setPadding(pad, pad, pad, pad)
             }
             else -> islandArt.setImageDrawable(null)
         }
         islandArt2.visibility = if (picture2 != null) View.VISIBLE else View.GONE
         islandArt2.setImageBitmap(picture2)
+        if (sports) {
+            islandArt.scaleType = ImageView.ScaleType.FIT_CENTER
+        } else {
+            islandArt.scaleType = ImageView.ScaleType.CENTER_CROP
+        }
         // The music's mark as the Shows row shows it: a plain mark in the ink, or its brand colour with Colour on.
         val pkg = media?.packageName
         val logo = pkg?.let { MainActivity.LOGOS[it] }?.takeIf { !it.second }
@@ -562,9 +496,10 @@ internal class IslandView(private val a: MainActivity) {
         }
         // The bars move with the music, in the art's colour: pale on a light ink and deep on a dark one.
         val light = Color.luminance(ink) > 0.5f
+        accent = item.image?.takeIf { music }?.let { artTone(it) }?.let { islandAccent(it, light) } ?: ink
         findViewById<EqBars>(R.id.islandEq).apply {
             visibility = if (!open && music) View.VISIBLE else View.GONE
-            color = item.image?.let { artTone(it) }?.let { vivid(it, dark = !light) } ?: ink
+            color = accent
             playing = item.kind == IslandKind.MEDIA
         }
         bindMarks(open, ink)
@@ -572,13 +507,18 @@ internal class IslandView(private val a: MainActivity) {
         val rows = islandRows(item)
         val selRow = if (island.isFocused) rows.getOrNull(islandRowAt) else null
         val bar = if (music) (media?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L) > 0L else item.progress != null
+        // Open: the bar with its times and the buttons. The pill at rest has none of them.
         islandMore.visibility = if (open && (bar || item.actions.isNotEmpty())) View.VISIBLE else View.GONE
         findViewById<View>(R.id.islandTimes).visibility = if (bar) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.islandElapsed).visibility = if (music) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.islandLeft).visibility = if (music) View.VISIBLE else View.GONE
-        islandBar.layoutParams = islandBar.layoutParams.apply { height = dp(if (selRow == IslandRow.BAR) 8 else 4) }
+        findViewById<View>(R.id.islandElapsed).visibility = if (music && open) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.islandLeft).visibility = if (music && open) View.VISIBLE else View.GONE
+        islandBar.layoutParams = (islandBar.layoutParams as LinearLayout.LayoutParams).apply {
+            height = dp(if (!open) 2 else if (selRow == IslandRow.BAR) 8 else 4)
+            marginStart = if (open) dp(10) else 0
+            marginEnd = if (open) dp(10) else 0
+        }
         if (music) showProgress() else item.progress?.let { islandBar.color = ink; islandBar.fraction = it }
-        islandActions.visibility = if (item.actions.isEmpty()) View.GONE else View.VISIBLE
+        islandActions.visibility = if (item.actions.isEmpty() || !open) View.GONE else View.VISIBLE
         if (islandActions.childCount != item.actions.size || islandActions.tag != item.key + item.actions.joinToString { "${it.icon}${it.label}" }) {
             islandActions.removeAllViews()
             islandActions.tag = item.key + item.actions.joinToString { "${it.icon}${it.label}" }
@@ -586,7 +526,7 @@ internal class IslandView(private val a: MainActivity) {
                 val big = music && a.icon == R.drawable.ic_pause || music && a.icon == R.drawable.ic_play
                 val v: View = if (a.icon != 0) ImageView(this).apply {
                     setImageResource(a.icon)
-                    val p = dp(if (big) 10 else 9)
+                    val p = dp(if (big) 9 else 8)
                     setPadding(p, p, p, p)
                 } else TextView(this).apply {
                     text = a.label
@@ -596,9 +536,9 @@ internal class IslandView(private val a: MainActivity) {
                     setPadding(dp(16), 0, dp(16), 0)
                 }
                 v.contentDescription = a.description ?: a.label
-                val s = dp(if (big) 56 else 44)
+                val s = dp(if (big) 44 else 36)
                 islandActions.addView(v, LinearLayout.LayoutParams(if (a.icon != 0) s else ViewGroup.LayoutParams.WRAP_CONTENT, s).apply {
-                    if (i > 0) marginStart = dp(if (music) 26 else 18)
+                    if (i > 0) marginStart = dp(if (music) 18 else 14)
                 })
             }
         }
@@ -610,31 +550,63 @@ internal class IslandView(private val a: MainActivity) {
             // The picked button sits on a soft disc (a pill for a word) of the ink, like a lit top bar icon: no ring, no growth.
             v.background = if (on) GradientDrawable().apply {
                 if (v is ImageView) shape = GradientDrawable.OVAL else cornerRadius = dp(22).toFloat()
-                setColor(ink and 0xFFFFFF or 0x2E000000)
+                setColor(if (music) accent and 0xFFFFFF or 0x59000000 else ink and 0xFFFFFF or 0x2E000000)
             } else null
             v.alpha = if (on || selRow != IslandRow.ACTIONS) 1f else 0.75f
         }
     }
 
-    /** The other things on the island: small marks after the pill's text at rest, a row to pick from when open. */
+    /** A row of items to choose from while the island is open. */
     fun MainActivity.bindMarks(open: Boolean, ink: Int) {
         val item = islandItem
-        // At rest the pill shows one thing only: the others wait in the open tile's row of marks.
-        findViewById<LinearLayout>(R.id.islandMarks).apply { visibility = View.GONE; removeAllViews() }
-        islandChips.visibility = if (open && islandList.size > 1) View.VISIBLE else View.GONE
+        val scroll = islandChips.parent as android.widget.HorizontalScrollView
+        scroll.visibility = if (open && islandList.size > 1) View.VISIBLE else View.GONE
         islandChips.removeAllViews()
         if (open && islandList.size > 1) {
             val sel = island.isFocused && islandRows(item).getOrNull(islandRowAt) == IslandRow.MARKS
             islandList.forEachIndexed { i, o ->
-                val chip = islandMark(o, ink, dp(30), sel && i == islandCol)
-                chip.alpha = if (o.key == item?.key) 1f else 0.55f
-                islandChips.addView(chip, LinearLayout.LayoutParams(dp(30), dp(30)).apply { if (i > 0) marginStart = dp(10) })
+                val active = o.key == item?.key
+                val chip = LinearLayout(this).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(islandMark(o, ink, dp(24)), LinearLayout.LayoutParams(dp(24), dp(24)))
+                    if (active || islandList.size <= 3) {
+                        val name = when (o.kind) {
+                            IslandKind.CALL, IslandKind.ALERT -> R.string.isl_alerts
+                            IslandKind.TIMER, IslandKind.TIMER_DONE -> R.string.isl_timer
+                            IslandKind.STOPWATCH -> R.string.isl_stopwatch
+                            IslandKind.MEDIA, IslandKind.MEDIA_PAUSED -> R.string.isl_music
+                            IslandKind.SPORTS, IslandKind.SPORTS_LIVE -> R.string.isl_games
+                            IslandKind.UPDATE -> R.string.isl_update_row
+                            IslandKind.WEATHER -> R.string.isl_wx_rain_row
+                        }
+                        addView(TextView(context).apply {
+                            setText(name)
+                            textSize = 12f
+                            maxLines = 1
+                            maxWidth = dp(72)
+                            ellipsize = android.text.TextUtils.TruncateAt.END
+                            setPadding(dp(4), 0, 0, 0)
+                            setTextColor(ink)
+                        })
+                    }
+                    setPadding(dp(6), 0, dp(6), 0)
+                    alpha = if (active) 1f else 0.72f
+                    if (active) background = GradientDrawable().apply {
+                        cornerRadius = dp(15).toFloat()
+                        // No ring (see PR 191): the picked mark only gets a stronger disc.
+                        setColor(ink and 0xFFFFFF or if (sel && i == islandCol) 0x40000000 else 0x22000000)
+                    }
+                }
+                islandChips.addView(chip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)).apply {
+                    if (i > 0) marginStart = dp(4)
+                })
+                if (active) chip.post { if (chip.parent != null) chip.requestRectangleOnScreen(Rect(0, 0, chip.width, chip.height), true) }
             }
         }
     }
 
-    /** One thing's mark: its picture in a circle, or its icon in the ink; [lit]: on a soft disc, as a picked button. */
-    fun MainActivity.islandMark(o: IslandItem, ink: Int, size: Int, lit: Boolean) = ImageView(this).apply {
+    /** One item's mark: its picture in a circle, or its icon in the ink. */
+    fun MainActivity.islandMark(o: IslandItem, ink: Int, size: Int) = ImageView(this).apply {
         val picture = islandPictures(o).first
         if (picture != null) {
             setImageBitmap(picture)
@@ -648,7 +620,6 @@ internal class IslandView(private val a: MainActivity) {
             val p = size / 6
             setPadding(p, p, p, p)
         }
-        if (lit) foreground = GradientDrawable().apply { shape = GradientDrawable.OVAL; setStroke(0, 0); setColor(ink and 0xFFFFFF or 0x40000000) }
         contentDescription = o.description ?: o.title
     }
 
@@ -659,10 +630,10 @@ internal class IslandView(private val a: MainActivity) {
         if (s == null || length <= 0L) return
         val at = if (seekTo >= 0) seekTo
             else islandPosition(s.position, s.lastPositionUpdateTime, android.os.SystemClock.elapsedRealtime(), s.playbackSpeed, mediaPlaying(c), length)
-        islandBar.color = islandInk
+        islandBar.color = accent
         islandBar.fraction = at.toFloat() / length
-        findViewById<TextView>(R.id.islandElapsed).apply { text = islandTime(at); setTextColor(islandInk) }
-        findViewById<TextView>(R.id.islandLeft).apply { text = "-" + islandTime(length - at); setTextColor(islandInk) }
+        findViewById<TextView>(R.id.islandElapsed).apply { text = islandTime(at); if (glassActive()) ink(this, islandInk) else setTextColor(islandInk) }
+        findViewById<TextView>(R.id.islandLeft).apply { text = "-" + islandTime(length - at); if (glassActive()) ink(this, islandInk) else setTextColor(islandInk) }
     }
 
     /**
@@ -675,6 +646,8 @@ internal class IslandView(private val a: MainActivity) {
         val length = c.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: return
         val from = if (seekTo >= 0) seekTo
             else islandPosition(s.position, s.lastPositionUpdateTime, android.os.SystemClock.elapsedRealtime(), s.playbackSpeed, mediaPlaying(c), length)
+        seekTrack = c.track()
+        ui.removeCallbacks(seekClear)
         seekTo = (from + dir * (if (islandRepeat > 4) 30_000L else 10_000L)).coerceIn(0L, length)
         showProgress()
         ui.removeCallbacks(seekSend)
@@ -749,11 +722,11 @@ internal class IslandView(private val a: MainActivity) {
     fun MainActivity.timerMenu(anchor: View) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
         val recent = recentTimers()
-        holdMenu(anchor, listOf(getString(R.string.isl_stopwatch) to { IslandTimers.startStopwatch(this); islandStarted() }) +
+        holdMenu(anchor, listOf(getString(R.string.isl_stopwatch) to { IslandTimers.startStopwatch(this); islandStarted("stopwatch") }) +
             recent.map { m -> mins(m) to { startTimer(m) } } +
             listOf(
                 getString(R.string.isl_custom) to { showPanel(); editTimer() },
-                getString(R.string.isl_games_now) to { showPanel(); pickGamesNow() },
+                getString(R.string.isl_games_now) to { showPanel(); pickSport(teams = false) },
             ), below = true,
             holds = listOf(null) + recent.map { m -> { saveRecent(recentTimers() - m); timerMenu(anchor) } })
     }
@@ -769,7 +742,7 @@ internal class IslandView(private val a: MainActivity) {
     fun MainActivity.startTimer(m: Int) {
         saveRecent(islRecent(recentTimers(), m))
         IslandTimers.startTimer(this, m * 60_000L)
-        islandStarted()
+        islandStarted("timer")
     }
 
     /** Hold OK on the island: hide what it shows, or stop what sent it, right where it is seen. */
@@ -834,8 +807,12 @@ internal class IslandView(private val a: MainActivity) {
     }
 
     /** A timer just started: make sure the island is on to show it. */
-    fun MainActivity.islandStarted() {
+    fun MainActivity.islandStarted(key: String) {
         if (!on("isl_on")) prefs.edit().putBoolean("isl_on", true).apply()
+        showIsland()
+        island.requestFocus()
+        islandPick = key
+        islandRowAt = Int.MAX_VALUE
         showIsland()
     }
 
@@ -849,19 +826,30 @@ internal class IslandView(private val a: MainActivity) {
     fun ok() = a.islandOk()
     fun menu(anchor: View) = a.timerMenu(anchor)
     fun hold() = a.islandHoldMenu()
-    fun started() = a.islandStarted()
+    fun started(key: String) = a.islandStarted(key)
     fun askAccess() = a.askIslandAccess()
     fun customTimer() = a.editTimer()
     fun startTimer(m: Int) = a.startTimer(m)
 
-    /** A logo from an address into [into], from the island's cache or fetched once; 24 dp, for settings rows. */
+    /** A logo from an address into [into], 24 dp, for settings rows. */
     fun logo(url: String, into: ImageView) {
         into.tag = url
         into.scaleType = ImageView.ScaleType.FIT_CENTER
-        islandImages[url]?.let { return into.setImageBitmap(it) }
-        a.posterIo.execute {
-            val b = try { a.decode(url, a.dp(48), Bitmap.Config.ARGB_8888) } catch (e: Exception) { null } ?: return@execute
-            a.ui.post { islandImages[url] = b; if (into.tag == url) into.setImageBitmap(b) }
-        }
+        a.picture(url, a.dp(48)) { if (into.tag == url) into.setImageBitmap(it) }?.let(into::setImageBitmap)
     }
 }
+
+/**
+ * The music art's colour, strong enough to read as a colour on the glass: the art's mean hue, at least half
+ * saturated, bright over a dark wallpaper (light ink) and deep over a light one. A grey cover stays grey.
+ */
+internal fun islandAccent(mean: Int, lightInk: Boolean): Int {
+    val hsv = FloatArray(3)
+    Color.colorToHSV(mean, hsv)
+    if (hsv[1] > 0.12f) hsv[1] = maxOf(hsv[1], 0.55f)
+    hsv[2] = if (lightInk) 0.95f else 0.45f
+    return Color.HSVToColor(hsv)
+}
+
+/** The island's change of shape: quick to start, a long soft landing. */
+private val ISLAND_EASE = android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f)

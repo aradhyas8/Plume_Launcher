@@ -2,22 +2,22 @@
 <resources>
     <!-- The island itself, its system items and its settings page. -->
     <string name="isl_section">Island</string>
-    <string name="help_isl_section">What is going on now, at the top of the home screen: music, timers, alerts, scores and more.</string>
+    <string name="help_isl_section">Music, timers, alerts and scores at the top of the home screen.</string>
     <string name="isl_on">Island</string>
     <string name="help_isl_on">Off: the island never shows. Timers still run.</string>
     <string name="isl_access">Notification access</string>
     <string name="isl_access_on">Allowed</string>
     <string name="isl_access_off">Give access</string>
-    <string name="help_isl_access">Needed to show music from other apps and alerts. Plume reads only what the island shows, and sends nothing anywhere.</string>
+    <string name="help_isl_access">Needed for music and alerts from other apps. Plume reads only what the island shows and sends nothing.</string>
     <string name="isl_access_steps">This TV has no screen for notification access. On a computer on the same network, run:\nadb shell cmd notification allow_listener dev.plume/dev.plume.MediaListener</string>
     <string name="isl_music">Music</string>
-    <string name="help_isl_music">What plays in Spotify, YouTube Music and other apps, with its controls.</string>
+    <string name="help_isl_music">Music that plays in other apps, with its controls.</string>
     <string name="isl_idle">Hide music when paused</string>
     <string name="help_isl_idle">How long a paused song stays on the island.</string>
     <string name="isl_idle_1">After 1 min</string>
     <string name="isl_idle_5">After 5 min</string>
     <string name="isl_timers">Timers</string>
-    <string name="help_isl_timers">Start a timer or the stopwatch. Add the timer icon to the top bar to start them from there.</string>
+    <string name="help_isl_timers">Start a timer or the stopwatch. You can add a timer icon to the top bar.</string>
     <string name="isl_timer">Timer</string>
     <string name="isl_stopwatch">Stopwatch</string>
     <plurals name="isl_minutes">
@@ -25,44 +25,33 @@
         <item quantity="other">%d min</item>
     </plurals>
     <string name="isl_alerts">Alerts</string>
-    <string name="help_isl_alerts">Calls, doorbells and other alerts from apps on this TV.</string>
+    <string name="help_isl_alerts">Calls, doorbells and other alerts from apps.</string>
     <string name="isl_privacy">Alert privacy</string>
-    <string name="help_isl_privacy">The TV is shared. App only shows which app sent an alert, not what it says.</string>
+    <string name="help_isl_privacy">The TV is shared. App shows only which app sent an alert.</string>
     <string name="isl_privacy_full">Full</string>
     <string name="isl_privacy_app">App only</string>
     <string name="isl_privacy_hidden">Calls only</string>
     <string name="isl_alert_apps">Alert apps</string>
-    <string name="help_isl_alert_apps">Apps that sent alerts so far. Turn off the ones you don\'t want on the island.</string>
+    <string name="help_isl_alert_apps">Turn off the apps you don\'t want on the island.</string>
     <string name="isl_alert_apps_none">Apps show here once they send an alert.</string>
     <string name="isl_sports">Sports</string>
-    <string name="help_isl_sports">Live scores and kick-off times of your teams. Scores come from ESPN.</string>
+    <string name="help_isl_sports">Live scores of your games and teams, from ESPN.</string>
     <string name="isl_teams">Your teams</string>
-    <string name="help_isl_games_now">Live games, and games that start within 3 hours. Pick one to show it on the island until it ends.</string>
-    <string name="isl_games_none">No games now or in the next 3 hours.</string>
     <string name="isl_pinned">On the island</string>
     <string name="isl_n_pinned">%d on the island</string>
-    <string name="isl_leagues">Leagues</string>
-    <string name="help_isl_leagues">A whole league\'s games, only while they are live or about to start.</string>
     <string name="isl_today">Today</string>
-    <string name="help_isl_teams">Pick a league, then your teams.</string>
     <string name="isl_teams_loading">Loading teams…</string>
     <string name="isl_teams_failed">Couldn\'t load teams. Check the internet and try again.</string>
     <string name="isl_following">Following</string>
     <string name="isl_wx_rain_row">Rain and snow soon</string>
-    <string name="help_isl_wx_rain">Rain or snow starting or stopping in the next hour.</string>
+    <string name="help_isl_wx_rain">Rain or snow in the next hour. When on, Plume sends your saved weather location to Open-Meteo.</string>
     <string name="isl_wx_needs_place">Needs the weather location (Clock &amp; weather).</string>
     <string name="isl_update_row">Plume updates</string>
     <string name="help_isl_update">How far an update of Plume is.</string>
-    <string name="isl_dream_row">On the screensaver</string>
-    <string name="help_isl_dream">The song, a live game or a timer, in a corner of the Gallery screensaver.</string>
-    <string name="isl_net_row">Internet</string>
-    <string name="help_isl_net">When the internet goes, and when it comes back.</string>
-    <string name="isl_bt_row">Bluetooth</string>
-    <string name="help_isl_bt">Headphones and controllers connecting, and a controller\'s low battery. Android asks to allow Bluetooth.</string>
     <string name="isl_custom">Other length…</string>
     <string name="isl_custom_hint">Minutes</string>
     <string name="isl_start">Start</string>
-    <string name="isl_games_now">Games now</string>
+    <string name="isl_games_now">Live now</string>
     <string name="isl_tip">Timers and Games now are on the island icon. To add it: hold OK on a top-bar icon, then select Add icon.</string>
     <string name="isl_menu_hide">Hide this</string>
     <string name="isl_menu_mute">Turn off alerts from %1$s</string>
@@ -72,13 +61,6 @@
     <string name="isl_access_card_title">Music and alerts on the island</string>
     <string name="isl_access_card_body">Allow notification access, and the island shows what plays in Spotify and other apps, with calls and doorbell alerts. Plume sends nothing anywhere.</string>
     <string name="isl_access_give">Give access</string>
-    <string name="isl_net_captive">Sign-in needed</string>
-    <string name="isl_net_captive_sub">This Wi-Fi asks you to sign in on a web page</string>
-    <string name="isl_net_noint">Connected, no internet</string>
-    <string name="isl_net_wifi">Wi-Fi</string>
-    <string name="isl_net_down">No internet</string>
-    <string name="isl_net_down_sub">Apps and streams can\'t load</string>
-    <string name="isl_net_back">Back online</string>
     <string name="isl_update_title">Updating Plume</string>
     <string name="isl_update_progress">%1$s · %2$d%%</string>
     <string name="isl_update_installing">Installing…</string>
@@ -88,12 +70,6 @@
     <string name="isl_alert_call">Incoming call</string>
 
     <!-- Bluetooth -->
-    <string name="isl_bt_connected">%1$s connected</string>
-    <string name="isl_bt_disconnected">%1$s disconnected</string>
-    <string name="isl_bt_battery">Battery %1$d%%</string>
-    <string name="isl_bt_percent">%1$d%%</string>
-    <string name="isl_bt_device">Bluetooth device</string>
-    <string name="isl_bt_pad_low">Controller battery low</string>
 
     <!-- Sports -->
     <!-- A game that has not started: the away team, then the home team, like the logos in the pill. -->
@@ -101,8 +77,17 @@
     <string name="isl_sports_today">Today %1$s</string>
     <string name="isl_sports_tomorrow">Tomorrow %1$s</string>
     <string name="isl_sports_final">Final</string>
-    <string name="isl_games_max">Games on the island</string>
-    <string name="help_isl_games_max">How many games the island holds at once. The pill always shows one; open the island to see the others.</string>
+    <string name="isl_games_max">Show on the island</string>
+    <plurals name="isl_n_games">
+        <item quantity="one">%d game</item>
+        <item quantity="other">Up to %d games</item>
+    </plurals>
+    <string name="isl_games">Games</string>
+    <string name="help_isl_games">Pick a game to follow it, or add your teams to see all their games.</string>
+    <string name="isl_game">Game</string>
+    <string name="isl_game_replaced">Replaced %1$s</string>
+    <string name="isl_league_none">No games today or tomorrow.</string>
+    <string name="isl_games_failed">Couldn\'t load games. Check the internet and try again.</string>
     <string name="isl_cricket_batting">%1$s batting</string>
     <string name="isl_cricket_batting_overs">%1$s batting · %2$s ov</string>
     <string name="isl_cricket_toss">%1$s won the toss · play starts soon</string>
@@ -161,4 +146,5 @@
     <string name="isl_wx_until">%1$s until %2$s</string>
     <!-- Tomorrow's lowest, then highest temperature. -->
     <!-- Tomorrow's highest temperature, then today's. -->
+    <string name="isl_score_live">Live · %1$s</string>
 </resources>

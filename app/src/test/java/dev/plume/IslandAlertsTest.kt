@@ -54,15 +54,17 @@ class IslandAlertsTest {
         assertEquals("Ring" to "Incoming call", text("hidden", call = true))
     }
 
+    @Test fun cachedFullAlertDisappearsWhenPrivacyTightensOrAppIsMuted() {
+        val alert = IslandAlerts.CachedAlert("com.ring.app", "full", IslandItem("doorbell", IslandKind.ALERT, "Front door", until = 2_000))
+        assertTrue(alert.visible(1_000, "full", emptySet()))
+        assertFalse(alert.visible(1_000, "app", emptySet()))
+        assertFalse(alert.visible(1_000, "full", setOf("com.ring.app")))
+        assertFalse(alert.visible(2_000, "full", emptySet()))
+    }
+
     @Test fun firstPeekIsAllowed() = assertTrue(islandAlertMayPeek(null, 1_000))
     @Test fun secondPeekWaitsTenSeconds() {
         assertFalse(islandAlertMayPeek(1_000, 10_999))
         assertTrue(islandAlertMayPeek(1_000, 11_000))
-    }
-
-    @Test fun padLowBelowFifteenPercent() {
-        assertTrue(islandPadLow(0.12f))
-        assertFalse(islandPadLow(0.15f))
-        assertFalse(islandPadLow(Float.NaN))
     }
 }

@@ -6,8 +6,6 @@ import android.os.Handler
 import android.os.Looper
 import android.text.format.DateFormat
 import org.json.JSONArray
-import org.json.JSONObject
-import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.Executors
 
@@ -15,16 +13,17 @@ import java.util.concurrent.Executors
  * Weather for the island: only rain or snow starting or stopping within the hour. The top bar already shows the
  * weather, so the island never repeats it; it speaks only when something is about to change. One Open-Meteo request
  * every 30 minutes while the home screen is shown, with the same coordinates the top bar's weather already uses;
- * nothing else leaves the TV. Switch: "isl_wx_rain", on by default. The rules themselves are the plain functions at
+ * nothing else leaves the TV. Switch: "isl_wx_rain", off by default. The rules themselves are the plain functions at
  * the end of this file, so they can be tested without Android.
  */
-internal object IslandWeather : IslandSource {
+internal object IslandWeather {
     private const val STALE = 25 * 60_000L
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private var app: Context? = null
     @Volatile private var forecast: Forecast? = null
     private var tried = 0L
+    private var triedFor: Triple<Float, Float, Boolean>? = null
 
     // The rain item peeks once per event. The key stays "wx:rain" throughout, so the event is remembered here: it is
     // the same event while it stays a start (or a stop) of the same rain or snow, even as the minutes count down.
@@ -33,7 +32,7 @@ internal object IslandWeather : IslandSource {
 
     /** What one fetch gave, times in wall-clock milliseconds. Temperatures are in the unit asked for, [fahrenheit] or not. */
     private class Forecast(
-        val time: Long, val fahrenheit: Boolean,
+        val time: Long, val fahrenheit: Boolean, val lat: Float, val lon: Float,
         val slots: List<Long>, val mm: List<Double>, val snow: List<Double>,
         val days: List<Long>, val code: List<Int>, val max: List<Double>, val min: List<Double>, val pop: List<Int>,
     )
@@ -71,18 +70,20 @@ internal object IslandWeather : IslandSource {
     private fun refresh() {
         val ctx = app ?: return
         val p = prefs(ctx)
-        if (!p.contains("geo_lat")) return
-        if (!p.getBoolean("isl_wx_rain", true)) return
+        if (!enabled(p)) return
+        val lat = p.getFloat("geo_lat", 0f)
+        val lon = p.getFloat("geo_lon", 0f)
         val f = forecast
         val wantF = fahrenheit(p)
         val now = System.currentTimeMillis()
-        if (f != null && f.fahrenheit == wantF && now - f.time < STALE) return
+        if (f != null && f.fahrenheit == wantF && f.lat == lat && f.lon == lon && now - f.time < STALE) return
         // items() asks for a refetch when the unit changed; this keeps that to one request a minute, even when it fails.
-        if (now - tried < 60_000L) return
+        val request = Triple(lat, lon, wantF)
+        if (request == triedFor && now - tried < 60_000L) return
+        triedFor = request
         tried = now
-        val lat = p.getFloat("geo_lat", 0f)
-        val lon = p.getFloat("geo_lon", 0f)
         io.execute {
+            if (!enabled(p)) return@execute
             try {
                 forecast = fetch(lat, lon, wantF)
                 Island.changed()
@@ -91,6 +92,9 @@ internal object IslandWeather : IslandSource {
             }
         }
     }
+
+    private fun enabled(p: SharedPreferences) =
+        p.getBoolean("isl_on", true) && p.getBoolean("isl_wx_rain", false) && p.contains("geo_lat")
 
     private fun fetch(lat: Float, lon: Float, f: Boolean): Forecast {
         // 12 quarter hours are the next 3 hours. Unix times avoid parsing local dates; "timezone=auto" still makes the
@@ -107,7 +111,7 @@ internal object IslandWeather : IslandSource {
         fun JSONArray.doubles(none: Double) = List(length()) { optDouble(it, none) }
         fun JSONArray.ints() = List(length()) { optInt(it, -1) }
         val w = Forecast(
-            System.currentTimeMillis(), f,
+            System.currentTimeMillis(), f, lat, lon,
             m.getJSONArray("time").times(), m.getJSONArray("precipitation").doubles(0.0), m.getJSONArray("snowfall").doubles(0.0),
             d.getJSONArray("time").times(), d.getJSONArray("weather_code").ints(),
             d.getJSONArray("temperature_2m_max").doubles(Double.NaN), d.getJSONArray("temperature_2m_min").doubles(Double.NaN),
@@ -119,18 +123,16 @@ internal object IslandWeather : IslandSource {
         return w
     }
 
-    override fun items(now: Long): List<IslandItem> {
+    fun items(now: Long): List<IslandItem> {
         val ctx = app ?: return emptyList()
         val f = forecast ?: return emptyList()
         val p = prefs(ctx)
-        val out = ArrayList<IslandItem>(3)
-        if (p.getBoolean("isl_wx_rain", true)) rain(ctx, f, now)?.let { out += it }
-        // Temperatures in the old unit would be wrong, so they wait for the refetch.
-        if (f.fahrenheit != fahrenheit(p)) {
+        if (!enabled(p)) return emptyList()
+        if (f.lat != p.getFloat("geo_lat", 0f) || f.lon != p.getFloat("geo_lon", 0f) || f.fahrenheit != fahrenheit(p)) {
             refresh()
-            return out
+            return emptyList()
         }
-        return out
+        return listOfNotNull(rain(ctx, f, now))
     }
 
     private fun rain(ctx: Context, f: Forecast, now: Long): IslandItem? {

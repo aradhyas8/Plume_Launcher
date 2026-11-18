@@ -1,16 +1,11 @@
 package dev.plume
 
-import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
-import android.view.animation.LinearInterpolator
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.sin
 
 /** The media island's progress: a rounded track with the played part filled, both in [color]. */
 internal class IslandBar @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
@@ -34,44 +29,25 @@ internal class IslandBar @JvmOverloads constructor(context: Context, attrs: Attr
 }
 
 /**
- * Three bars that move while the island's track plays, and rest low while it is paused. They animate only while
- * shown, so a hidden island or a covered home screen costs nothing.
+ * Three still bars: tall and uneven while music plays, low while paused. They do not move, because a moving
+ * pill made the launcher redraw about 30 times a second on a slow TV.
  */
 internal class EqBars @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
-    private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = 2400
-        repeatCount = ValueAnimator.INFINITE
-        interpolator = LinearInterpolator()
-        // 20 redraws a second: the bars stay smooth to the eye, and a slow TV is not redrawing them every frame.
-        addUpdateListener { if (it.currentPlayTime - drawnAt !in 0L until 50L) { drawnAt = it.currentPlayTime; invalidate() } }
-    }
-    private var drawnAt = -100L
     var color = 0xFFFFFFFF.toInt()
         set(v) { if (field != v) { field = v; invalidate() } }
     var playing = false
-        set(v) { if (field != v) { field = v; update() } }
-
-    private fun update() {
-        if (playing && isAttachedToWindow && isShown && windowVisibility == VISIBLE) { if (!anim.isStarted) anim.start() } else anim.cancel()
-        invalidate()
-    }
-
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); update() }
-    override fun onDetachedFromWindow() { anim.cancel(); super.onDetachedFromWindow() }
-    override fun onVisibilityChanged(changed: View, v: Int) { super.onVisibilityChanged(changed, v); update() }
-    override fun onWindowVisibilityChanged(v: Int) { super.onWindowVisibilityChanged(v); update() }
+        set(v) { if (field != v) { field = v; invalidate() } }
 
     override fun onDraw(c: Canvas) {
         paint.color = color
         val w = width / 6f
         val gap = (width - 3 * w) / 2
-        val t = anim.animatedValue as Float
+        val heights = if (playing) PLAYING else PAUSED
         for (i in 0..2) {
-            // Paused, the bars stand still at three heights: three equal dots would read as a "more" menu.
-            val f = if (playing) 0.3f + 0.7f * abs(sin(2 * PI * (t * SPEED[i] + PHASE[i]))).toFloat() else REST[i]
-            val h = maxOf(w, height * f)
+            // Paused bars stay uneven: three equal dots would read as a "more" menu.
+            val h = maxOf(w, height * heights[i])
             val x = i * (w + gap)
             rect.set(x, (height - h) / 2, x + w, (height + h) / 2)
             c.drawRoundRect(rect, w / 2, w / 2, paint)
@@ -79,8 +55,7 @@ internal class EqBars @JvmOverloads constructor(context: Context, attrs: Attribu
     }
 
     private companion object {
-        val SPEED = intArrayOf(2, 3, 2) // whole turns per loop, so the loop has no jump
-        val PHASE = floatArrayOf(0f, 0.3f, 0.65f)
-        val REST = floatArrayOf(0.45f, 0.8f, 0.6f)
+        val PLAYING = floatArrayOf(0.6f, 1f, 0.75f)
+        val PAUSED = floatArrayOf(0.3f, 0.5f, 0.4f)
     }
 }
