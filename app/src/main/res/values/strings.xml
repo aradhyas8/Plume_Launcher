@@ -479,4 +479,10 @@
     <string name="wall_no_folders_hint">No photos found on the TV or USB drive.</string>
     <string name="wall_every_week">Every week</string>
     <string name="wall_every_30_days">Every 30 days</string>
+    <string name="wall_browse">Browse wallpapers</string>
+    <string name="wall_tv_photos">TV and USB photos</string>
+    <string name="wall_tv_photos_detail">Browse folders or make a slideshow</string>
+    <string name="wall_uploads_detail">Photos and videos already on Plume</string>
+    <string name="wall_phone_detail">Scan a QR code to send photos or videos</string>
+    <string name="wall_open_folder_hint">Press OK to open the folder.</string>
 </resources>

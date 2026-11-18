@@ -1702,38 +1702,47 @@ class MainActivity : Activity() {
             id = View.generateViewId()
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(8))
-            addView(wallpaperThumb(current, forDark), LinearLayout.LayoutParams(dp(94), dp(53)))
+            addView(wallpaperThumb(current, forDark, true), LinearLayout.LayoutParams(dp(104), dp(59)))
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(14), 0, 0, 0)
-                addView(label(active, 12f).apply { setTextColor(valueInk()) })
-                addView(label(wallpaperName(current), 16f).apply {
+                addView(label(active, 12f).apply { setTextColor(valueInk()); panelShadow() })
+                addView(label(wallpaperName(current), 17f).apply {
+                    setTextColor(focusInk())
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    panelShadow()
                     maxLines = 1
                     ellipsize = TextUtils.TruncateAt.END
                 })
                 if (current.startsWith("folder:") || current == ShowsWall.CHOICE) {
-                    addView(label(getString(PHOTO_EVERY.getValue(photoEvery())), 12f).apply { setTextColor(valueInk()) })
+                    val interval = getString(PHOTO_EVERY.getValue(photoEvery()))
+                    val count = if (current.startsWith("folder:")) savedPhotoSelection().size else 0
+                    val detail = if (count > 0) {
+                        resources.getQuantityString(R.plurals.photo_count, count, count) + " · " + interval
+                    } else interval
+                    addView(label(detail, 12f).apply { setTextColor(valueInk()); panelShadow() })
                 }
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            addView(label("›", 24f))
+            addView(icon(R.drawable.ms_chevron_right, 20, iconInk(false)))
             setOnClickListener { pickActiveWallpaper(forDark) }
-            panelFocus(this, 12, null, AREA_ALL) { }
+            val idle = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(ink(.06f)) }
+            panelFocus(this, 12, null, AREA_ALL) { if (!it) background = idle }
+            background = idle
         }
-        val collection = builtIns(forDark).firstOrNull { it.startsWith("pack:") } ?: FIRST_WALLPAPER
         val categories = listOf(
-            Tile(getString(R.string.wall_my_photos), cover = R.drawable.wall_cover_photos) { pickMyPhotos(forDark) },
-            Tile(getString(R.string.wall_collection), collection) { pickBuiltIn(forDark) },
-            Tile(getString(R.string.aerial_views), cover = R.drawable.wall_cover_aerial) { pickVideoWallpaper(forDark) },
-            Tile(getString(R.string.wall_automatic), cover = R.drawable.wall_cover_automatic) { pickAutomaticWallpaper(forDark) },
+            Tile(getString(R.string.wall_my_photos), cover = R.drawable.wall_cover_photos, captionIcon = R.drawable.ms_photo_library) { pickMyPhotos(forDark) },
+            Tile(getString(R.string.wall_collection), cover = R.drawable.wall_cover_collection, captionIcon = R.drawable.ms_landscape) { pickBuiltIn(forDark) },
+            Tile(getString(R.string.aerial_views), cover = R.drawable.wall_cover_aerial, captionIcon = R.drawable.ms_movie) { pickVideoWallpaper(forDark) },
+            Tile(getString(R.string.wall_automatic), cover = R.drawable.wall_cover_automatic, captionIcon = R.drawable.ms_shuffle) { pickAutomaticWallpaper(forDark) },
         )
         val entry = when (focusOn) {
             getString(R.string.built_in) -> getString(R.string.wall_collection)
             getString(R.string.manage_videos) -> getString(R.string.aerial_views)
             getString(R.string.my_uploads), getString(R.string.choose_from_tv) -> getString(R.string.wall_my_photos)
-            else -> focusOn ?: active
+            else -> focusOn ?: getString(R.string.wall_my_photos)
         }
-        wallGrid(getString(R.string.wallpaper), listOf(null to categories), forDark, "", entry,
-            listOf(active to summary), columns = 2, tileHeight = 94) { renderSettings(WALLPAPER_CARD) }
+        wallGrid(getString(R.string.wallpaper), listOf(R.string.wall_browse to categories), forDark, "", entry,
+            listOf(active to summary), columns = 2, tileHeight = 86) { renderSettings(WALLPAPER_CARD) }
     }
 
     private fun pickActiveWallpaper(forDark: Boolean) {
@@ -1755,12 +1764,23 @@ class MainActivity : Activity() {
             rows += page(getString(R.string.tmdb_artwork), getString(if (Tmdb.key(this) == null) R.string.off else R.string.on)) { configureTmdb(back = again) }
         }
         val preview = wallpaperThumb(current, forDark, true)
-        showPage(wallpaperName(current), rows.ifEmpty {
+        val controls = rows.ifEmpty {
             listOf(page(getString(R.string.wall_preview)) { previewWallpaper(current, again) })
-        }, top = LinearLayout(this).apply {
+        }
+        val styles = controls.map { (title) ->
+            RowStyle(icon = when (title) {
+                getString(R.string.wall_edit_photos) -> R.drawable.ms_photo_library
+                getString(R.string.folder_photo_changes) -> R.drawable.ms_schedule
+                getString(R.string.wall_shuffle_now) -> R.drawable.ms_shuffle
+                getString(R.string.wp_sources) -> R.drawable.ms_filter_list
+                getString(R.string.tmdb_artwork) -> R.drawable.ms_landscape
+                else -> R.drawable.ms_play_circle
+            })
+        }
+        showPage(wallpaperName(current), controls, top = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(preview, LinearLayout.LayoutParams(MATCH_PARENT, dp(145)))
-        }, crumb = getString(R.string.wallpaper), back = back)
+        }, styles = styles, crumb = getString(R.string.wallpaper), back = back)
     }
 
     private fun pickAutomaticWallpaper(forDark: Boolean, focusOn: String? = null) {
@@ -1775,14 +1795,20 @@ class MainActivity : Activity() {
     }
 
     private fun pickMyPhotos(forDark: Boolean, focusOn: String? = null) {
-        val tiles = listOf(
-            Tile(getString(R.string.choose_from_tv), icon = R.drawable.ms_folder, help = R.string.help_folder) { browsePhotoFolders(forDark) },
-            Tile(getString(R.string.my_uploads), icon = R.drawable.ms_photo_library) { pickUploads(forDark) },
-            Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate, help = R.string.help_add_from_phone) {
+        val rows = listOf(
+            page(getString(R.string.wall_tv_photos)) { browsePhotoFolders(forDark) },
+            page(getString(R.string.my_uploads)) { pickUploads(forDark) },
+            page(getString(R.string.add_from_phone)) {
                 uploadWallpaper(forDark, applyPhoto = false) { pickUploads(forDark, getString(R.string.add_from_phone)) }
             },
         )
-        wallGrid(getString(R.string.wall_my_photos), listOf(null to tiles), forDark, "", focusOn) {
+        val styles = listOf(
+            RowStyle(icon = R.drawable.ms_folder, sub = getString(R.string.wall_tv_photos_detail)),
+            RowStyle(icon = R.drawable.ms_photo_library, sub = getString(R.string.wall_uploads_detail)),
+            RowStyle(icon = R.drawable.ms_add_photo_alternate, sub = getString(R.string.wall_phone_detail)),
+        )
+        showPage(getString(R.string.wall_my_photos), rows, focus = rows.indexOfFirst { it.first == focusOn },
+            styles = styles, crumb = getString(R.string.wallpaper)) {
             pickWallpaper(forDark, getString(R.string.wall_my_photos))
         }
     }
@@ -1790,6 +1816,7 @@ class MainActivity : Activity() {
     /** A tile in the wallpaper grid: a [choice]'s picture (for a tile that opens more, the one in use there) or an [icon]. */
     private class Tile(val name: String, val choice: String? = null, val icon: Int? = null, val help: Int? = null,
                              val cover: Int? = null, val checked: Boolean = false, val hideLabel: Boolean = false,
+                             val captionIcon: Int? = null, val detail: String? = null,
                              val action: () -> Unit)
 
     /** Focus [focusOn] by choice or label. If it is gone, focus the active wallpaper. */
@@ -1802,12 +1829,14 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             extras.forEach { (_, view) -> addView(view) }
             for ((name, tiles) in groups) {
-                name?.let { addView(groupTitle(getString(it))) }
+                name?.let {
+                    addView(groupTitle(getString(it)).apply { setPadding(dp(16), dp(10), dp(16), dp(2)) })
+                }
                 for (i in tiles.indices step columns) tiles.subList(i, minOf(i + columns, tiles.size)).let { line ->
                     addView(LinearLayout(context).apply {
                         line.forEach { t ->
                             val chosen = t.checked || (t.choice != null && t.choice == current)
-                            val help = t.help ?: if (t.icon == null) R.string.help_wp_tile else null
+                            val help = t.help ?: if (t.icon == null && t.captionIcon == null) R.string.help_wp_tile else null
                             val v = wallpaperTile(t, forDark, chosen, help, tileHeight)
                             if (focusOn != null && focus == null && (t.choice == focusOn || t.name == focusOn)) focus = v
                             if (chosen && selected == null) selected = v
@@ -1820,6 +1849,7 @@ class MainActivity : Activity() {
             footer.forEach { addView(it) }
         }
         showPage(title, emptyList(), top = grid, crumb = crumb) { back() }
+        findViewById<TextView>(R.id.settingsHelp).setLines(2)
         (focus ?: selected ?: grid.getFocusables(View.FOCUS_DOWN).firstOrNull())?.requestFocus()
     }
 
@@ -1988,34 +2018,63 @@ class MainActivity : Activity() {
         }
         val frame = FrameLayout(this).apply {
             addView(pic, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-            if (chosen) addView(ImageView(context).apply {
-                setImageResource(R.drawable.ms_check)
-                setColorFilter(if (dark) Color.BLACK else Color.WHITE)
-                setPadding(dp(2), dp(2), dp(2), dp(2))
-                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(focusInk()) }
-            }, FrameLayout.LayoutParams(dp(20), dp(20), Gravity.TOP or Gravity.END).apply { setMargins(0, dp(5), dp(5), 0) })
+            if (tile.hideLabel) alpha = .87f
+            if (chosen) addView(icon(R.drawable.ms_check, 18, Color.WHITE).apply {
+                setPadding(dp(4), dp(4), dp(4), dp(4))
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(5).toFloat()
+                    setColor(0xD9232228.toInt())
+                }
+            }, FrameLayout.LayoutParams(dp(24), dp(22), Gravity.BOTTOM or Gravity.END).apply {
+                setMargins(0, 0, dp(6), dp(6))
+            })
         }
-        val label = label(tile.name, if (height > 70) 15f else 13f).apply { maxLines = 2; setTextColor(if (chosen) restInk() else valueInk()); panelShadow() }
+        val name = label(tile.name, if (height > 70) 15f else 13f).apply {
+            maxLines = if (tile.captionIcon != null || tile.detail != null) 1 else 2
+            ellipsize = TextUtils.TruncateAt.END
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setTextColor(restInk())
+            panelShadow()
+        }
+        val smallIcon = tile.captionIcon?.let { icon(it, 16, iconInk(false)) }
         return LinearLayout(this).apply {
             id = View.generateViewId()
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(6), dp(6), dp(6), dp(8))
+            if (tile.hideLabel) clipToPadding = false
+            setPadding(dp(6), dp(5), dp(6), dp(if (tile.hideLabel) 5 else 8))
             addView(frame, LinearLayout.LayoutParams(MATCH_PARENT, dp(height)))
             if (tile.hideLabel) {
                 contentDescription = if (chosen) getString(R.string.wall_checked, tile.name) else tile.name
             } else {
-                addView(label, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
+                addView(LinearLayout(context).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    smallIcon?.let {
+                        addView(it, LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginEnd = dp(6) })
+                    }
+                    addView(name, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    tile.detail?.let {
+                        addView(label(it, 12f).apply {
+                            setTextColor(valueInk())
+                            setPadding(dp(6), 0, 0, 0)
+                            panelShadow()
+                        })
+                    }
+                }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(7) })
             }
             setOnClickListener { tile.action() }
-            panelFocus(this, 12, help?.let { getString(it) }, AREA_ALL) { f ->
-                label.setTextColor(if (f) focusInk() else if (chosen) restInk() else valueInk())
-                if (height > 62 || tile.hideLabel) frame.foreground = if (f) GradientDrawable().apply {
-                    cornerRadius = dp(8).toFloat()
-                    setColor(Color.TRANSPARENT)
-                    setStroke(dp(2), Color.WHITE)
-                } else null
+            panelFocus(this, 12, help?.let { getString(it) }, AREA_ALL) { focused ->
+                name.setTextColor(if (focused) focusInk() else restInk())
+                smallIcon?.setColorFilter(iconInk(focused))
+                if (tile.hideLabel) {
+                    background = null
+                    frame.animate().cancel()
+                    val scale = if (focused) 1.06f else 1f
+                    frame.animate().scaleX(scale).scaleY(scale).alpha(if (focused) 1f else .87f)
+                        .setDuration(if (animationsOn()) 120 else 0).start()
+                    translationZ = if (focused) dp(5).toFloat() else 0f
+                }
             }
-            // The panel turns Left and Right into a row's step (dispatchKeyEvent); in the grid they move between pictures.
+            // The panel turns Left and Right into a row's step; in the grid they move between pictures.
             tag = { d: Int -> focusSearch(if (d < 0) View.FOCUS_LEFT else View.FOCUS_RIGHT)?.requestFocus(); Unit }
         }
     }
@@ -2747,7 +2806,7 @@ class MainActivity : Activity() {
     }
 
     private fun browsePhotoFolders(forDark: Boolean, focusOn: String? = null) {
-        val back = { pickMyPhotos(forDark, getString(R.string.choose_from_tv)) }
+        val back = { pickMyPhotos(forDark, getString(R.string.wall_tv_photos)) }
         if (checkSelfPermission(READ_PHOTOS) != PackageManager.PERMISSION_GRANTED) {
             afterPhotoAccess = { browsePhotoFolders(forDark, focusOn) }
             return requestPermissions(arrayOf(READ_PHOTOS), MEDIA_REQUEST)
@@ -2769,7 +2828,8 @@ class MainActivity : Activity() {
                 }
                 val tiles = folders.map { (id, name, count) ->
                     val choice = "folder:$id:$name"
-                    Tile("$name · $count", choice) {
+                    Tile(name, choice, help = R.string.wall_open_folder_hint, captionIcon = R.drawable.ms_folder,
+                        detail = count.toString()) {
                         openPhotoFolder(forDark, choice, { browsePhotoFolders(forDark, choice) })
                     }
                 }
@@ -2806,30 +2866,56 @@ class MainActivity : Activity() {
     private fun showPhotoFolder(forDark: Boolean, choice: String, title: String, ids: List<Long>, selected: MutableSet<Long>,
                                 selecting: Boolean, index: Int, focusOn: String?, back: () -> Unit) {
         val pageSize = 9
+        val photoHeight = 63
         val start = index * pageSize
         val visible = ids.subList(start, minOf(ids.size, start + pageSize))
         fun redraw(page: Int = index, focus: String? = focusOn, select: Boolean = selecting) =
             showPhotoFolder(forDark, choice, title, ids, selected, select, page, focus, back)
         val selectLabel = getString(R.string.wall_select_photos)
         val wholeLabel = getString(R.string.wall_whole_folder)
-        fun control(name: String, action: () -> Unit) = settingsRow(name, "", action = action).apply {
-            tag = { direction: Int ->
-                focusSearch(if (direction < 0) View.FOCUS_LEFT else View.FOCUS_RIGHT)?.requestFocus()
-                Unit
+        fun control(name: String, symbol: Int, primary: Boolean = false, action: () -> Unit): View {
+            val tint = if (primary) focusInk() else restInk()
+            val surface = GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(ink(if (primary) .15f else .06f)) }
+            return LinearLayout(this).apply {
+                id = View.generateViewId()
+                gravity = if (primary) Gravity.CENTER else Gravity.CENTER_VERTICAL
+                setPadding(dp(10), 0, dp(10), 0)
+                addView(icon(symbol, 18, tint))
+                val title = label(name, if (primary) 15f else 13f).apply {
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    setTextColor(tint)
+                    panelShadow()
+                    setPadding(dp(7), 0, 0, 0)
+                }
+                addView(title)
+                setOnClickListener { action() }
+                panelFocus(this, 10, null, AREA_ALL) { focused ->
+                    if (!focused) background = surface
+                    title.setTextColor(if (focused) focusInk() else tint)
+                }
+                background = surface
+
+                tag = { direction: Int ->
+                    focusSearch(if (direction < 0) View.FOCUS_LEFT else View.FOCUS_RIGHT)?.requestFocus()
+                    Unit
+                }
             }
         }
         val select = if (selecting) {
             label(getString(R.string.wall_selected_count, selected.size), 14f).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(12), 0, 0, 0)
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                setTextColor(focusInk())
+                setPadding(dp(6), 0, 0, 0)
             }
-        } else control(selectLabel) { redraw(focus = "photo:" + visible.first(), select = true) }
-        val whole = control(wholeLabel) {
+        } else control(selectLabel, R.drawable.ms_checklist) { redraw(focus = "photo:" + visible.first(), select = true) }
+        val whole = control(wholeLabel, R.drawable.ms_folder) {
             previewPhotoChoice(forDark, choice, ids.shuffled().map { "photo:$it" }) { redraw(focus = wholeLabel) }
         }
         val controls = LinearLayout(this).apply {
-            addView(select, LinearLayout.LayoutParams(0, dp(44), 1f))
-            addView(whole, LinearLayout.LayoutParams(0, dp(44), 1.25f))
+            setPadding(dp(6), 0, dp(6), dp(10))
+            addView(select, LinearLayout.LayoutParams(0, dp(38), 1f).apply { marginEnd = dp(8) })
+            addView(whole, LinearLayout.LayoutParams(0, dp(38), 1.15f))
         }
         val tiles = visible.mapIndexed { i, id ->
             val photo = "photo:$id"
@@ -2844,26 +2930,33 @@ class MainActivity : Activity() {
         }
         val footer = mutableListOf<View>()
         if (ids.size > pageSize) {
+            val missingRows = (pageSize - visible.size) / 3
+            if (missingRows > 0) footer += View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, missingRows * (dp(photoHeight) + 2 * dp(5)))
+            }
             val previous = getString(R.string.wall_previous_photos)
             val next = getString(R.string.wall_next_photos)
-            val paging = LinearLayout(this)
-            if (index > 0) paging.addView(control(previous) {
+            val paging = LinearLayout(this).apply { setPadding(dp(6), dp(7), dp(6), 0) }
+            if (index > 0) paging.addView(control(previous, R.drawable.ms_chevron_left) {
                 val page = index - 1
                 redraw(page, "photo:" + ids[page * pageSize])
-            }, LinearLayout.LayoutParams(0, dp(42), 1f))
-            if (start + pageSize < ids.size) paging.addView(control(next) {
+            }, LinearLayout.LayoutParams(0, dp(33), 1f).apply { marginEnd = dp(6) })
+            if (start + pageSize < ids.size) paging.addView(control(next, R.drawable.ms_chevron_right) {
                 val page = index + 1
                 redraw(page, "photo:" + ids[page * pageSize])
-            }, LinearLayout.LayoutParams(0, dp(42), 1f))
+            }, LinearLayout.LayoutParams(0, dp(33), 1f))
             footer += paging
         }
-        if (selecting && selected.isNotEmpty()) footer += control(getString(R.string.wall_preview_slideshow)) {
-            previewPhotoChoice(forDark, choice, selected.shuffled().map { "photo:$it" }, selected.toSet()) { redraw() }
+        if (selecting && selected.isNotEmpty()) footer += LinearLayout(this).apply {
+            setPadding(dp(6), dp(9), dp(6), 0)
+            addView(control(getString(R.string.wall_preview_slideshow), R.drawable.ms_play_circle, primary = true) {
+                previewPhotoChoice(forDark, choice, selected.shuffled().map { "photo:$it" }, selected.toSet()) { redraw() }
+            }, LinearLayout.LayoutParams(MATCH_PARENT, dp(44)))
         }
         val first = "photo:" + visible.first()
         val focus = focusOn ?: first
         val extras = listOf(selectLabel to controls)
-        wallGrid(title, listOf(null to tiles), forDark, "", focus.takeUnless { it == wholeLabel }, extras, tileHeight = 59,
+        wallGrid(title, listOf(null to tiles), forDark, "", focus.takeUnless { it == wholeLabel }, extras, tileHeight = photoHeight,
             footer = footer, crumb = getString(R.string.wall_my_photos), back = back)
         if (focus == wholeLabel) whole.requestFocus()
     }
@@ -4207,7 +4300,7 @@ class MainActivity : Activity() {
             clearColorFilter()
             setImageBitmap(cached)
         } else if (!choice.startsWith("plain:")) io.execute {
-            val bmp = try {
+            val bmp = key?.let { thumbCache.get(it) } ?: try {
                 // 1920 px wide comes out 120 for a row, 480 for the hero card
                 val small = BitmapFactory.Options().apply { inSampleSize = if (big) 4 else 16 }
                 when {
