@@ -27,6 +27,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - **Recent apps.** Press Home twice to open a row of app windows. Press Left or Right to switch apps. Press Back to return to Plume.
 - Add the Recent apps icon to the top bar. You can also assign Plume recent apps to a remote key.
 - Enable **App window previews** to show each app's last screen on Android 11 and later. Plume keeps them on the TV after a restart.
+- Plume pauses **Smooth volume** while **App window previews** are on.
 - With no captured screen, a window shows the app's Continue Watching picture.
 - Hold OK on a window to remove it from the list, or select **Clear all**.
 - **Edit the top bar in place.** Hold OK on an icon. Lift, move, add or remove icons right on the bar. It holds up to 5 icons.

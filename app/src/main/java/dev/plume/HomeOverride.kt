@@ -42,13 +42,13 @@ class HomeOverride : AccessibilityService() {
 
     /**
      * Seeing keys costs volume its hold on TVs: Android acts on Volume before any service sees it and the key never
-     * repeats. So Smooth volume turns key filtering off, unless remote keys need it (set, or one being learned).
+     * repeats. Smooth volume turns key filtering off unless window previews or remote keys need it.
      * Home is then caught by the window watcher below, which shows the TV's own home for about a second.
      * Fire OS never passes remote keys to us, so there filtering is always off.
      */
     fun applyKeyFilter() {
         val filter = !fireTv(this) && (!getSharedPreferences("home", MODE_PRIVATE).getBoolean("smooth_volume", false) ||
-            Remap.all(this).isNotEmpty() || Remap.learn != null)
+            (Build.VERSION.SDK_INT >= 30 && previewsEnabled()) || Remap.all(this).isNotEmpty() || Remap.learn != null)
         val flag = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
         serviceInfo = serviceInfo.apply { flags = if (filter) flags or flag else flags and flag.inv() }
     }
