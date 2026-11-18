@@ -4682,9 +4682,10 @@ class MainActivity : Activity() {
     /** "App names: Always": a name under every tile, same width and gap as the tiles, so they line up. */
     private fun showNames() {
         val row = findViewById<LinearLayout>(R.id.nameRow)
-        val always = rowNames() == "always"
+        val names = rowNames()
+        val always = names == "always"
         row.visibility = if (always) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.rowLabel).visibility = if (always) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.rowLabel).visibility = if (names == "focus") View.VISIBLE else View.GONE
         row.removeAllViews()
         if (!always) return
         for (i in 0 until appRow.childCount) {
@@ -5339,11 +5340,14 @@ class MainActivity : Activity() {
             .also { panel.addView(it, LinearLayout.LayoutParams(wrap, wrap).apply { topMargin = dp(6) }) }
         trayHint = small("").also { panel.addView(it, LinearLayout.LayoutParams(wrap, wrap).apply { topMargin = dp(12) }) }
         val bar = wifi.parent as View
-        val at = IntArray(2).also { bar.getLocationInWindow(it) }
+        val root = findViewById<FrameLayout>(R.id.root)
+        // The header also holds the clock. Use the icon's bottom edge for the panel.
+        val at = Rect(0, 0, bar.width, v.bottom)
+        root.offsetDescendantRectToMyCoords(bar, at)
         panel.elevation = dp(16).toFloat()
-        findViewById<FrameLayout>(R.id.root).addView(panel, FrameLayout.LayoutParams(wrap, wrap, Gravity.TOP or Gravity.END).apply {
-            topMargin = at[1] + bar.height + dp(12)
-            marginEnd = resources.displayMetrics.widthPixels - (at[0] + bar.width)
+        root.addView(panel, FrameLayout.LayoutParams(wrap, wrap, Gravity.TOP or Gravity.END).apply {
+            topMargin = at.bottom + dp(8)
+            marginEnd = if (root.layoutDirection == View.LAYOUT_DIRECTION_RTL) at.left else root.width - at.right
         })
         topTray = panel
         fillTray()
@@ -7155,9 +7159,6 @@ class MainActivity : Activity() {
             showTitle()
         }
         (watchTitle.parent as ViewGroup).clipChildren = false // the chip can shrink past the label's new width
-        (watchTitle.layoutParams as LinearLayout.LayoutParams).apply {
-            topMargin += dp(10) // more space above than below: the title goes with its cards, not with the apps
-        }
     }
 
     /** Change the title without interrupting the row's visibility or focus animations. */
