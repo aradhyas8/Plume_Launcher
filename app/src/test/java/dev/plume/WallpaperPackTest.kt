@@ -23,6 +23,15 @@ class WallpaperPackTest {
         try { test(dir) } finally { dir.deleteRecursively() }
     }
 
+    @Test fun bingReplacesOnlyUnsetOrUnavailableAurora() = inDirectory { dir ->
+        assertEquals(Bing.CHOICE, wallpaperAfterAuroraRemoval(null, dir))
+        assertEquals(Bing.CHOICE, wallpaperAfterAuroraRemoval("res:Arctic Aurora", dir))
+        assertEquals("plain:Soft white", wallpaperAfterAuroraRemoval("plain:Soft white", dir))
+        assertEquals("file:custom.jpg", wallpaperAfterAuroraRemoval("file:custom.jpg", dir))
+        File(dir, "05_Arctic_Aurora.webp").writeBytes(image("Aurora"))
+        assertEquals("pack:05_Arctic_Aurora.webp", wallpaperAfterAuroraRemoval("res:Arctic Aurora", dir))
+    }
+
     @Test fun everyDownloadHasADistinctWebpAsset() {
         val files = File(root, "wallpapers").listFiles()!!.filter { it.extension == "webp" }
         assertTrue(files.isNotEmpty())

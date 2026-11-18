@@ -455,16 +455,21 @@ class MainActivity : Activity() {
         allApps = findViewById(R.id.allApps)
         allAppsGrid = findViewById(R.id.allAppsGrid)
         wifi = findViewById(R.id.wifi)
-        // A new install starts on Arctic Aurora, light, with Frosted glass; an update keeps what it has.
+        // A new install starts with the light theme and Frosted glass.
         val info = packageManager.getPackageInfo(packageName, 0)
         if (info.firstInstallTime == info.lastUpdateTime && !prefs.contains("wp_light") && !prefs.contains("wp_dark"))
-            prefs.edit().putString("wp_light", FIRST_WALLPAPER).putString("wp_dark", FIRST_WALLPAPER)
-                .putString("theme", "light").putString("glass_style", GlassStyle.FROSTED.key).apply()
-        fetchFirstWallpaper4k()
+            prefs.edit().putString("theme", "light").putString("glass_style", GlassStyle.FROSTED.key).apply()
+        prefs.edit().apply {
+            for (key in listOf("wp_light", "wp_dark")) {
+                val saved = prefs.getString(key, null)
+                val choice = wallpaperAfterAuroraRemoval(saved, packDir())
+                if (choice != saved) putString(key, choice)
+            }
+        }.apply()
         if (!prefs.getBoolean("wp_shared", false)) {
             val wasDark = wantDark()
             val choice = prefs.getString(if (wasDark) "wp_dark" else "wp_light", null)
-                ?: defaultWallpaper(wasDark)
+                ?: Bing.CHOICE
             val photo = prefs.getLong(if (wasDark) "wp_photo_dark" else "wp_photo_light", -1)
             val at = prefs.getLong(if (wasDark) "wp_photo_at_dark" else "wp_photo_at_light", System.currentTimeMillis())
             prefs.edit().putString("wp_light", choice).putString("wp_dark", choice)
@@ -1275,7 +1280,6 @@ class MainActivity : Activity() {
     /** A plain choice first (just the theme's base colour, no image), then pictures. */
     private fun wallpaperChoices(forDark: Boolean): List<Pair<String, String>> =
         listOf(plainWallpaper(forDark).let { wallpaperName(it) to it }) +
-            BUNDLED_WALLPAPERS.keys.map { wallpaperName("res:$it") to "res:$it" } +
             (wallpaperName(Bing.CHOICE) to Bing.CHOICE) +
             (wallpaperName(ShowsWall.CHOICE) to ShowsWall.CHOICE) +
             (wallpaperDir()?.listFiles { f -> f.extension.lowercase() in setOf("jpg", "jpeg", "png", "webp") }
@@ -1285,10 +1289,8 @@ class MainActivity : Activity() {
     // Light gets a soft white (the light ground colour), not #FFFFFF: pure white glares on a TV.
     private fun plainWallpaper(forDark: Boolean) = if (forDark) "plain:Pure black" else "plain:Soft white"
 
-    private fun defaultWallpaper(forDark: Boolean) = plainWallpaper(forDark)
-
     private fun currentWallpaper(forDark: Boolean = dark) =
-        prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it) } ?: defaultWallpaper(forDark)
+        prefs.getString(if (forDark) "wp_dark" else "wp_light", null)?.let { movedWallpaper(it) } ?: Bing.CHOICE
 
     /** Keep installed pack photos; only unavailable legacy choices fall back to a plain colour. */
     private fun movedWallpaper(choice: String): String {
@@ -1467,6 +1469,7 @@ class MainActivity : Activity() {
     private fun loadWallpaper() {
         val view = findViewById<ImageView>(R.id.wallpaper)
         val choice = currentWallpaper()
+        if (resumed && choice == Bing.CHOICE) Bing.refresh(applicationContext, prefs)
         val video = choice.startsWith("video:")
         val slideshow = choice.startsWith("folder:")
         val load = ++wallpaperLoad
@@ -1482,7 +1485,6 @@ class MainActivity : Activity() {
             fitInk()
             return
         }
-        val fallback = defaultWallpaper(dark)
         val allowUhd = !video && supportsUhdWallpaper()
         io.execute {
             val photo = if (slideshow) runCatching { folderPhoto(choice) }.getOrNull() else null
@@ -1491,7 +1493,7 @@ class MainActivity : Activity() {
                 slideshow -> photo?.let { decodeMediaPhoto(it, uhd) }
                 else -> decodeWallpaper(choice, uhd)
             }
-            val own = try {
+            val bmp = try {
                 decode(allowUhd)
             } catch (_: Exception) {
                 null
@@ -1499,7 +1501,7 @@ class MainActivity : Activity() {
                 if (allowUhd) runCatching { decode(false) }.getOrNull() else null
             }
             if (slideshow) {
-                if (own == null) {
+                if (bmp == null) {
                     folderPending = true
                     ui.post { scheduleFolderRetry() }
                 } else {
@@ -1512,10 +1514,8 @@ class MainActivity : Activity() {
                 folderRetries = 0
                 ui.post { ui.removeCallbacks(folderRetryTask) }
             }
-            val bmp = own ?: decodeWallpaper(fallback)
             // Kept even with glass off, so turning it on needs no second decode.
-            // A video is frosted from its first frame (own); never from the default picture shown when that failed.
-            val screen = if (bmp != null && (!video || own != null)) glassScreen(bmp, ground) else null
+            val screen = bmp?.let { glassScreen(it, ground) }
             val sharp = if (bmp != null && !video && glassStyle() == GlassStyle.CLEAR) glassSharp(bmp, ground) else null
             val thumb = bmp?.let { Bitmap.createScaledBitmap(it, 64, maxOf(1, 64 * it.height / it.width), true) }
             // Nothing reads the pixels from here on: keep the picture in graphics memory only, not once more in the process.
@@ -1530,7 +1530,7 @@ class MainActivity : Activity() {
             }
             ui.post {
                 if (isDestroyed || load != wallpaperLoad) return@post
-                if (photo != null && own != null && photo != prefs.getLong(photoKey(), -1)) {
+                if (photo != null && bmp != null && photo != prefs.getLong(photoKey(), -1)) {
                     prefs.edit().putLong(photoKey(), photo).apply()
                 }
                 wpThumb = thumb
@@ -1660,32 +1660,8 @@ class MainActivity : Activity() {
         }
     }
 
-    /** The downloaded 4K pack photo for a bundled wallpaper, if there is one. */
-    private fun packFor(bundled: String) =
-        packDir().listFiles { f -> f.isFile && packFileName(f.name) && packPhotoName(f.name) == bundled }?.firstOrNull()
-
-    /** While Arctic Aurora is in use, get its 4K photo once; until then, and if that fails, the 1080p copy shows. */
-    private fun fetchFirstWallpaper4k() {
-        if (FIRST_WALLPAPER !in listOf(currentWallpaper(false), currentWallpaper(true))) return
-        if (File(packDir(), FIRST_WALLPAPER_4K.file).isFile) return
-        io.execute {
-            val ok = try {
-                FIRST_WALLPAPER_4K.download(packDir()) { openStream(PACK_URL + FIRST_WALLPAPER_4K.file + "?v=" + FIRST_WALLPAPER_4K.sha) }
-            } catch (e: Exception) {
-                android.util.Log.w("Plume", "first wallpaper 4K", e)
-                false
-            }
-            if (ok) ui.post { if (!isDestroyed && currentWallpaper() == FIRST_WALLPAPER) loadWallpaper() }
-        }
-    }
-
     private fun decodeWallpaper(choice: String, allowUhd: Boolean = false): Bitmap? {
-        // A plain colour has no picture. It is the fallback when a picture fails (Bing not downloaded yet): not a file.
         if (choice.startsWith("plain:")) return null
-        BUNDLED_WALLPAPERS[choice.removePrefix("res:")]?.let { res ->
-            packFor(choice.removePrefix("res:"))?.let { f -> return fitWallpaper(allowUhd) { f.inputStream() } }
-            return BitmapFactory.decodeResource(resources, res)
-        }
         return when {
             choice == Bing.CHOICE -> fitWallpaper(allowUhd) { Bing.file(this).inputStream() }
             choice == ShowsWall.CHOICE -> {
@@ -1881,8 +1857,7 @@ class MainActivity : Activity() {
         var active = true
         val current = currentWallpaper(forDark)
         val missing = packCatalog.filter { !File(packDir(), it.file).isFile }
-        val choices = BUNDLED_WALLPAPERS.keys.map { "res:$it" } +
-            packFiles().filter { packPhotoName(it) !in BUNDLED_WALLPAPERS }.map { "pack:$it" } + plainWallpaper(forDark)
+        val choices = packFiles().map { "pack:$it" } + plainWallpaper(forDark)
         val get = if (missing.isEmpty()) emptyList() else listOf(
             Tile(getString(R.string.get_wallpaper_pack, packSize(missing)), icon = R.drawable.ms_photo_library, help = R.string.help_wallpaper_pack) {
                 downloadPack(missing) { if (it) refreshPackPage?.invoke() }
@@ -2754,6 +2729,11 @@ class MainActivity : Activity() {
     /** While the home screen shows, a folder wallpaper moves on to its next photo when its time is up. */
     private val wallpaperTick = object : Runnable {
         override fun run() {
+            if (currentWallpaper() == Bing.CHOICE) {
+                Bing.refresh(applicationContext, prefs)
+                ui.postDelayed(this, 60_000L)
+                return
+            }
             val every = photoEvery() * 60_000L
             val shows = currentWallpaper() == ShowsWall.CHOICE
             if (!shows && !currentWallpaper().startsWith("folder:")) return
@@ -4301,7 +4281,7 @@ class MainActivity : Activity() {
             setColorFilter(ink(.4f))
         }
         // Fixed pictures keep their small copy, so a grid opened again shows them at once; Bing, shows and folders change.
-        val key = "$choice|$big".takeIf { listOf("res:", "pack:", "file:", "video:", "photo:").any { choice.startsWith(it) } }
+        val key = "$choice|$big".takeIf { listOf("pack:", "file:", "video:", "photo:").any { choice.startsWith(it) } }
         val cached = key?.let { thumbCache.get(it) }
         if (cached != null) {
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -4313,7 +4293,6 @@ class MainActivity : Activity() {
                 // 1920 px wide comes out 120 for a row, 480 for the hero card
                 val small = BitmapFactory.Options().apply { inSampleSize = if (big) 4 else 16 }
                 when {
-                    choice.startsWith("res:") -> BUNDLED_WALLPAPERS[choice.removePrefix("res:")]?.let { BitmapFactory.decodeResource(resources, it, small) }
                     choice == Bing.CHOICE -> BitmapFactory.decodeFile(Bing.file(this@MainActivity).path, small)
                     choice == ShowsWall.CHOICE -> BitmapFactory.decodeFile(ShowsWall.file(this@MainActivity).path, small)
                     choice.startsWith("file:") -> BitmapFactory.decodeFile(File(wallpaperDir(), choice.removePrefix("file:")).path, small)
@@ -7852,11 +7831,6 @@ class MainActivity : Activity() {
             "Mist (day)" to R.string.wp_mist_day, "Peak (dusk)" to R.string.wp_peak_dusk,
             "Pure black" to R.string.wp_pure_black, "Soft white" to R.string.wp_soft_white,
         )
-        /** By pack photo name: a 1080p copy ships in the app, and the 4K pack photo of that name replaces it once downloaded. */
-        val BUNDLED_WALLPAPERS = mapOf("Arctic Aurora" to R.drawable.wallpaper_aurora)
-        const val FIRST_WALLPAPER = "res:Arctic Aurora"
-        // ponytail: pinned to today's blob; if the photo changes on main the fetch fails and the 1080p copy stays.
-        val FIRST_WALLPAPER_4K = PackPhoto("05_Arctic_Aurora.webp", 1_145_394, "fb288f54f21328355cf2d2c0cb23148069888628")
         const val PACK_URL = "https://raw.githubusercontent.com/aradhyas8/Plume_Launcher/main/wallpapers/"
         val PIN_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,

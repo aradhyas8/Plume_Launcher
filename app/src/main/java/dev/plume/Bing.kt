@@ -18,13 +18,13 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * The Bing picture of the day, as a choice in the wallpaper list. Nothing goes online unless someone picks it.
+ * The Bing picture of the day, used when no other wallpaper is set.
  * The home screen asks for a lookup at most once a day while Plume is open: there is no service and no alarm.
  * One JPEG is kept on disk and replaced when the picture changes. Choosing another wallpaper deletes it. Offline,
- * or if Bing stops answering, the last picture stays and nothing is shown. Only the picture shows: no title.
+ * or if Bing stops answering, the last picture stays. Only the picture shows: no title.
  */
 internal object Bing {
-    /** The wallpaper choice, next to "res:…", "file:…" and "folder:…". */
+    /** The wallpaper choice, next to "pack:…", "file:…" and "folder:…". */
     const val CHOICE = "bing"
 
     /** 1080p like every other wallpaper: a bigger picture would cost memory and show no more. */
@@ -45,7 +45,7 @@ internal object Bing {
 
     fun file(c: Context) = File(c.filesDir, "bing.jpg")
 
-    private fun used(prefs: SharedPreferences) = prefs.getString("wp_light", null) == CHOICE || prefs.getString("wp_dark", null) == CHOICE
+    private fun used(prefs: SharedPreferences) = prefs.getString("wp_light", CHOICE) == CHOICE || prefs.getString("wp_dark", CHOICE) == CHOICE
 
     /**
      * Looks up the picture if a wallpaper uses it and the picture has not changed today: a minute apart while there is
