@@ -4497,7 +4497,7 @@ class MainActivity : Activity() {
         return used
     }
 
-    /** The system's focus-move sound for a D-pad key; while held, its repeat sounds (Android 11+). */
+    /** The system's focus-move sound for a D-pad key; while held, its repeat sounds (Android 12+). */
     private fun navSound(v: View, e: KeyEvent) {
         val dir = when (e.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> View.FOCUS_LEFT
@@ -4507,7 +4507,7 @@ class MainActivity : Activity() {
             else -> return
         }
         v.playSoundEffect(
-            if (Build.VERSION.SDK_INT >= 30) SoundEffectConstants.getConstantForFocusDirection(dir, e.repeatCount > 0)
+            if (Build.VERSION.SDK_INT >= 31) SoundEffectConstants.getConstantForFocusDirection(dir, e.repeatCount > 0)
             else SoundEffectConstants.getContantForFocusDirection(dir)
         )
     }
