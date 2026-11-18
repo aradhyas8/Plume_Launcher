@@ -16,6 +16,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- **Wallpaper gallery.** Browse wallpapers by source. Select photos from a TV or USB folder and preview the slideshow before you apply it.
+
 - **Island.** A glass tile at the top of Home shows what happens now: music, timers, alerts and live scores.
 - Select the island to open it. Press Left or Right on the progress bar to seek in a song.
 - Start a timer or the stopwatch from the timer icon on the top bar. It lists the last 4 lengths you used.

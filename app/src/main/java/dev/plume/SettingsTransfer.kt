@@ -67,7 +67,7 @@ internal object SettingsTransfer {
                     number.toFloat()
                 }
                 key == "wp_every" -> {
-                    require(value is Number && value.toDouble() in setOf(1.0, 5.0, 10.0, 15.0, 30.0, 60.0, 1440.0)) { "Invalid $key" }
+                    require(value is Number && value.toDouble() in setOf(1.0, 5.0, 10.0, 15.0, 30.0, 60.0, 1440.0, 10080.0, 43200.0)) { "Invalid $key" }
                     value.toInt()
                 }
                 key == "row_hidden" || key == "cw_off" -> {

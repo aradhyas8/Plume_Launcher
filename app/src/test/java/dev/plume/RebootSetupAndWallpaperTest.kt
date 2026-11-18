@@ -46,4 +46,10 @@ class RebootSetupAndWallpaperTest {
         assertEquals(1L, picked)
         assertEquals(listOf(2L), deck.toList())
     }
+    @Test fun newShuffleRoundStartsWithADifferentPhoto() {
+        val deck = ArrayDeque<Long>()
+        val picked = pickFolderPhoto(listOf(1L, 2L), currentSaved = null, deck = deck, previous = 1L) { it }
+        assertEquals(2L, picked)
+        assertEquals(listOf(1L), deck.toList())
+    }
 }

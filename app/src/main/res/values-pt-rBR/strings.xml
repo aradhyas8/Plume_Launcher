@@ -330,8 +330,6 @@
     <string name="help_app_animations">O app cresce a partir do seu bloco ao abrir.</string>
     <string name="help_wallpaper">Pressione OK para escolher um papel de parede.</string>
     <string name="help_wp_tile">Pressione OK para experimentar. Pressione qualquer botão para voltar.</string>
-    <string name="wp_group_yours">Seus</string>
-    <string name="wp_group_more">Mais</string>
     <string name="my_uploads">Meus envios</string>
     <string name="built_in">Integrados</string>
     <string name="manage_videos">Gerenciar vídeos</string>
@@ -349,8 +347,6 @@
     <string name="help_folder">Uma apresentação das fotos de uma pasta nesta TV ou em um pen drive.</string>
     <string name="help_my_uploads">As fotos e vídeos que você enviou do celular.</string>
     <string name="help_surprise">Reproduz uma cena escolhida ao acaso.</string>
-    <string name="help_scene_kind">Pressione OK para ver as cenas. A cena é baixada quando você a escolhe.</string>
-    <string name="help_manage_videos">Remova cenas que você baixou e vídeos que enviou.</string>
     <string name="help_built_in">As imagens que vêm com o Plume, e uma cor lisa.</string>
     <string name="theme_wallpaper">Papel de parede</string>
     <string name="help_theme_wallpaper">Papel de parede escolhe claro ou escuro a partir da sua imagem, e o vidro assume as cores dela.</string>

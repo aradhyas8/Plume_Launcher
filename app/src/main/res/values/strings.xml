@@ -403,8 +403,6 @@
     <string name="help_app_animations">The app grows out of its tile when it opens.</string>
     <string name="help_wallpaper">Press OK to choose a wallpaper.</string>
     <string name="help_wp_tile">Press OK to try it. Press any button to come back.</string>
-    <string name="wp_group_yours">Yours</string>
-    <string name="wp_group_more">More</string>
     <string name="my_uploads">My uploads</string>
     <string name="built_in">Built-in</string>
     <string name="manage_videos">Manage videos</string>
@@ -422,8 +420,6 @@
     <string name="help_folder">A slideshow of the photos in a folder on this TV or a USB drive.</string>
     <string name="help_my_uploads">The photos and videos you sent from your phone.</string>
     <string name="help_surprise">Plays a scene picked at random.</string>
-    <string name="help_scene_kind">Press OK to see the scenes. A scene downloads when you pick it.</string>
-    <string name="help_manage_videos">Remove scenes you downloaded and videos you sent.</string>
     <string name="help_built_in">The pictures that come with Plume, and a plain colour.</string>
     <string name="get_wallpaper_pack">More photos (%1$s)</string>
     <string name="downloading_wallpapers">Downloading wallpapers (%1$s)…</string>
@@ -454,4 +450,37 @@
     <string name="media_previous">Previous</string>
     <string name="media_play_pause">Play or pause</string>
     <string name="media_next">Next</string>
+    <string name="wall_in_use">In use</string>
+    <string name="wall_my_photos">My Photos</string>
+    <string name="wall_collection">Plume Collection</string>
+    <string name="wall_automatic">Automatic</string>
+    <string name="wall_edit_photos">Edit photos</string>
+    <string name="wall_shuffle_now">Shuffle now</string>
+    <string name="wall_preview">Preview</string>
+    <string name="wall_single_photo">Your photo</string>
+    <string name="wall_select_hint">Press OK to select or deselect the photo.</string>
+    <string name="wall_preview_hint">Press OK to preview the photo.</string>
+    <string name="wall_select_photos">Select photos</string>
+    <string name="wall_whole_folder">Use whole folder</string>
+    <string name="wall_numbered_photo">Photo %1$d</string>
+    <plurals name="wall_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="wall_checked">%1$s, selected</string>
+    <string name="wall_previous_photos">Previous photos</string>
+    <string name="wall_next_photos">Next photos</string>
+    <string name="wall_preview_slideshow">Preview slideshow</string>
+    <string name="wall_preview_apply">OK to apply · Back to cancel</string>
+    <string name="wall_preview_apply_multiple">%1$d of %2$d · Left or Right to browse · OK to apply · Back to cancel</string>
+    <string name="wall_loading_photo">Loading photo…</string>
+    <string name="wall_photo_unavailable">This photo is unavailable.</string>
+    <string name="wall_no_folders_hint">No photos found on the TV or USB drive.</string>
+    <string name="wall_every_week">Every week</string>
+    <string name="wall_every_30_days">Every 30 days</string>
+    <string name="wall_browse">Browse wallpapers</string>
+    <string name="wall_tv_photos">TV and USB photos</string>
+    <string name="wall_tv_photos_detail">Browse folders or make a slideshow</string>
+    <string name="wall_phone_detail">Scan a QR code to send photos or videos</string>
+    <string name="wall_open_folder_hint">Press OK to open the folder.</string>
 </resources>
