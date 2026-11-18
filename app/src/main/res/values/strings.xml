@@ -403,8 +403,6 @@
     <string name="help_app_animations">The app grows out of its tile when it opens.</string>
     <string name="help_wallpaper">Press OK to choose a wallpaper.</string>
     <string name="help_wp_tile">Press OK to try it. Press any button to come back.</string>
-    <string name="wp_group_yours">Yours</string>
-    <string name="wp_group_more">More</string>
     <string name="my_uploads">My uploads</string>
     <string name="built_in">Built-in</string>
     <string name="manage_videos">Manage videos</string>
@@ -422,8 +420,6 @@
     <string name="help_folder">A slideshow of the photos in a folder on this TV or a USB drive.</string>
     <string name="help_my_uploads">The photos and videos you sent from your phone.</string>
     <string name="help_surprise">Plays a scene picked at random.</string>
-    <string name="help_scene_kind">Press OK to see the scenes. A scene downloads when you pick it.</string>
-    <string name="help_manage_videos">Remove scenes you downloaded and videos you sent.</string>
     <string name="help_built_in">The pictures that come with Plume, and a plain colour.</string>
     <string name="get_wallpaper_pack">More photos (%1$s)</string>
     <string name="downloading_wallpapers">Downloading wallpapers (%1$s)…</string>
@@ -467,7 +463,10 @@
     <string name="wall_select_photos">Select photos</string>
     <string name="wall_whole_folder">Use whole folder</string>
     <string name="wall_numbered_photo">Photo %1$d</string>
-    <string name="wall_selected_count">%1$d selected</string>
+    <plurals name="wall_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
     <string name="wall_checked">%1$s, selected</string>
     <string name="wall_previous_photos">Previous photos</string>
     <string name="wall_next_photos">Next photos</string>
@@ -482,7 +481,6 @@
     <string name="wall_browse">Browse wallpapers</string>
     <string name="wall_tv_photos">TV and USB photos</string>
     <string name="wall_tv_photos_detail">Browse folders or make a slideshow</string>
-    <string name="wall_uploads_detail">Photos and videos already on Plume</string>
     <string name="wall_phone_detail">Scan a QR code to send photos or videos</string>
     <string name="wall_open_folder_hint">Press OK to open the folder.</string>
 </resources>

@@ -1468,6 +1468,7 @@ class MainActivity : Activity() {
         val view = findViewById<ImageView>(R.id.wallpaper)
         val choice = currentWallpaper()
         val video = choice.startsWith("video:")
+        val slideshow = choice.startsWith("folder:")
         val load = ++wallpaperLoad
         view.alpha = 1f
         if (!video) videoWallpaper.clear()
@@ -1484,14 +1485,20 @@ class MainActivity : Activity() {
         val fallback = defaultWallpaper(dark)
         val allowUhd = !video && supportsUhdWallpaper()
         io.execute {
+            val photo = if (slideshow) runCatching { folderPhoto(choice) }.getOrNull() else null
+            fun decode(uhd: Boolean) = when {
+                video -> videoPoster(File(wallpaperDir(), choice.removePrefix("video:")))
+                slideshow -> photo?.let { decodeMediaPhoto(it, uhd) }
+                else -> decodeWallpaper(choice, uhd)
+            }
             val own = try {
-                if (video) videoPoster(File(wallpaperDir(), choice.removePrefix("video:"))) else decodeWallpaper(choice, allowUhd)
+                decode(allowUhd)
             } catch (_: Exception) {
                 null
             } catch (_: OutOfMemoryError) {
-                if (allowUhd) runCatching { decodeWallpaper(choice) }.getOrNull() else null
+                if (allowUhd) runCatching { decode(false) }.getOrNull() else null
             }
-            if (choice.startsWith("folder:")) {
+            if (slideshow) {
                 if (own == null) {
                     folderPending = true
                     ui.post { scheduleFolderRetry() }
@@ -1523,6 +1530,9 @@ class MainActivity : Activity() {
             }
             ui.post {
                 if (isDestroyed || load != wallpaperLoad) return@post
+                if (photo != null && own != null && photo != prefs.getLong(photoKey(), -1)) {
+                    prefs.edit().putLong(photoKey(), photo).apply()
+                }
                 wpThumb = thumb
                 wpFrames = listOfNotNull(thumb)
                 // The glass is tinted with the wallpaper's mean colour; kept, so the next start has it before the picture.
@@ -1683,7 +1693,6 @@ class MainActivity : Activity() {
                 fitWallpaper(allowUhd) { ShowsWall.file(this).inputStream() }
             }
             choice.startsWith("pack:") -> fitWallpaper(allowUhd) { File(packDir(), choice.removePrefix("pack:")).inputStream() }
-            choice.startsWith("folder:") -> decodeMediaPhoto(folderPhoto(choice) ?: return null, allowUhd)
             choice.startsWith("photo:") -> decodeMediaPhoto(choice.substringAfter(':').toLongOrNull() ?: return null, allowUhd)
             else -> {
                 val file = File(wallpaperDir(), choice.removePrefix("file:"))
@@ -1731,7 +1740,7 @@ class MainActivity : Activity() {
         }
         val categories = listOf(
             Tile(getString(R.string.wall_my_photos), cover = R.drawable.wall_cover_photos, captionIcon = R.drawable.ms_photo_library) { pickMyPhotos(forDark) },
-            Tile(getString(R.string.wall_collection), cover = R.drawable.wall_cover_collection, captionIcon = R.drawable.ms_landscape) { pickBuiltIn(forDark) },
+            Tile(getString(R.string.wall_collection), help = R.string.help_built_in, cover = R.drawable.wall_cover_collection, captionIcon = R.drawable.ms_landscape) { pickBuiltIn(forDark) },
             Tile(getString(R.string.aerial_views), cover = R.drawable.wall_cover_aerial, captionIcon = R.drawable.ms_movie) { pickVideoWallpaper(forDark) },
             Tile(getString(R.string.wall_automatic), cover = R.drawable.wall_cover_automatic, captionIcon = R.drawable.ms_shuffle) { pickAutomaticWallpaper(forDark) },
         )
@@ -1804,7 +1813,7 @@ class MainActivity : Activity() {
         )
         val styles = listOf(
             RowStyle(icon = R.drawable.ms_folder, sub = getString(R.string.wall_tv_photos_detail)),
-            RowStyle(icon = R.drawable.ms_photo_library, sub = getString(R.string.wall_uploads_detail)),
+            RowStyle(icon = R.drawable.ms_photo_library, sub = getString(R.string.help_my_uploads)),
             RowStyle(icon = R.drawable.ms_add_photo_alternate, sub = getString(R.string.wall_phone_detail)),
         )
         showPage(getString(R.string.wall_my_photos), rows, focus = rows.indexOfFirst { it.first == focusOn },
@@ -1864,9 +1873,6 @@ class MainActivity : Activity() {
     /** Include local files even when GitHub is unavailable or no longer lists them. */
     private fun packFiles() = (packCatalog.map { it.file } +
         packDir().listFiles { f -> f.isFile && packFileName(f.name) }.orEmpty().map { it.name }).distinct().sorted()
-
-    private fun builtIns(forDark: Boolean) = BUNDLED_WALLPAPERS.keys.map { "res:$it" } +
-        packFiles().filter { packPhotoName(it) !in BUNDLED_WALLPAPERS && File(packDir(), it).isFile }.map { "pack:$it" } + plainWallpaper(forDark)
 
     private fun packSize(photos: List<PackPhoto>) = String.format(java.util.Locale.ROOT, "%.1f MB", photos.sumOf { it.size } / 1_000_000.0)
 
@@ -2772,7 +2778,6 @@ class MainActivity : Activity() {
         val previous = prefs.getLong("wp_previous_photo", -1)
         val picked = pickFolderPhoto(eligible, saved, deck, previous)
         if (picked != null) deck.remove(picked)
-        if (picked != null && picked != saved) prefs.edit().putLong(photoKey(), picked).apply()
         return picked
     }
 
@@ -2902,7 +2907,7 @@ class MainActivity : Activity() {
             }
         }
         val select = if (selecting) {
-            label(getString(R.string.wall_selected_count, selected.size), 14f).apply {
+            label(resources.getQuantityString(R.plurals.wall_selected_count, selected.size, selected.size), 14f).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 setTextColor(focusInk())
@@ -4885,18 +4890,23 @@ class MainActivity : Activity() {
     private fun routeKey(e: KeyEvent): Boolean {
         if (!ready) return super.dispatchKeyEvent(e)
         photoPreview?.let { preview ->
-            if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) when (e.keyCode) {
-                KeyEvent.KEYCODE_BACK -> finishPhotoPreview(false)
-                KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_NUMPAD_ENTER ->
-                    if (preview.shown) finishPhotoPreview(true) else Unit
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> if (preview.choices.size > 1) {
-                    val step = if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
-                    preview.index = (preview.index + step + preview.choices.size) % preview.choices.size
-                    showPhotoPreview(preview)
-                } else Unit
-                else -> Unit
+            val released = e.action == KeyEvent.ACTION_UP && !e.isCanceled
+            return when (e.keyCode) {
+                KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    if (released && preview.shown) finishPhotoPreview(true)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (released && preview.choices.size > 1) {
+                        val step = if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
+                        preview.index = (preview.index + step + preview.choices.size) % preview.choices.size
+                        showPhotoPreview(preview)
+                    }
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> true
+                else -> super.dispatchKeyEvent(e)
             }
-            return true
         }
         if (wallPreview != null) { // a picked wallpaper shown whole: any button brings the panel back
             if (e.action == KeyEvent.ACTION_UP) endWallPreview()
@@ -7710,10 +7720,6 @@ class MainActivity : Activity() {
         const val WALLPAPER_CARD = -2
         val WALLPAPER_KEYS = setOf(R.string.wallpaper, R.string.folder_photo_changes, R.string.wp_sources)
         /** Rows whose choices are drawn as pictures (see OptionArt). */
-        val SCENE_ICONS = mapOf(
-            "Space" to R.drawable.ms_public, "Nature" to R.drawable.ms_forest, "Water & Coast" to R.drawable.ms_water,
-            "Cities" to R.drawable.ms_location_city, "Abstract & Patterns" to R.drawable.ms_texture, "Elements & Fire" to R.drawable.ms_local_fire_department,
-        )
         val ROW_ART = mapOf(R.string.row_size to "size", R.string.row_position to "position")
         val ROW_ICONS = mapOf(
             R.string.theme to R.drawable.ms_contrast, R.string.glass to R.drawable.ms_blur_on, R.string.app_animations to R.drawable.ms_open_in_full,
