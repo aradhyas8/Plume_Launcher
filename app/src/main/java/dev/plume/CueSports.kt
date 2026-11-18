@@ -15,15 +15,15 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 /**
- * The island's sports source, from ESPN's public site API (no key, no account). Two things put a game on the
- * island: a game the user picked ([leagueGames], [pinGame]) and a game of one of their teams ([follow]);
+ * Cue's sports source, from ESPN's public site API (no key, no account). Two things put a game on the
+ * Cue: a game the user picked ([leagueGames], [pinGame]) and a game of one of their teams ([follow]);
  * at most [max] at once, picks first. The home screen calls [start] while it is
  * shown and [stop] when it leaves; each poll asks one scoreboard per league that either of the two needs, and how soon
  * the next poll comes depends on how close the games are (see [sportsPollMs]). The settings call [start] again after
  * every change. Nothing about the user goes out: the requests carry only the league and dates in the URL and a
  * generic User-Agent.
  */
-internal object IslandSports {
+internal object CueSports {
     /**
      * A league the settings can offer, in the sport folder [group] (a string resource). [query] is added to its
      * scoreboard request. [teams] is false for the leagues with no teams list (races, tennis, golf, fights, cricket):
@@ -97,7 +97,7 @@ internal object IslandSports {
     @Volatile private var generation = 0
 
     /**
-     * A game as the island last saw it: why it shows ([source], see [sportsSource]), when its score last changed,
+     * A game as Cue last saw it: why it shows ([source], see [sportsSource]), when its score last changed,
      * when it peeks and when it goes, kept across polls.
      */
     private class Shown(val game: SportsGame, val source: Int, val changed: Long, val peekUntil: Long, val until: Long)
@@ -132,14 +132,14 @@ internal object IslandSports {
     fun pinned(ctx: Context): List<PinnedGame> = stored(ctx, PREF_GAMES).mapNotNull(PinnedGame::parse)
 
     /**
-     * Pins a game from [leagueGames]. The pin goes by itself two hours after the game's final; when the island never
+     * Pins a game from [leagueGames]. The pin goes by itself two hours after the game's final; when Cue never
      * sees a final (the TV was off), it goes eight hours after the start, or after the pin for an event that started
      * days ago (golf, a Test match).
      */
     fun pinGame(ctx: Context, g: NowGame): List<PinnedGame> {
         val now = System.currentTimeMillis()
         val entry = PinnedGame(g.sport, g.league, g.eventId, maxOf(g.start, now) + 8 * HOUR, now, g.name).entry
-        // The island holds [max] games: a new pick takes the place of the oldest one when it is full.
+        // Cue holds [max] games: a new pick takes the place of the oldest one when it is full.
         val drop = sportsPinsToDrop(pinned(ctx).filter { it.eventId != g.eventId }, max(ctx))
         edit(ctx, PREF_GAMES) { set ->
             set.removeAll { e -> PinnedGame.parse(e)?.let { it.eventId == g.eventId || drop.any { d -> d.eventId == it.eventId } } == true }
@@ -159,7 +159,7 @@ internal object IslandSports {
         return drop.isNotEmpty()
     }
 
-    /** A pick's name: the one kept with it, else the game as the island last saw it ("AFG v ZIM"). */
+    /** A pick's name: the one kept with it, else the game as Cue last saw it ("AFG v ZIM"). */
     fun pinName(ctx: Context, p: PinnedGame): String? =
         p.name.ifEmpty { null } ?: shown.firstOrNull { it.game.id == p.eventId }?.game?.let { label(ctx, it) }
 
@@ -167,9 +167,9 @@ internal object IslandSports {
         edit(ctx, PREF_GAMES) { set -> set.removeAll { PinnedGame.parse(it)?.eventId == eventId } }
 
     /**
-     * The hold menu's "unfollow" for the island item [itemKey] ("sports:<eventId>"): unpins the game when it is
+     * The hold menu's "unfollow" for Cue item [itemKey] ("sports:<eventId>"): unpins the game when it is
      * pinned, else unfollows the followed teams playing in it. Returns what it did, for a toast, or null when the game
-     * is not one the island shows.
+     * is not one Cue shows.
      */
     fun unfollowFor(ctx: Context, itemKey: String): String? {
         val id = itemKey.removePrefix("sports:")
@@ -196,7 +196,7 @@ internal object IslandSports {
         Thread {
             val list = try {
                 // The default page holds only 50 teams; college football has over 700.
-                val teams = islandJson("$BASE/$sport/$league/teams?limit=1000").getJSONArray("sports").getJSONObject(0)
+                val teams = cueJson("$BASE/$sport/$league/teams?limit=1000").getJSONArray("sports").getJSONObject(0)
                     .getJSONArray("leagues").getJSONObject(0).getJSONArray("teams")
                 val all = (0 until teams.length()).mapNotNull { i ->
                     val t = teams.optJSONObject(i)?.optJSONObject("team") ?: return@mapNotNull null
@@ -289,8 +289,8 @@ internal object IslandSports {
             val team = "${g.league}/${g.away?.id}" in teamIds || "${g.league}/${g.home?.id}" in teamIds
             val source = sportsSource(g, g.id in pinIds, team, false, now) ?: return@mapNotNull null
             val o = old[g.id]
-            // Only pinned games and followed teams open the island on a goal; a followed league's games stay quiet.
-            // Cricket shows by name and its score moves every ball, so it would open the island on every poll.
+            // Only pinned games and followed teams open Cue on a goal; a followed league's games stay quiet.
+            // Cricket shows by name and its score moves every ball, so it would open Cue on every poll.
             val scored = g.name == null && sportsScored(o?.game, g)
             val peek = if (scored && source != SPORTS_LEAGUE) now + PEEK_MS else o?.peekUntil ?: 0L
             // A final result keeps the end time it got when it was first seen final.
@@ -302,11 +302,11 @@ internal object IslandSports {
             Shown(g, source, if (scored) now else o?.changed ?: g.start, peek, until)
         }
         shown = picked
-        // A pin goes two hours after its final, or at its own end time when the island never saw a final.
+        // A pin goes two hours after its final, or at its own end time when Cue never saw a final.
         val gone = pins.filter { p -> now >= minOf(p.until, picked.firstOrNull { it.game.id == p.eventId }?.until ?: Long.MAX_VALUE) }
             .map { it.eventId }.toSet()
         if (gone.isNotEmpty()) edit(ctx, PREF_GAMES) { set -> set.removeAll { PinnedGame.parse(it)?.eventId in gone } }
-        if (items(now).map { it.shown } != before) Island.changed()
+        if (items(now).map { it.shown } != before) Cue.changed()
         val watch = picked.map { it.game }
         // With nothing followed (or sports off) there is nothing to wait for; the settings call start() again.
         if (needed.isNotEmpty() && gen == generation) task = io.schedule(Runnable { poll(gen) }, sportsPollMs(watch, now), TimeUnit.MILLISECONDS)
@@ -320,7 +320,7 @@ internal object IslandSports {
             else -> listOf("$BASE/${l.key}/scoreboard" + sportsQuery(l.query, null))
         }
         urls.flatMap { url ->
-            val j = islandJson(url)
+            val j = cueJson(url)
             // The cricket panel holds one scoreboard per series under "scores"; a league's scoreboard is one.
             val boards = j.optJSONArray("scores")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } } ?: listOf(j)
             boards.flatMap { b ->
@@ -366,20 +366,20 @@ internal object IslandSports {
 
     // ---------- items ----------
 
-    fun items(now: Long): List<IslandItem> {
+    fun items(now: Long): List<CueItem> {
         val ctx = app ?: return emptyList()
         // The games the user picked first, then a followed team's (live before soon), and only as many as the user allows.
         return shown.sortedWith(compareBy<Shown>({ it.source }, { if (it.game.state == "in") 0 else 1 }, { it.game.start }))
             .mapNotNull { item(ctx, it, now) }.take(max(ctx))
     }
 
-    private fun item(ctx: Context, s: Shown, now: Long): IslandItem? {
+    private fun item(ctx: Context, s: Shown, now: Long): CueItem? {
         val g = s.game
         val key = "sports:" + g.id
         val live = g.state == "in"
         // A followed league's live game ranks with the upcoming games, so it never pushes a timer or the user's own
         // teams out of the pill.
-        val kind = if (live && s.source != SPORTS_LEAGUE) IslandKind.SPORTS_LIVE else IslandKind.SPORTS
+        val kind = if (live && s.source != SPORTS_LEAGUE) CueKind.SPORTS_LIVE else CueKind.SPORTS
         val since = sportsSince(s.source, live, if (g.state == "pre") -g.start else s.changed)
         // Cricket names its match home side first ("ABT v HYD-R"): the pictures follow the order of the words.
         val (first, second) = sportsSides(g)
@@ -394,24 +394,24 @@ internal object IslandSports {
                 val zone = ZoneId.systemDefault()
                 val tomorrow = Instant.ofEpochMilli(g.start).atZone(zone).toLocalDate() != Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
                 val sub = ctx.getString(if (tomorrow) R.string.isl_sports_tomorrow else R.string.isl_sports_today, clock(ctx, g.start))
-                IslandItem(key = key, kind = kind, title = label(ctx, g), sub = sub, imageUri = away,
+                CueItem(key = key, kind = kind, title = label(ctx, g), sub = sub, imageUri = away,
                     image2Uri = home, icon = icon, since = since,
                     description = g.name?.let { "$it, $sub" } ?: ctx.getString(R.string.isl_sports_desc_pre, g.away?.name, g.home?.name, sub))
             }
             live && g.cricket -> {
                 val line = cricketLine(ctx, g)
-                IslandItem(key = key, kind = kind, title = cricketScore(g), sub = ctx.getString(R.string.isl_score_live, line), imageUri = away,
+                CueItem(key = key, kind = kind, title = cricketScore(g), sub = ctx.getString(R.string.isl_score_live, line), imageUri = away,
                     image2Uri = home, icon = icon, since = since, peekUntil = s.peekUntil,
                     description = "${g.away?.name} ${g.away?.score}, ${g.home?.name} ${g.home?.score}, $line")
             }
-            live -> IslandItem(key = key, kind = kind, title = g.name ?: sportsScore(g),
+            live -> CueItem(key = key, kind = kind, title = g.name ?: sportsScore(g),
                 sub = ctx.getString(R.string.isl_score_live, if (g.name != null) g.shortDetail else sportsDetail(g.shortDetail)), imageUri = away,
                 image2Uri = home, icon = icon, since = since, peekUntil = s.peekUntil,
                 description = describe(ctx, g, if (g.name != null) g.detail else sportsDetail(g.detail)))
             // A postponed or cancelled game is "post" but not completed; it has no result to show.
             g.state == "post" && g.completed -> {
                 val final = if (g.name != null) g.shortDetail else ctx.getString(R.string.isl_sports_final)
-                IslandItem(key = key, kind = kind, title = if (g.cricket) cricketScore(g) else g.name ?: sportsScore(g), sub = final,
+                CueItem(key = key, kind = kind, title = if (g.cricket) cricketScore(g) else g.name ?: sportsScore(g), sub = final,
                     imageUri = away, image2Uri = home, icon = icon, since = since, until = s.until, peekUntil = s.peekUntil,
                     description = describe(ctx, g, final))
             }
@@ -419,7 +419,7 @@ internal object IslandSports {
         }
     }
 
-    /** How many games the island holds at once, 1 to 3: 1 by default. */
+    /** How many games Cue holds at once, 1 to 3: 1 by default. */
     fun max(ctx: Context) = prefs(ctx).getInt("isl_sports_max", 1).coerceIn(1, 3)
 
     /** "IND at PHI", or the event's name when it shows by name. */
@@ -452,7 +452,7 @@ internal object IslandSports {
     }
 }
 
-// ---------- plain rules (no Android, no org.json), tested in IslandSportsTest ----------
+// ---------- plain rules (no Android, no org.json), tested in CueSportsTest ----------
 
 private const val MINUTE = 60_000L
 private const val HOUR = 60 * MINUTE
@@ -479,7 +479,7 @@ internal class FollowedTeam(val sport: String, val league: String, val teamId: S
 
 /** One pinned game, stored as "sport|league|eventId|untilMillis"; [until] is when the pin goes at the latest. */
 internal class PinnedGame(val sport: String, val league: String, val eventId: String, val until: Long,
-    /** When it was picked (0 for picks stored before this was kept): the oldest goes first when the island is full. */
+    /** When it was picked (0 for picks stored before this was kept): the oldest goes first when Cue is full. */
     val at: Long = 0L,
     /** Who plays ("IND at PHI"), so the settings can list it without the network. */
     val name: String = "",
@@ -550,7 +550,7 @@ internal fun sportsSource(g: SportsGame, pinned: Boolean, team: Boolean, league:
 private const val SINCE_STEP = 10_000_000_000_000L
 
 /**
- * The item's since, which the island sorts newest first among items of the same kind: pinned games before followed
+ * The item's since, which Cue sorts newest first among items of the same kind: pinned games before followed
  * teams before followed leagues, live games before the rest, and then the larger [order] first. [order] is the time
  * of the last score change for a game that is on or over, and minus the start for a game to come, so the next one
  * comes first.
@@ -592,12 +592,12 @@ internal fun sportsDetail(detail: String): String {
 
 private val clockText = Regex("\\d+(:\\d\\d)?(\\.\\d+)?")
 
-/** The score moved since the last poll of a game that was on, so the island opens for a moment to show it. */
+/** The score moved since the last poll of a game that was on, so Cue opens for a moment to show it. */
 internal fun sportsScored(old: SportsGame?, new: SportsGame) =
     old != null && old.state == "in" && (old.away?.score != new.away?.score || old.home?.score != new.home?.score)
 
 /**
- * When a final result goes: two hours after the island first saw it final. A game first seen already over (the TV
+ * When a final result goes: two hours after Cue first saw it final. A game first seen already over (the TV
  * was off, or the launcher started late) has ended at the latest four hours after its start, so an old result does
  * not stay for two hours more.
  */

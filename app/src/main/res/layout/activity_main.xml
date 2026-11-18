@@ -41,7 +41,7 @@
         <!-- Bottom is a little more than the top: the last text line's box includes space under the letters,
              so this makes the visible gap below Continue Watching match the gap above the clock. -->
 
-        <!-- The top bar, with the media island centred on the screen over it. -->
+        <!-- The top bar, with Cue centred on the screen over it. -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -166,7 +166,7 @@
                 android:padding="8dp"
                 android:src="@drawable/ic_tune" />
 
-            <!-- Timers and the stopwatch, shown on the island. -->
+            <!-- Timers and the stopwatch, shown on Cue. -->
             <ImageView
                 android:id="@+id/timerButton"
                 android:layout_width="36dp"
@@ -213,10 +213,10 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <!-- Media island: what is playing. A compact glass pill at rest (art, title, moving bars); selected, it
+        <!-- Cue: what is playing. A compact glass pill at rest (art, title, moving bars); selected, it
              opens down into a bigger tile with bigger art, the artist, the app's icon, the time played and the controls. -->
         <LinearLayout
-            android:id="@+id/island"
+            android:id="@+id/cue"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|center_horizontal"
@@ -229,7 +229,7 @@
             android:paddingBottom="4dp"
             android:visibility="gone">
 
-                <!-- Open, with more than one thing on the island: a mark for each, Left and Right pick which one shows. -->
+                <!-- Open, with more than one thing on Cue: a mark for each, Left and Right pick which one shows. -->
                 <HorizontalScrollView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -238,7 +238,7 @@
                     android:scrollbars="none"
                     android:visibility="gone">
                     <LinearLayout
-                        android:id="@+id/islandChips"
+                        android:id="@+id/cueChips"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:gravity="center_vertical"
@@ -246,28 +246,28 @@
                 </HorizontalScrollView>
 
                 <LinearLayout
-                    android:id="@+id/islandTop"
+                    android:id="@+id/cueTop"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
                     <ImageView
-                        android:id="@+id/islandArt"
+                        android:id="@+id/cueArt"
                         android:layout_width="28dp"
                         android:layout_height="28dp"
                         android:importantForAccessibility="no"
                         android:scaleType="centerCrop" />
 
                     <LinearLayout
-                        android:id="@+id/islandText"
+                        android:id="@+id/cueText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="10dp"
                         android:orientation="vertical">
 
                         <TextView
-                            android:id="@+id/islandTitle"
+                            android:id="@+id/cueTitle"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:ellipsize="end"
@@ -279,7 +279,7 @@
                             android:textSize="13sp" />
 
                         <TextView
-                            android:id="@+id/islandArtist"
+                            android:id="@+id/cueArtist"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
@@ -292,7 +292,7 @@
                             android:visibility="gone" />
                         <!-- Under the text: the progress (a thin line at rest), then the buttons while open. -->
                         <LinearLayout
-                            android:id="@+id/islandMore"
+                            android:id="@+id/cueMore"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="5dp"
@@ -302,14 +302,14 @@
                             android:visibility="gone">
 
                             <LinearLayout
-                                android:id="@+id/islandTimes"
+                                android:id="@+id/cueTimes"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:gravity="center_vertical"
                                 android:orientation="horizontal">
 
                                 <TextView
-                                    android:id="@+id/islandElapsed"
+                                    android:id="@+id/cueElapsed"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:alpha="0.85"
@@ -319,8 +319,8 @@
                                     android:minWidth="30dp"
                                     android:textSize="12sp" />
 
-                                <dev.plume.IslandBar
-                                    android:id="@+id/islandProgress"
+                                <dev.plume.CueBar
+                                    android:id="@+id/cueProgress"
                                     android:layout_width="0dp"
                                     android:layout_height="4dp"
                                     android:layout_marginStart="10dp"
@@ -328,7 +328,7 @@
                                     android:layout_weight="1" />
 
                                 <TextView
-                                    android:id="@+id/islandLeft"
+                                    android:id="@+id/cueLeft"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:alpha="0.85"
@@ -342,7 +342,7 @@
 
                             <!-- The open item's buttons, made for each item. -->
                             <LinearLayout
-                                android:id="@+id/islandActions"
+                                android:id="@+id/cueActions"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_gravity="center_horizontal"
@@ -355,7 +355,7 @@
 
                     <!-- A second picture at the end: the home team's logo. -->
                     <ImageView
-                        android:id="@+id/islandArt2"
+                        android:id="@+id/cueArt2"
                         android:layout_width="26dp"
                         android:layout_height="26dp"
                         android:layout_marginStart="10dp"
@@ -364,14 +364,14 @@
                         android:visibility="gone" />
 
                     <dev.plume.EqBars
-                        android:id="@+id/islandEq"
+                        android:id="@+id/cueEq"
                         android:layout_width="12dp"
                         android:layout_height="12dp"
                         android:layout_marginStart="12dp" />
 
                     <!-- The playing app's mark, as the Shows row shows it. Only while open. -->
                     <ImageView
-                        android:id="@+id/islandApp"
+                        android:id="@+id/cueApp"
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="top"

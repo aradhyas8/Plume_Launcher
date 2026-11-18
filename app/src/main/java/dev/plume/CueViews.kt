@@ -7,8 +7,8 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
 
-/** The media island's progress: a rounded track with the played part filled, both in [color]. */
-internal class IslandBar @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
+/** Cue's progress: a rounded track with the played part filled, both in [color]. */
+internal class CueBar @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     var color = 0xFFFFFFFF.toInt()

@@ -18,7 +18,7 @@ These will be declined, however well they're built:
 - Ads, analytics, crash reporting services, or accounts
 - New third-party libraries or SDKs (AndroidX included)
 - Services, workers or alarms that run while Plume isn't on screen. One exception: on a Fire TV, the Home button service sets a single alarm for "now" after each Home press, to skip Android's 5-second hold on app starts (see `HomeAlarm`). It fires once, and nothing repeats or waits in the background.
-- The Island uses Android's notification listener only with permission for media sessions and alerts. It sets a one-shot alarm only when a user starts a timer or sleep timer. Android can delay the alarm if Plume's process no longer runs.
+- Cue uses Android's notification listener only with permission for media sessions and alerts. It sets a one-shot alarm only when a user starts a timer or sleep timer. Android can delay the alarm if Plume's process no longer runs.
 - Online metadata services that need an API key, such as TMDB
 - Rows, widgets or sections that copy the scrolling layouts of other launchers
 
