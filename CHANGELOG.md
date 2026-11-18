@@ -18,15 +18,16 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 - **Island.** A glass tile at the top of Home shows what happens now: music, timers, alerts and live scores.
 - Select the island to open it. Press Left or Right on the progress bar to seek in a song.
-- Start a timer, the stopwatch or a sleep timer from the island icon on the top bar. The sleep timer pauses the music.
+- Start a timer or the stopwatch from the timer icon on the top bar. It lists the last 4 lengths you used.
 - Select **Games** in **Island** settings. Select **Live now** to pin a game, or **Your teams** to follow a team.
 - The island shows alerts from apps, rain soon and Plume updates.
 - Hold OK on the island to hide an item or turn off an app's alerts.
 - **Recent apps.** Press Home twice to open a row of app windows. Press Left or Right to switch apps. Press Back to return to Plume.
-- Hold OK on All apps, then select Recent apps. You can also assign Plume recent apps to a remote key.
+- Add the Recent apps icon to the top bar. You can also assign Plume recent apps to a remote key.
 - Enable **App window previews** to show each app's last screen on Android 11 and later. Plume keeps them on the TV after a restart.
 - With no captured screen, a window shows the app's Continue Watching picture.
 - Hold OK on a window to remove it from the list, or select **Clear all**.
+- **Edit the top bar in place.** Hold OK on an icon. Lift, move, add or remove icons right on the bar. It holds up to 5 icons.
 - Choose a date or time format in **Clock & weather**. Select a preset or enter a custom format with a preview.
 - **Faster Home on Fire TV.** Plume uses an alarm to open sooner after you press Home. This needs the `WRITE_SECURE_SETTINGS` grant. Plume restores the previous alarm setting when you turn its Home button off.
 

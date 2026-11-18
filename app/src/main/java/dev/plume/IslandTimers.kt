@@ -3,14 +3,11 @@ package dev.plume
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.Ringtone
 import android.media.RingtoneManager
-import android.media.session.MediaSessionManager
-import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
@@ -39,12 +36,8 @@ internal fun islElapsed(base: Long, shown: Long, running: Boolean, now: Long) =
 /** A paused stopwatch starts again: the base that makes it go on from [shown]. */
 internal fun islResumeBase(shown: Long, now: Long) = now - shown
 
-/** The sleep timer's words: whole minutes, rounded up, from one minute on; whole seconds, rounded up, below it. */
-internal fun islSleepCount(left: Long): Long =
-    if (left >= 60_000L) (left + 59_999L) / 60_000L else (left.coerceAtLeast(0L) + 999L) / 1000L
-
 /**
- * The island's timer, stopwatch and sleep timer: one of each at a time. The state lives in the "home" prefs with
+ * The island's timer and stopwatch: one of each at a time. The state lives in the "home" prefs with
  * wall-clock end times, so it outlives the process. While the process lives a main-thread Handler ends things on
  * time; an inexact AlarmManager alarm to [IslandAlarm] is the backup when the process is gone. Exact alarms need a
  * special permission on Android 12 and later, and a few seconds late is fine for a backup. Both paths go through
@@ -62,8 +55,6 @@ internal object IslandTimers {
     private const val W_BASE = "isl_w_base"
     private const val W_SHOWN = "isl_w_shown"
     private const val W_START = "isl_w_start"
-    private const val S_END = "isl_s_end" // 0: no sleep timer
-    private const val S_START = "isl_s_start"
 
     private const val NONE = 0
     private const val RUNNING = 1
@@ -74,7 +65,6 @@ internal object IslandTimers {
     private const val DONE_SHOWN = 2 * MINUTE
     private const val PEEK = 8_000L
     private const val ALARM_TIMER = 1
-    private const val ALARM_SLEEP = 2
 
     // Lazy, because a Handler made when the object loads would also be made in unit tests that never need it.
     private val main by lazy { Handler(Looper.getMainLooper()) }
@@ -142,22 +132,10 @@ internal object IslandTimers {
     /** Stops the stopwatch and clears it. */
     fun resetStopwatch(ctx: Context) = edit(ctx) { remove(W_STATE).remove(W_BASE).remove(W_SHOWN).remove(W_START) }
 
-    fun startSleep(ctx: Context, ms: Long) = edit(ctx) {
-        val now = System.currentTimeMillis()
-        putLong(S_END, now + ms).putLong(S_START, now)
-    }
-
-    fun extendSleep(ctx: Context, ms: Long) = edit(ctx) { p ->
-        val end = p.getLong(S_END, 0L)
-        if (end > 0L) putLong(S_END, end + ms)
-    }
-
-    fun cancelSleep(ctx: Context) = edit(ctx) { clearSleep() }
-
     fun items(now: Long): List<IslandItem> {
         val c = app ?: return emptyList()
         val p = prefs(c)
-        val out = ArrayList<IslandItem>(3)
+        val out = ArrayList<IslandItem>(2)
         val stop = IslandAction(R.drawable.ic_isl_stop, description = c.getString(R.string.isl_timer_stop)) { cancelTimer(c) }
 
         when (p.getInt(T_STATE, NONE)) {
@@ -212,23 +190,6 @@ internal object IslandTimers {
             )
         }
 
-        val sleepEnd = p.getLong(S_END, 0L)
-        if (sleepEnd > 0L) {
-            val start = p.getLong(S_START, 0L)
-            val left = islLeft(sleepEnd, now)
-            out += IslandItem(
-                key = "sleep", kind = IslandKind.SLEEP,
-                title = c.getString(if (left >= MINUTE) R.string.isl_timer_sleep_min else R.string.isl_timer_sleep_s, islSleepCount(left)),
-                sub = c.getString(R.string.isl_timer_sleep_sub), icon = R.drawable.ms_bedtime,
-                progress = islFraction(left, sleepEnd - start), tick = if (left < 70_000L) 1000L else 30_000L, // minutes, then seconds since = start,
-                actions = listOf(
-                    IslandAction(label = c.getString(R.string.isl_timer_plus15), description = c.getString(R.string.isl_timer_add_15)) {
-                        extendSleep(c, 15 * MINUTE)
-                    },
-                    IslandAction(R.drawable.ic_isl_stop, description = c.getString(R.string.isl_timer_cancel_sleep)) { cancelSleep(c) },
-                ),
-            )
-        }
         return out
     }
 
@@ -254,8 +215,6 @@ internal object IslandTimers {
     private fun SharedPreferences.Editor.clearTimer() =
         remove(T_STATE).remove(T_END).remove(T_LEFT).remove(T_TOTAL).remove(T_START)
 
-    private fun SharedPreferences.Editor.clearSleep() = remove(S_END).remove(S_START)
-
     /**
      * Ends what is past its end, then sets the Handler for the next end and the backup alarms. The prefs change in
      * memory at once and this runs on the main thread only, so the Handler and the alarm cannot both end a timer.
@@ -273,21 +232,14 @@ internal object IslandTimers {
             p.edit().clearTimer().apply()
             Island.changed()
         }
-        val sleepEnd = p.getLong(S_END, 0L)
-        if (sleepEnd in 1L..now) {
-            p.edit().clearSleep().apply()
-            sleepDone(c)
-        }
 
         val timerEnd = if (p.getInt(T_STATE, NONE) == RUNNING) p.getLong(T_END, 0L) else 0L
         val doneGone = if (p.getInt(T_STATE, NONE) == DONE) p.getLong(T_END, 0L) + DONE_SHOWN else 0L
-        val sleep = p.getLong(S_END, 0L)
         main.removeCallbacks(tick)
-        val next = listOf(timerEnd, doneGone, sleep).filter { it > 0L }.minOrNull()
+        val next = listOf(timerEnd, doneGone).filter { it > 0L }.minOrNull()
         if (next != null) main.postDelayed(tick, (next - now).coerceAtLeast(0L))
         // The dismissal of a done timer needs no alarm: a new process clears it in init.
         alarm(c, ALARM_TIMER, timerEnd)
-        alarm(c, ALARM_SLEEP, sleep)
     }
 
     private fun timerDone(c: Context) {
@@ -298,22 +250,6 @@ internal object IslandTimers {
         }
         // With home shown the island tells it; otherwise only a Toast reaches the person over another app.
         if (Island.listener == null) Toast.makeText(c, R.string.isl_timer_toast, Toast.LENGTH_LONG).show()
-        Island.changed()
-    }
-
-    private fun sleepDone(c: Context) {
-        val playing = try {
-            c.getSystemService(MediaSessionManager::class.java)
-                .getActiveSessions(ComponentName(c, MediaListener::class.java))
-                .filter { it.playbackState?.state in listOf(PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING) }
-        } catch (_: SecurityException) {
-            Toast.makeText(c, R.string.isl_sleep_access, Toast.LENGTH_LONG).show()
-            return Island.changed()
-        }
-        playing.forEach { it.transportControls.pause() }
-        if (Island.listener == null && playing.isNotEmpty()) {
-            Toast.makeText(c, R.string.isl_timer_sleep_toast, Toast.LENGTH_LONG).show()
-        }
         Island.changed()
     }
 

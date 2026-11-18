@@ -143,14 +143,21 @@
     <string name="pin_forgot">Forgot it? Android Settings → Apps → Plume → Clear data removes the lock, along with your layout and settings.</string>
     <string name="tip_move">Tip: hold OK on an app to rearrange the row</string>
     <string name="open">Open</string>
-    <string name="hide">Hide</string>
-    <string name="add_icon">Add icon</string>
-    <string name="icon_hidden">Hidden. To bring it back, hold OK on an icon and select Add icon.</string>
-    <string name="shows_with_input">Shows when the TV has an input</string>
-    <string name="top_bar_hint">Hold OK on a top-bar icon to move, hide or add icons.</string>
     <string name="power_needs_home">Turn on the Home button</string>
     <string name="power_menu_failed">This TV does not open the power menu.</string>
     <string name="move">Move</string>
+    <!-- Editing the top bar: the panel under the bar. ▲ ▼ ◀ ▶ are the remote's arrow keys. -->
+    <string name="top_count">Top bar · %1$d of %2$d icons</string>
+    <string name="top_more">More icons</string>
+    <string name="top_all_on">Every icon is on the top bar.</string>
+    <string name="top_always">%s · always on the top bar</string>
+    <string name="top_replaces">%1$s · replaces %2$s</string>
+    <string name="top_hint_bar">OK  lift   ·   ▼  more icons   ·   Back  done</string>
+    <string name="top_hint_lifted">◀ ▶  move   ·   OK  place   ·   ▼  remove   ·   Back  undo</string>
+    <string name="top_hint_lifted_plume">◀ ▶  move   ·   OK  place   ·   Back  undo</string>
+    <string name="top_hint_swap">◀ ▶  pick the icon to replace   ·   OK  place   ·   Back  undo</string>
+    <string name="top_hint_tray">OK  add to the top bar   ·   ▲  top bar   ·   Back  done</string>
+    <string name="top_hint_tray_full">OK  swap onto the top bar   ·   ▲  top bar   ·   Back  done</string>
     <string name="remove_from_row">Remove from row</string>
     <string name="removed_from_row">Removed from the row. It\'s still in All apps.</string>
     <string name="app_info">App info</string>
@@ -390,7 +397,7 @@
     <string name="section_style">Style</string>
     <string name="group_home_screen">Home screen</string>
     <string name="group_tv">TV</string>
-    <string name="help_style">Hold OK on a top-bar icon to move, hide, or add icons.</string>
+    <string name="help_style">Hold OK on a top-bar icon to edit the top bar.</string>
     <string name="help_theme">Auto is light from sunrise to sunset and dark at night.</string>
     <string name="help_glass">Off: solid tiles. Frosted: the wallpaper blurred behind the tiles. Clear: the wallpaper sharp behind them.</string>
     <string name="help_app_animations">The app grows out of its tile when it opens.</string>

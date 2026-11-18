@@ -40,6 +40,17 @@ class TopBarTest {
         assertEquals(listOf("wifi", "apps", "plume", "system"), TopBar.addAfter(order, "system", "missing"))
     }
 
+    @Test fun theBarShowsAtMostFiveAndAlwaysPlumeSettings() {
+        val six = listOf("wifi", "sources", "apps", "system", "timer", "plume")
+        assertEquals(listOf("wifi", "sources", "apps", "system", "plume"), TopBar.cap(six, "plume"))
+        assertEquals(listOf("plume", "wifi", "sources", "apps", "system"), TopBar.cap(listOf("plume") + (six - "plume"), "plume"))
+        assertEquals(listOf("plume"), TopBar.cap(listOf("plume"), "plume"))
+    }
+
+    @Test fun anIconAddedToAFullBarTakesThePlaceOfOne() {
+        assertEquals(listOf("wifi", "power", "plume"), TopBar.swap(listOf("wifi", "apps", "plume"), "apps", "power"))
+    }
+
     @Test fun aDefaultCanLeaveAnIconOut() { // Power is not on the bar until someone adds it
         val all = known + "power"
         assertEquals(known, TopBar.parse(null, all, all - "power", "plume"))

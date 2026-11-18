@@ -166,7 +166,7 @@
                 android:padding="8dp"
                 android:src="@drawable/ic_tune" />
 
-            <!-- Timers, stopwatch and sleep timer, shown on the island. Hidden until it is added from the top bar's menu. -->
+            <!-- Timers and the stopwatch, shown on the island. -->
             <ImageView
                 android:id="@+id/timerButton"
                 android:layout_width="36dp"
@@ -188,6 +188,28 @@
                 android:focusable="true"
                 android:padding="8dp"
                 android:src="@drawable/ic_power"
+                android:visibility="gone" />
+            <!-- Plume's Recent apps. Hidden until it is added from the top bar's menu. -->
+            <ImageView
+                android:id="@+id/recentsButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="@string/recent_apps"
+                android:focusable="true"
+                android:padding="8dp"
+                android:src="@drawable/ic_history"
+                android:visibility="gone" />
+            <!-- Starts the screensaver now. Hidden until it is added from the top bar's menu. -->
+            <ImageView
+                android:id="@+id/screensaverButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="@string/screensaver"
+                android:focusable="true"
+                android:padding="8dp"
+                android:src="@drawable/ms_bedtime"
                 android:visibility="gone" />
         </LinearLayout>
 
