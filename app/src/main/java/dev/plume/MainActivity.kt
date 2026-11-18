@@ -81,6 +81,7 @@ import android.text.style.StyleSpan
 import android.util.LruCache
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.SoundEffectConstants
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -4487,6 +4488,31 @@ class MainActivity : Activity() {
      * listener in style() is a fallback for remotes that send no repeats. [holdFired] stops both firing.
      */
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        val before = currentFocus
+        val used = routeKey(e)
+        // Android plays the move sound only for keys nobody took. Our rows and homeNav take them, so play it
+        // here when focus moved. A key nobody took gets Android's own sound, so never both.
+        val after = currentFocus
+        if (used && e.action == KeyEvent.ACTION_DOWN && after != null && after !== before) navSound(after, e)
+        return used
+    }
+
+    /** The system's focus-move sound for a D-pad key; while held, its repeat sounds (Android 12+). */
+    private fun navSound(v: View, e: KeyEvent) {
+        val dir = when (e.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> View.FOCUS_LEFT
+            KeyEvent.KEYCODE_DPAD_RIGHT -> View.FOCUS_RIGHT
+            KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP
+            KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN
+            else -> return
+        }
+        v.playSoundEffect(
+            if (Build.VERSION.SDK_INT >= 31) SoundEffectConstants.getConstantForFocusDirection(dir, e.repeatCount > 0)
+            else SoundEffectConstants.getContantForFocusDirection(dir)
+        )
+    }
+
+    private fun routeKey(e: KeyEvent): Boolean {
         if (!ready) return super.dispatchKeyEvent(e)
         if (wallPreview != null) { // a picked wallpaper shown whole: any button brings the panel back
             if (e.action == KeyEvent.ACTION_UP) endWallPreview()
@@ -4519,7 +4545,10 @@ class MainActivity : Activity() {
             (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
         ) {
             @Suppress("UNCHECKED_CAST")
-            if (e.action == KeyEvent.ACTION_DOWN) (currentFocus?.tag as? (Int) -> Unit)?.invoke(if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1)
+            if (e.action == KeyEvent.ACTION_DOWN) (currentFocus?.tag as? (Int) -> Unit)?.let {
+                it(if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1)
+                currentFocus?.let { v -> navSound(v, e) } // a value step sounds like a move
+            }
             return true
         }
         // By title, the title is a pill you select: Left and Right (or OK) show another source.
