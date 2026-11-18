@@ -84,6 +84,7 @@ You need Android TV or Google TV on **Android 8.0 or newer**.
 | **Google TV / Android TV** | **Plume settings → Home & remote → Home opens Plume**, then turn on **Plume: Home button** in Accessibility. Or choose Plume as the **Home app**. |
 | **Android 13+, switch greyed out** | Unlock it once over adb. See [Android 13 and newer](#android-13-and-newer). |
 | **Fire TV** | The Home button service covers Amazon's home with Plume. See [Fire TV](#fire-tv). |
+| **Xiaomi TV** | The Home button service needs an adb grant and two HyperOS settings. See [Xiaomi TV](#xiaomi-tv). |
 | **Any TV, from a computer** | Run [`tools/plume-install.sh`](tools/plume-install.sh). See [Set up over adb](#set-up-over-adb). |
 | **Other tools** | A launcher app such as **Launcher Manager**, or `adb shell pm disable-user` on the stock launcher. |
 
@@ -123,6 +124,26 @@ Fire OS never gives the Home key to apps. The Home button service watches for Am
 - **Remote keys can't be set.** Fire OS doesn't pass the keys to Plume.
 
 If Home doesn't reach Plume, run [`tools/plume-firetv-probe.sh`](tools/plume-firetv-probe.sh) and post the result in [#153](../../issues/153).
+</details>
+
+<details>
+<summary><b>Xiaomi TV</b></summary>
+
+#### Xiaomi TV
+
+HyperOS 3 opens Xiaomi's home even with Plume as the Home app, and hides **Allow restricted settings**. Set it up once from a computer:
+
+1. **Settings → About**: press **Product model** seven times, then turn on ADB debugging.
+2. Follow steps 3–4 of [Android 13 and newer](#android-13-and-newer). Plume turns its Home button service on by itself.
+3. **Settings → General settings → Short press the on key**: choose **Shutdown** instead of **Screen off**. Shutdown puts the TV in standby; it doesn't restart it.
+4. Keep Plume running during Shutdown. The change works after the restart:
+
+   ```sh
+   adb shell settings put system str_killbackgroud_pkg_white_list dev.plume
+   adb reboot
+   ```
+
+This also covers the TV turning itself off. **Screen off** still closes Plume and its Home button service. If Home opens Xiaomi's home, open Plume once to turn the service back on.
 </details>
 
 <details>
