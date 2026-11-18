@@ -87,6 +87,7 @@ import android.view.ViewGroup
 import android.view.Window
 import android.view.ViewOutlineProvider
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -160,13 +161,17 @@ internal fun pickFolderPhoto(
     ids: List<Long>,
     currentSaved: Long?,
     deck: ArrayDeque<Long>,
+    previous: Long? = null,
     shuffle: (List<Long>) -> List<Long> = { it.shuffled() }
 ): Long? {
     if (ids.isEmpty()) return null
     val all = ids.toHashSet()
     if (currentSaved != null && currentSaved in all) return currentSaved
     deck.removeAll { it !in all }
-    if (deck.isEmpty()) deck.addAll(shuffle(ids))
+    if (deck.isEmpty()) {
+        deck.addAll(shuffle(ids))
+        if (deck.size > 1 && deck.first() == previous) deck.addLast(deck.removeFirst())
+    }
     return deck.removeFirstOrNull()
 }
 
@@ -605,7 +610,7 @@ class MainActivity : Activity() {
     /** Auto theme flips at sunrise and sunset (or 7:00 and 19:00) even while the home screen just sits there. */
     private val themeTick = object : Runnable {
         override fun run() {
-            if (wantDark() != dark) recreate() else ui.postDelayed(this, 60_000L)
+            if (wantDark() != dark && !wallpaperPickerOpen()) recreate() else ui.postDelayed(this, 60_000L)
         }
     }
 
@@ -1075,6 +1080,7 @@ class MainActivity : Activity() {
     override fun onBackPressed() {
         if (!ready) return
         when {
+            photoPreview != null -> finishPhotoPreview(false)
             settingsScrim.visibility == View.VISIBLE -> pageBack?.invoke() ?: closeLauncherSettings()
             allApps.visibility == View.VISIBLE && recentAppsOpen && animationsOn() && ValueAnimator.areAnimatorsEnabled() ->
                 recentWindows.animate().alpha(0f).scaleX(0.94f).scaleY(0.94f).setDuration(150).setInterpolator(EASE)
@@ -1441,6 +1447,7 @@ class MainActivity : Activity() {
         choice.startsWith("video:") -> videoScenes(this).firstOrNull { "video:${it.file}" == choice }?.name
             ?: choice.removePrefix("video:").substringBeforeLast('.')
         choice.startsWith("folder:") -> getString(R.string.folder_name, choice.substringAfter(':').substringAfter(':'))
+        choice.startsWith("photo:") -> getString(R.string.wall_single_photo)
         choice.startsWith("pack:") -> packPhotoName(choice.removePrefix("pack:"))
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
     }
@@ -1520,7 +1527,7 @@ class MainActivity : Activity() {
                 wpFrames = listOfNotNull(thumb)
                 // The glass is tinted with the wallpaper's mean colour; kept, so the next start has it before the picture.
                 thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
-                if (wantDark() != dark) return@post recreate() // the Wallpaper theme follows the new picture
+                if (wantDark() != dark && !wallpaperPickerOpen()) return@post recreate()
                 fitInk()
                 if (allowUhd && shown?.width == UHD_WIDTH && shown.height == UHD_HEIGHT) {
                     glassPixels = screen
@@ -1676,10 +1683,8 @@ class MainActivity : Activity() {
                 fitWallpaper(allowUhd) { ShowsWall.file(this).inputStream() }
             }
             choice.startsWith("pack:") -> fitWallpaper(allowUhd) { File(packDir(), choice.removePrefix("pack:")).inputStream() }
-            choice.startsWith("folder:") -> {
-                val uri = ContentUris.withAppendedId(PHOTOS, folderPhoto(choice) ?: return null)
-                fitWallpaper(allowUhd) { contentResolver.openInputStream(uri) ?: throw IOException("gone: $uri") }
-            }
+            choice.startsWith("folder:") -> decodeMediaPhoto(folderPhoto(choice) ?: return null, allowUhd)
+            choice.startsWith("photo:") -> decodeMediaPhoto(choice.substringAfter(':').toLongOrNull() ?: return null, allowUhd)
             else -> {
                 val file = File(wallpaperDir(), choice.removePrefix("file:"))
                 fitWallpaper(allowUhd) { file.inputStream() }
@@ -1687,68 +1692,110 @@ class MainActivity : Activity() {
         }
     }
 
-    /**
-     * Wallpapers as pictures in three groups: yours (add, a folder, your uploads), Aerial Views (by kind) and more
-     * (photo of the day, your shows, built-in). OK on a picture sets it and steps the panel aside to show it whole,
-     * until any button. A tile that opens more shows the wallpaper in use from there, with its check.
-     */
+    private fun wallpaperPickerOpen() = settingsScrim.visibility == View.VISIBLE && lastSettings == R.string.wallpaper
+
     private fun pickWallpaper(forDark: Boolean, focusOn: String? = null) {
         lastSettings = R.string.wallpaper
-        fun returnToControl(id: Int) = pickWallpaper(forDark, getString(id))
         val current = currentWallpaper(forDark)
-        val scenes = videoScenes(this)
-        val uploads = ownUploads(forDark, scenes)
-        val pick = { c: String -> Tile(wallpaperName(c), c) { setWallpaper(forDark, c); previewWallpaper(c) } }
-        val inUse = { mine: Boolean -> current.takeIf { mine } }
-        // Scenes by what they show, whoever filmed them: people look for "the sea", not for a provider.
-        val kinds = scenes.groupBy { it.category }.entries.sortedByDescending { it.value.size }.map { (kind, list) ->
-            Tile(kind, icon = SCENE_ICONS[kind] ?: R.drawable.ms_movie, help = R.string.help_scene_kind) {
-                pickVideoScenesList(forDark, kind, list.sortedBy { it.name }) { pickWallpaper(forDark, kind) }
+        val active = getString(R.string.wall_in_use)
+        val summary = LinearLayout(this).apply {
+            id = View.generateViewId()
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            addView(wallpaperThumb(current, forDark), LinearLayout.LayoutParams(dp(94), dp(53)))
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(14), 0, 0, 0)
+                addView(label(active, 12f).apply { setTextColor(valueInk()) })
+                addView(label(wallpaperName(current), 16f).apply {
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                })
+                if (current.startsWith("folder:") || current == ShowsWall.CHOICE) {
+                    addView(label(getString(PHOTO_EVERY.getValue(photoEvery())), 12f).apply { setTextColor(valueInk()) })
+                }
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(label("›", 24f))
+            setOnClickListener { pickActiveWallpaper(forDark) }
+            panelFocus(this, 12, null, AREA_ALL) { }
+        }
+        val collection = builtIns(forDark).firstOrNull { it.startsWith("pack:") } ?: FIRST_WALLPAPER
+        val categories = listOf(
+            Tile(getString(R.string.wall_my_photos), cover = R.drawable.wall_cover_photos) { pickMyPhotos(forDark) },
+            Tile(getString(R.string.wall_collection), collection) { pickBuiltIn(forDark) },
+            Tile(getString(R.string.aerial_views), cover = R.drawable.wall_cover_aerial) { pickVideoWallpaper(forDark) },
+            Tile(getString(R.string.wall_automatic), cover = R.drawable.wall_cover_automatic) { pickAutomaticWallpaper(forDark) },
+        )
+        val entry = when (focusOn) {
+            getString(R.string.built_in) -> getString(R.string.wall_collection)
+            getString(R.string.manage_videos) -> getString(R.string.aerial_views)
+            getString(R.string.my_uploads), getString(R.string.choose_from_tv) -> getString(R.string.wall_my_photos)
+            else -> focusOn ?: active
+        }
+        wallGrid(getString(R.string.wallpaper), listOf(null to categories), forDark, "", entry,
+            listOf(active to summary), columns = 2, tileHeight = 94) { renderSettings(WALLPAPER_CARD) }
+    }
+
+    private fun pickActiveWallpaper(forDark: Boolean) {
+        val current = currentWallpaper(forDark)
+        val back = { pickWallpaper(forDark, getString(R.string.wall_in_use)) }
+        val again = { pickActiveWallpaper(forDark) }
+        val rows = mutableListOf<Triple<String, String, () -> Unit>>()
+        if (current.startsWith("folder:")) {
+            rows += page(getString(R.string.wall_edit_photos)) { openPhotoFolder(forDark, current, again, edit = true) }
+        }
+        if (current.startsWith("folder:") || current == ShowsWall.CHOICE) {
+            rows += page(getString(R.string.folder_photo_changes), getString(PHOTO_EVERY.getValue(photoEvery()))) { pickPhotoEvery(again) }
+        }
+        if (current.startsWith("folder:")) {
+            rows += page(getString(R.string.wall_shuffle_now)) { nextPhoto(); scheduleWallpaperTick(); again() }
+        }
+        if (current == ShowsWall.CHOICE) {
+            rows += page(getString(R.string.wp_sources), getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) })) { pickWpSources(back = again) }
+            rows += page(getString(R.string.tmdb_artwork), getString(if (Tmdb.key(this) == null) R.string.off else R.string.on)) { configureTmdb(back = again) }
+        }
+        val preview = wallpaperThumb(current, forDark, true)
+        showPage(wallpaperName(current), rows.ifEmpty {
+            listOf(page(getString(R.string.wall_preview)) { previewWallpaper(current, again) })
+        }, top = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(preview, LinearLayout.LayoutParams(MATCH_PARENT, dp(145)))
+        }, crumb = getString(R.string.wallpaper), back = back)
+    }
+
+    private fun pickAutomaticWallpaper(forDark: Boolean, focusOn: String? = null) {
+        val tiles = listOf(Bing.CHOICE, ShowsWall.CHOICE).map { choice ->
+            Tile(wallpaperName(choice), choice) {
+                setWallpaper(forDark, choice)
+                previewWallpaper(choice) { pickAutomaticWallpaper(forDark, choice) }
             }
         }
-        val groups = listOf(
-            R.string.wp_group_yours to listOf(
-                Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate, help = R.string.help_add_from_phone) {
-                    uploadWallpaper(forDark) { returnToControl(R.string.add_from_phone) }
-                },
-                Tile(getString(R.string.choose_from_tv), inUse(current.startsWith("folder:")), R.drawable.ms_folder, R.string.help_folder) { pickFolder(forDark) },
-                Tile(getString(R.string.my_uploads), inUse(uploads.any { it.first == current }), R.drawable.ms_photo_library, R.string.help_my_uploads) { pickUploads(forDark) },
-            ),
-            R.string.aerial_views to listOfNotNull(
-                Tile(getString(R.string.surprise_me), icon = R.drawable.ms_shuffle, help = R.string.help_surprise) {
-                    surpriseVideo(forDark) { returnToControl(R.string.surprise_me) }
-                },
-                scenes.firstOrNull { "video:${it.file}" == current }?.let { Tile(it.name, current) { previewWallpaper(current) } },
-            ) + kinds + Tile(getString(R.string.manage_videos), icon = R.drawable.ms_edit, help = R.string.help_manage_videos) { pickVideoWallpaper(forDark) },
-            R.string.wp_group_more to listOf(pick(Bing.CHOICE), pick(ShowsWall.CHOICE),
-                Tile(getString(R.string.built_in), inUse(current in builtIns(forDark)) ?: builtIns(forDark).first(), R.drawable.ms_landscape, R.string.help_built_in) { pickBuiltIn(forDark) }),
+        wallGrid(getString(R.string.wall_automatic), listOf(null to tiles), forDark, currentWallpaper(forDark), focusOn,
+            columns = 2, tileHeight = 94) { pickWallpaper(forDark, getString(R.string.wall_automatic)) }
+    }
+
+    private fun pickMyPhotos(forDark: Boolean, focusOn: String? = null) {
+        val tiles = listOf(
+            Tile(getString(R.string.choose_from_tv), icon = R.drawable.ms_folder, help = R.string.help_folder) { browsePhotoFolders(forDark) },
+            Tile(getString(R.string.my_uploads), icon = R.drawable.ms_photo_library) { pickUploads(forDark) },
+            Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate, help = R.string.help_add_from_phone) {
+                uploadWallpaper(forDark, applyPhoto = false) { pickUploads(forDark, getString(R.string.add_from_phone)) }
+            },
         )
-        // The current wallpaper's own settings first: how often a folder or the shows change, and which shows.
-        val extras = listOfNotNull(
-            if (current.startsWith("folder:") || current == ShowsWall.CHOICE) getString(R.string.folder_photo_changes) to settingsRow(getString(R.string.folder_photo_changes),
-                getString(PHOTO_EVERY[photoEvery()]!!) + "  ›", style = RowStyle(R.drawable.ms_schedule, help = getString(R.string.help_photo_every))) {
-                pickPhotoEvery { returnToControl(R.string.folder_photo_changes) }
-            } else null,
-            if (current == ShowsWall.CHOICE) getString(R.string.wp_sources) to settingsRow(getString(R.string.wp_sources),
-                getString(R.string.n_on, wpSourceList().count { wpSourceOn(it.first) }) + "  ›", style = RowStyle(R.drawable.ms_filter_list, help = getString(R.string.help_wp_sources))) {
-                pickWpSources { returnToControl(R.string.wp_sources) }
-            } else null,
-            if (current == ShowsWall.CHOICE) getString(R.string.tmdb_artwork) to settingsRow(getString(R.string.tmdb_artwork),
-                getString(if (Tmdb.key(this) == null) R.string.off else R.string.on) + "  ›",
-                style = RowStyle(R.drawable.ms_landscape, help = getString(R.string.tmdb_help))) {
-                configureTmdb { returnToControl(R.string.tmdb_artwork) }
-            } else null,
-        )
-        val entryFocus = focusOn ?: extras.firstOrNull()?.first ?: groups.first().second.first().name
-        wallGrid(getString(R.string.wallpaper), groups, forDark, current, entryFocus, extras) { renderSettings(WALLPAPER_CARD) }
+        wallGrid(getString(R.string.wall_my_photos), listOf(null to tiles), forDark, "", focusOn) {
+            pickWallpaper(forDark, getString(R.string.wall_my_photos))
+        }
     }
 
     /** A tile in the wallpaper grid: a [choice]'s picture (for a tile that opens more, the one in use there) or an [icon]. */
-    private class Tile(val name: String, val choice: String? = null, val icon: Int? = null, val help: Int? = null, val action: () -> Unit)
+    private class Tile(val name: String, val choice: String? = null, val icon: Int? = null, val help: Int? = null,
+                             val cover: Int? = null, val checked: Boolean = false, val hideLabel: Boolean = false,
+                             val action: () -> Unit)
 
     /** Focus [focusOn] by choice or label. If it is gone, focus the active wallpaper. */
     private fun wallGrid(title: String, groups: List<Pair<Int?, List<Tile>>>, forDark: Boolean, current: String, focusOn: String?,
-                         extras: List<Pair<String, View>> = emptyList(), back: () -> Unit) {
+                         extras: List<Pair<String, View>> = emptyList(), columns: Int = 3, tileHeight: Int = 62,
+                         footer: List<View> = emptyList(), crumb: String = getString(R.string.plume_settings), back: () -> Unit) {
         var focus = extras.firstOrNull { it.first == focusOn }?.second
         var selected: View? = null
         val grid = LinearLayout(this).apply {
@@ -1756,22 +1803,23 @@ class MainActivity : Activity() {
             extras.forEach { (_, view) -> addView(view) }
             for ((name, tiles) in groups) {
                 name?.let { addView(groupTitle(getString(it))) }
-                for (i in tiles.indices step 3) tiles.subList(i, minOf(i + 3, tiles.size)).let { line ->
+                for (i in tiles.indices step columns) tiles.subList(i, minOf(i + columns, tiles.size)).let { line ->
                     addView(LinearLayout(context).apply {
                         line.forEach { t ->
-                            val chosen = t.choice != null && t.choice == current
+                            val chosen = t.checked || (t.choice != null && t.choice == current)
                             val help = t.help ?: if (t.icon == null) R.string.help_wp_tile else null
-                            val v = wallpaperTile(t.name, t.choice, t.icon, forDark, chosen, help, t.action)
+                            val v = wallpaperTile(t, forDark, chosen, help, tileHeight)
                             if (focusOn != null && focus == null && (t.choice == focusOn || t.name == focusOn)) focus = v
                             if (chosen && selected == null) selected = v
                             addView(v, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
                         }
-                        repeat(3 - line.size) { addView(View(context), LinearLayout.LayoutParams(0, 0, 1f)) }
+                        repeat(columns - line.size) { addView(View(context), LinearLayout.LayoutParams(0, 0, 1f)) }
                     })
                 }
             }
+            footer.forEach { addView(it) }
         }
-        showPage(title, emptyList(), top = grid, crumb = getString(R.string.plume_settings)) { back() }
+        showPage(title, emptyList(), top = grid, crumb = crumb) { back() }
         (focus ?: selected ?: grid.getFocusables(View.FOCUS_DOWN).firstOrNull())?.requestFocus()
     }
 
@@ -1809,17 +1857,16 @@ class MainActivity : Activity() {
                 if (photo != null && !File(packDir(), photo.file).isFile) {
                     downloadPack(listOf(photo)) { ok ->
                         if (ok && active) {
-                            setWallpaper(forDark, c)
-                            previewWallpaper(c) { pickBuiltIn(forDark, c) }
+                            previewPhotoChoice(forDark, c, listOf(c)) { pickBuiltIn(forDark, c) }
                         }
                     }
                 } else {
                     active = false // A pending download must not replace this newer selection.
-                    setWallpaper(forDark, c); previewWallpaper(c) { pickBuiltIn(forDark, c) }
+                    previewPhotoChoice(forDark, c, listOf(c)) { pickBuiltIn(forDark, c) }
                 }
             }
         } + get), forDark, current, focusOn) { pickWallpaper(forDark, getString(R.string.built_in)) }
-        refreshPackPage = { if (wallPreview == null) pickBuiltIn(forDark, focusOn, false) }
+        refreshPackPage = { if (wallPreview == null && photoPreview == null) pickBuiltIn(forDark, focusOn, false) }
         pageExit = { active = false; refreshPackPage = null }
         if (refresh && !packBusy && (packCheckedAt == 0L || SystemClock.elapsedRealtime() - packCheckedAt > 24 * 3600_000L)) {
             packBusy = true
@@ -1912,10 +1959,10 @@ class MainActivity : Activity() {
         val tiles = uploads.map { (choice, video) ->
             Tile(wallpaperName(choice), choice) {
                 if (video != null) previewVideo(forDark, video) { pickUploads(forDark, choice) }
-                else { setWallpaper(forDark, choice); previewWallpaper(choice) { pickUploads(forDark, choice) } }
+                else previewPhotoChoice(forDark, choice, listOf(choice)) { pickUploads(forDark, choice) }
             }
         } + listOf(Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) {
-            uploadWallpaper(forDark) { pickUploads(forDark, getString(R.string.add_from_phone)) }
+            uploadWallpaper(forDark, applyPhoto = false) { pickUploads(forDark, getString(R.string.add_from_phone)) }
         }) +
             listOfNotNull(
                 if (photos.isEmpty()) null else Tile(getString(R.string.remove_photo_row), icon = R.drawable.ms_delete) { removeWallpaper(photos, forDark) },
@@ -1924,15 +1971,20 @@ class MainActivity : Activity() {
                 },
             )
         wallGrid(getString(R.string.my_uploads), listOf(null to tiles), forDark, current, focusOn) {
-            pickWallpaper(forDark, getString(R.string.my_uploads))
+            pickMyPhotos(forDark, getString(R.string.my_uploads))
         }
     }
 
     /** One wallpaper in the grid: its picture (or an icon for an action), its name, and a check on the one in use. */
-    private fun wallpaperTile(name: String, choice: String?, iconRes: Int?, forDark: Boolean, chosen: Boolean, help: Int?, action: () -> Unit): View {
-        val pic: View = if (choice != null) wallpaperThumb(choice, forDark) else FrameLayout(this).apply {
+    private fun wallpaperTile(tile: Tile, forDark: Boolean, chosen: Boolean, help: Int?, height: Int): View {
+        val pic: View = if (tile.cover != null) ImageView(this).apply {
+            background = GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(ink(.08f)) }
+            clipToOutline = true
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setImageResource(tile.cover)
+        } else if (tile.choice != null) wallpaperThumb(tile.choice, forDark, big = height > 62) else FrameLayout(this).apply {
             background = GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(ink(.07f)); setStroke(1, ink(.14f)) }
-            addView(icon(iconRes!!, 26, valueInk()), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+            addView(icon(tile.icon!!, 26, valueInk()), FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
         }
         val frame = FrameLayout(this).apply {
             addView(pic, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
@@ -1943,16 +1995,25 @@ class MainActivity : Activity() {
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(focusInk()) }
             }, FrameLayout.LayoutParams(dp(20), dp(20), Gravity.TOP or Gravity.END).apply { setMargins(0, dp(5), dp(5), 0) })
         }
-        val label = label(name, 13f).apply { maxLines = 2; setTextColor(if (chosen) restInk() else valueInk()); panelShadow() }
+        val label = label(tile.name, if (height > 70) 15f else 13f).apply { maxLines = 2; setTextColor(if (chosen) restInk() else valueInk()); panelShadow() }
         return LinearLayout(this).apply {
             id = View.generateViewId()
             orientation = LinearLayout.VERTICAL
             setPadding(dp(6), dp(6), dp(6), dp(8))
-            addView(frame, LinearLayout.LayoutParams(MATCH_PARENT, dp(62)))
-            addView(label, LinearLayout.LayoutParams(MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
-            setOnClickListener { action() }
+            addView(frame, LinearLayout.LayoutParams(MATCH_PARENT, dp(height)))
+            if (tile.hideLabel) {
+                contentDescription = if (chosen) getString(R.string.wall_checked, tile.name) else tile.name
+            } else {
+                addView(label, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
+            }
+            setOnClickListener { tile.action() }
             panelFocus(this, 12, help?.let { getString(it) }, AREA_ALL) { f ->
                 label.setTextColor(if (f) focusInk() else if (chosen) restInk() else valueInk())
+                if (height > 62 || tile.hideLabel) frame.foreground = if (f) GradientDrawable().apply {
+                    cornerRadius = dp(8).toFloat()
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(2), Color.WHITE)
+                } else null
             }
             // The panel turns Left and Right into a row's step (dispatchKeyEvent); in the grid they move between pictures.
             tag = { d: Int -> focusSearch(if (d < 0) View.FOCUS_LEFT else View.FOCUS_RIGHT)?.requestFocus(); Unit }
@@ -1990,6 +2051,79 @@ class MainActivity : Activity() {
         settingsScrim.animate().alpha(1f).setDuration(220).setInterpolator(DECELERATE).start()
         previewBack?.invoke() ?: pickWallpaper(dark, choice)
         previewBack = null
+    }
+
+    private class PhotoPreview(
+        val layer: ImageView, val controls: TextView, val choices: List<String>,
+        val apply: (String) -> Unit, val back: () -> Unit,
+        var index: Int = 0, var shown: Boolean = false, var generation: Int = 0,
+    )
+
+    private var photoPreview: PhotoPreview? = null
+
+    private fun previewPhotoChoice(forDark: Boolean, choice: String, photos: List<String>, selected: Set<Long> = emptySet(), back: () -> Unit) {
+        if (photos.isEmpty() || photoPreview != null) return
+        val root = findViewById<FrameLayout>(R.id.root)
+        val layer = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            visibility = View.INVISIBLE
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        root.addView(layer, root.indexOfChild(findViewById<View>(R.id.content)), FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        val controls = label("", 15f).apply {
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply { setColor(0xE6222026.toInt()); cornerRadius = dp(12).toFloat() }
+            setPadding(dp(20), dp(10), dp(20), dp(10))
+            visibility = View.INVISIBLE
+        }
+        root.addView(controls, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin = dp(24)
+        })
+        val preview = PhotoPreview(layer, controls, photos, { shown ->
+            val id = shown.takeIf { it.startsWith("photo:") }?.substringAfter(':')?.toLongOrNull()
+            setWallpaper(forDark, choice, selected, id.takeIf { choice.startsWith("folder:") })
+        }, back)
+        photoPreview = preview
+        showPhotoPreview(preview)
+    }
+
+    private fun showPhotoPreview(preview: PhotoPreview) {
+        val photo = preview.choices[preview.index]
+        val generation = ++preview.generation
+        preview.shown = false
+        if (preview.layer.visibility == View.VISIBLE) preview.controls.text = getString(R.string.wall_loading_photo)
+        io.execute {
+            val color = if (photo.startsWith("plain:")) if (dark) DARK_BG else 0xFFF3F5F7.toInt() else null
+            val bitmap = if (color == null) runCatching { decodeWallpaper(photo) }.getOrNull() else null
+            ui.post {
+                if (isDestroyed || photoPreview !== preview || generation != preview.generation) return@post
+                if (bitmap == null && color == null) {
+                    finishPhotoPreview(false)
+                    toast(getString(R.string.wall_photo_unavailable), long = true)
+                    return@post
+                }
+                preview.layer.setBackgroundColor(color ?: Color.BLACK)
+                preview.layer.setImageBitmap(bitmap)
+                preview.layer.visibility = View.VISIBLE
+                preview.controls.text = if (preview.choices.size == 1) getString(R.string.wall_preview_apply)
+                    else getString(R.string.wall_preview_apply_multiple, preview.index + 1, preview.choices.size)
+                preview.controls.visibility = View.VISIBLE
+                preview.shown = true
+                settingsScrim.animate().alpha(0f).setDuration(180).start()
+            }
+        }
+    }
+
+    private fun finishPhotoPreview(apply: Boolean, returnToPicker: Boolean = true) {
+        val preview = photoPreview ?: return
+        photoPreview = null
+        val root = findViewById<FrameLayout>(R.id.root)
+        root.removeView(preview.layer)
+        root.removeView(preview.controls)
+        settingsScrim.animate().alpha(1f).setDuration(180).start()
+        if (apply) preview.apply(preview.choices[preview.index])
+        if (returnToPicker) preview.back()
     }
 
     private fun cleanUnusedVideoWallpapers(dir: File) {
@@ -2172,9 +2306,16 @@ class MainActivity : Activity() {
         }, focus, back = back)
     }
 
-    private fun setWallpaper(forDark: Boolean, choice: String) {
+    private fun setWallpaper(forDark: Boolean, choice: String, selected: Set<Long> = emptySet(), firstPhoto: Long? = null) {
         prefs.edit().putString("wp_dark", choice).putString("wp_light", choice)
-            .remove(photoKey()).putLong(photoAtKey(), System.currentTimeMillis()).apply()
+            .putLong(photoAtKey(), System.currentTimeMillis()).apply {
+                if (firstPhoto == null) remove(photoKey()) else putLong(photoKey(), firstPhoto)
+                remove("wp_previous_photo")
+                if (selected.isEmpty()) remove("wp_selected_photos")
+                else putStringSet("wp_selected_photos", selected.mapTo(mutableSetOf()) { it.toString() })
+            }.apply()
+        io.execute { deck.clear() }
+        scheduleWallpaperTick()
         Bing.dropIfUnused(applicationContext, prefs) // choosing another wallpaper deletes the Bing picture at once
         if (choice == Bing.CHOICE) Bing.refresh(applicationContext, prefs, force = true)
         dropShowsIfUnused()
@@ -2458,14 +2599,18 @@ class MainActivity : Activity() {
 
     private fun photoKey(forDark: Boolean = dark) = "wp_photo_light"
     private fun photoAtKey(forDark: Boolean = dark) = "wp_photo_at_light"
-    private fun photoEvery() = prefs.getInt("wp_every", 30)
+    private fun photoEvery() = prefs.getInt("wp_every", 30).takeIf { it in PHOTO_EVERY } ?: 30
+
+    private fun scheduleWallpaperTick() {
+        ui.removeCallbacks(wallpaperTick)
+        ui.post(wallpaperTick)
+    }
 
     private fun pickPhotoEvery(back: () -> Unit = { pickWallpaper(dark, getString(R.string.folder_photo_changes)) }) {
         val rows = PHOTO_EVERY.map { (minutes, name) ->
             page(getString(name), if (minutes == photoEvery()) CHOSEN else "") {
                 prefs.edit().putInt("wp_every", minutes).apply()
-                ui.removeCallbacks(wallpaperTick)
-                ui.post(wallpaperTick)
+                scheduleWallpaperTick()
                 back()
             }
         }
@@ -2554,15 +2699,20 @@ class MainActivity : Activity() {
     }
 
     private fun nextPhoto() {
-        prefs.edit().remove(photoKey()).putLong(photoAtKey(), System.currentTimeMillis()).apply()
+        val previous = prefs.getLong(photoKey(), -1)
+        prefs.edit().remove(photoKey()).putLong("wp_previous_photo", previous).putLong(photoAtKey(), System.currentTimeMillis()).apply()
         loadWallpaper()
     }
 
     /** The folder's photo on show now, or the next one in this round's shuffle. Runs on the io thread. */
     private fun folderPhoto(choice: String): Long? {
         val ids = folderPhotos(contentResolver, choice)
+        val selected = savedPhotoSelection()
+        val eligible = if (selected.isEmpty()) ids else ids.filter { it in selected }
         val saved = prefs.getLong(photoKey(), -1).takeIf { it >= 0 }
-        val picked = pickFolderPhoto(ids, saved, deck)
+        val previous = prefs.getLong("wp_previous_photo", -1)
+        val picked = pickFolderPhoto(eligible, saved, deck, previous)
+        if (picked != null) deck.remove(picked)
         if (picked != null && picked != saved) prefs.edit().putLong(photoKey(), picked).apply()
         return picked
     }
@@ -2580,9 +2730,142 @@ class MainActivity : Activity() {
         return found.map { (id, v) -> Triple(id, v.first, v.second) }
     }
 
-    private fun pickFolder(forDark: Boolean) = pickFolder({ pickWallpaper(forDark, getString(R.string.choose_from_tv)) }) { choice ->
-        setWallpaper(forDark, choice)
-        pickWallpaper(forDark, getString(R.string.choose_from_tv))
+    private fun savedPhotoSelection(): Set<Long> =
+        prefs.getStringSet("wp_selected_photos", emptySet()).orEmpty().mapNotNullTo(mutableSetOf()) { it.toLongOrNull() }
+
+    private fun decodeMediaPhoto(id: Long, allowUhd: Boolean = false): Bitmap? {
+        val uri = ContentUris.withAppendedId(PHOTOS, id)
+        return fitWallpaper(allowUhd) { contentResolver.openInputStream(uri) ?: throw IOException("gone: $uri") }
+    }
+
+    private fun mediaPhotoThumb(id: Long, big: Boolean): Bitmap? {
+        val uri = ContentUris.withAppendedId(PHOTOS, id)
+        val size = if (big) android.util.Size(dp(186), dp(105)) else android.util.Size(dp(112), dp(68))
+        if (Build.VERSION.SDK_INT >= 29) return contentResolver.loadThumbnail(uri, size, null)
+        @Suppress("DEPRECATION")
+        return MediaStore.Images.Thumbnails.getThumbnail(contentResolver, id, MediaStore.Images.Thumbnails.MINI_KIND, null)
+    }
+
+    private fun browsePhotoFolders(forDark: Boolean, focusOn: String? = null) {
+        val back = { pickMyPhotos(forDark, getString(R.string.choose_from_tv)) }
+        if (checkSelfPermission(READ_PHOTOS) != PackageManager.PERMISSION_GRANTED) {
+            afterPhotoAccess = { browsePhotoFolders(forDark, focusOn) }
+            return requestPermissions(arrayOf(READ_PHOTOS), MEDIA_REQUEST)
+        }
+        val title = getString(R.string.choose_folder)
+        var active = true
+        showPage(title, emptyList(), crumb = getString(R.string.wall_my_photos), back = back)
+        pageExit = { active = false }
+        io.execute {
+            val folders = runCatching { photoFolders() }.getOrDefault(emptyList())
+            ui.post {
+                if (isDestroyed || !active) return@post
+                if (folders.isEmpty()) {
+                    showPage(title, listOf(page(getString(R.string.add_from_phone)) {
+                        uploadWallpaper(forDark, applyPhoto = false) { pickUploads(forDark) }
+                    }), styles = listOf(RowStyle(sub = getString(R.string.wall_no_folders_hint))),
+                        crumb = getString(R.string.wall_my_photos), back = back)
+                    return@post
+                }
+                val tiles = folders.map { (id, name, count) ->
+                    val choice = "folder:$id:$name"
+                    Tile("$name · $count", choice) {
+                        openPhotoFolder(forDark, choice, { browsePhotoFolders(forDark, choice) })
+                    }
+                }
+                wallGrid(title, listOf(null to tiles), forDark, "", focusOn, columns = 2, tileHeight = 86,
+                    crumb = getString(R.string.wall_my_photos), back = back)
+            }
+        }
+    }
+
+    private fun openPhotoFolder(forDark: Boolean, choice: String, back: () -> Unit, edit: Boolean = false) {
+        if (checkSelfPermission(READ_PHOTOS) != PackageManager.PERMISSION_GRANTED) {
+            afterPhotoAccess = { openPhotoFolder(forDark, choice, back, edit) }
+            return requestPermissions(arrayOf(READ_PHOTOS), MEDIA_REQUEST)
+        }
+        val title = choice.substringAfter(':').substringAfter(':')
+        var active = true
+        showPage(title, emptyList(), crumb = getString(R.string.wall_my_photos), back = back)
+        pageExit = { active = false }
+        io.execute {
+            val ids = runCatching { folderPhotos(contentResolver, choice) }.getOrDefault(emptyList())
+            ui.post {
+                if (isDestroyed || !active) return@post
+                if (ids.isEmpty()) {
+                    toast(getString(R.string.wall_no_folders_hint), long = true)
+                    back()
+                    return@post
+                }
+                val selected = if (edit) savedPhotoSelection().intersect(ids.toSet()).toMutableSet() else mutableSetOf()
+                showPhotoFolder(forDark, choice, title, ids, selected, edit, 0, null, back)
+            }
+        }
+    }
+
+    private fun showPhotoFolder(forDark: Boolean, choice: String, title: String, ids: List<Long>, selected: MutableSet<Long>,
+                                selecting: Boolean, index: Int, focusOn: String?, back: () -> Unit) {
+        val pageSize = 9
+        val start = index * pageSize
+        val visible = ids.subList(start, minOf(ids.size, start + pageSize))
+        fun redraw(page: Int = index, focus: String? = focusOn, select: Boolean = selecting) =
+            showPhotoFolder(forDark, choice, title, ids, selected, select, page, focus, back)
+        val selectLabel = getString(R.string.wall_select_photos)
+        val wholeLabel = getString(R.string.wall_whole_folder)
+        fun control(name: String, action: () -> Unit) = settingsRow(name, "", action = action).apply {
+            tag = { direction: Int ->
+                focusSearch(if (direction < 0) View.FOCUS_LEFT else View.FOCUS_RIGHT)?.requestFocus()
+                Unit
+            }
+        }
+        val select = if (selecting) {
+            label(getString(R.string.wall_selected_count, selected.size), 14f).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), 0, 0, 0)
+            }
+        } else control(selectLabel) { redraw(focus = "photo:" + visible.first(), select = true) }
+        val whole = control(wholeLabel) {
+            previewPhotoChoice(forDark, choice, ids.shuffled().map { "photo:$it" }) { redraw(focus = wholeLabel) }
+        }
+        val controls = LinearLayout(this).apply {
+            addView(select, LinearLayout.LayoutParams(0, dp(44), 1f))
+            addView(whole, LinearLayout.LayoutParams(0, dp(44), 1.25f))
+        }
+        val tiles = visible.mapIndexed { i, id ->
+            val photo = "photo:$id"
+            Tile(getString(R.string.wall_numbered_photo, start + i + 1), photo,
+                help = if (selecting) R.string.wall_select_hint else R.string.wall_preview_hint,
+                checked = id in selected, hideLabel = true) {
+                if (selecting) {
+                    if (!selected.add(id)) selected.remove(id)
+                    redraw(focus = photo)
+                } else previewPhotoChoice(forDark, photo, listOf(photo)) { redraw(focus = photo) }
+            }
+        }
+        val footer = mutableListOf<View>()
+        if (ids.size > pageSize) {
+            val previous = getString(R.string.wall_previous_photos)
+            val next = getString(R.string.wall_next_photos)
+            val paging = LinearLayout(this)
+            if (index > 0) paging.addView(control(previous) {
+                val page = index - 1
+                redraw(page, "photo:" + ids[page * pageSize])
+            }, LinearLayout.LayoutParams(0, dp(42), 1f))
+            if (start + pageSize < ids.size) paging.addView(control(next) {
+                val page = index + 1
+                redraw(page, "photo:" + ids[page * pageSize])
+            }, LinearLayout.LayoutParams(0, dp(42), 1f))
+            footer += paging
+        }
+        if (selecting && selected.isNotEmpty()) footer += control(getString(R.string.wall_preview_slideshow)) {
+            previewPhotoChoice(forDark, choice, selected.shuffled().map { "photo:$it" }, selected.toSet()) { redraw() }
+        }
+        val first = "photo:" + visible.first()
+        val focus = focusOn ?: first
+        val extras = listOf(selectLabel to controls)
+        wallGrid(title, listOf(null to tiles), forDark, "", focus.takeUnless { it == wholeLabel }, extras, tileHeight = 59,
+            footer = footer, crumb = getString(R.string.wall_my_photos), back = back)
+        if (focus == wholeLabel) whole.requestFocus()
     }
 
     /** Folders page for wallpapers and the screensaver; [onPick] gets "folder:<bucket id>:<name>". */
@@ -2629,7 +2912,7 @@ class MainActivity : Activity() {
      * wallpaper and show it at once. The server runs only while this panel is open.
      */
     /** Add from phone: one QR page that takes a photo (set at once) or an MP4 video (previewed first). */
-    private fun uploadWallpaper(forDark: Boolean, back: () -> Unit) {
+    private fun uploadWallpaper(forDark: Boolean, applyPhoto: Boolean = true, back: () -> Unit) {
         val ip = lanAddress() ?: return toast(getString(R.string.connect_network), long = true)
         val dir = wallpaperDir() ?: return
         val active = AtomicBoolean(true)
@@ -2642,9 +2925,9 @@ class MainActivity : Activity() {
                     if (isDestroyed || !active.get()) { saved.delete(); return@post }
                     if (video) {
                         status.text = getString(R.string.video_added, saved.nameWithoutExtension)
-                        previewVideo(forDark, saved) { uploadWallpaper(forDark, back) }
+                        previewVideo(forDark, saved) { uploadWallpaper(forDark, applyPhoto, back) }
                     } else {
-                        setWallpaper(forDark, "file:${saved.name}")
+                        if (applyPhoto) setWallpaper(forDark, "file:${saved.name}")
                         status.text = getString(R.string.photo_added, saved.nameWithoutExtension)
                     }
                 }
@@ -2758,6 +3041,8 @@ class MainActivity : Activity() {
     }
 
     internal fun closeLauncherSettings() {
+        val updateTheme = wallpaperPickerOpen() && wantDark() != dark
+        finishPhotoPreview(false, returnToPicker = false)
         wallPreview = null
         settingsScrim.animate().cancel()
         settingsScrim.alpha = 1f
@@ -2768,6 +3053,7 @@ class MainActivity : Activity() {
         homeFocusable(allApps.visibility != View.VISIBLE) // the PIN can open over All apps
         (panelFrom?.takeIf { it.isAttachedToWindow } ?: findViewById(R.id.launcherSettings)).requestFocus()
         panelFrom = null
+        if (updateTheme) recreate()
     }
 
     private var panelFrom: View? = null // focus to go back to when the panel closes
@@ -3913,7 +4199,7 @@ class MainActivity : Activity() {
             setColorFilter(ink(.4f))
         }
         // Fixed pictures keep their small copy, so a grid opened again shows them at once; Bing, shows and folders change.
-        val key = "$choice|$big".takeIf { listOf("res:", "pack:", "file:", "video:").any { choice.startsWith(it) } }
+        val key = "$choice|$big".takeIf { listOf("res:", "pack:", "file:", "video:", "photo:").any { choice.startsWith(it) } }
         val cached = key?.let { thumbCache.get(it) }
         if (cached != null) {
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -3934,11 +4220,14 @@ class MainActivity : Activity() {
                         val w = if (big) 480 else 160
                         Bitmap.createScaledBitmap(p, w, maxOf(1, w * p.height / p.width), true).also { if (it !== p) p.recycle() }
                     }
-                    // A folder shows the photo it's on now (the other theme's has none yet: its first photo); Android has a ready thumbnail.
-                    choice.startsWith("folder:") -> (prefs.getLong(photoKey(forDark), -1).takeIf { it >= 0 } ?: folderPhotos(contentResolver, choice).firstOrNull())?.let {
-                        val size = if (big) android.util.Size(dp(372), dp(150)) else android.util.Size(dp(80) * 2, dp(45) * 2)
-                        if (Build.VERSION.SDK_INT >= 29) contentResolver.loadThumbnail(ContentUris.withAppendedId(PHOTOS, it), size, null)
-                        else @Suppress("DEPRECATION") MediaStore.Images.Thumbnails.getThumbnail(contentResolver, it, MediaStore.Images.Thumbnails.MINI_KIND, null)
+                    choice.startsWith("photo:") -> choice.substringAfter(':').toLongOrNull()?.let { mediaPhotoThumb(it, big) }
+                    choice.startsWith("folder:") -> {
+                        val ids = folderPhotos(contentResolver, choice)
+                        val active = choice == currentWallpaper(forDark)
+                        val selected = if (active) savedPhotoSelection() else emptySet()
+                        val id = prefs.getLong(photoKey(forDark), -1).takeIf { active && it in ids }
+                            ?: ids.firstOrNull { selected.isEmpty() || it in selected }
+                        id?.let { mediaPhotoThumb(it, big) }
                     }
                     else -> null
                 }
@@ -4502,6 +4791,20 @@ class MainActivity : Activity() {
 
     private fun routeKey(e: KeyEvent): Boolean {
         if (!ready) return super.dispatchKeyEvent(e)
+        photoPreview?.let { preview ->
+            if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) when (e.keyCode) {
+                KeyEvent.KEYCODE_BACK -> finishPhotoPreview(false)
+                KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_NUMPAD_ENTER ->
+                    if (preview.shown) finishPhotoPreview(true) else Unit
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> if (preview.choices.size > 1) {
+                    val step = if (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
+                    preview.index = (preview.index + step + preview.choices.size) % preview.choices.size
+                    showPhotoPreview(preview)
+                } else Unit
+                else -> Unit
+            }
+            return true
+        }
         if (wallPreview != null) { // a picked wallpaper shown whole: any button brings the panel back
             if (e.action == KeyEvent.ACTION_UP) endWallPreview()
             return true
@@ -7421,7 +7724,7 @@ class MainActivity : Activity() {
         /** Minutes between folder photos. */
         val PHOTO_EVERY = linkedMapOf(
             1 to R.string.every_1, 5 to R.string.every_5, 10 to R.string.every_10, 15 to R.string.every_15, 30 to R.string.every_30,
-            60 to R.string.every_60, 1440 to R.string.every_1440,
+            60 to R.string.every_60, 1440 to R.string.every_1440, 10080 to R.string.wall_every_week, 43200 to R.string.wall_every_30_days,
         )
         const val CHOSEN = "✓"
         const val REPO = "aradhyas8/Plume_Launcher"
