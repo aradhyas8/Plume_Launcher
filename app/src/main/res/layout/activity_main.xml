@@ -435,7 +435,7 @@
                     android:id="@+id/rowLabel"
                     android:layout_width="200dp"
                     android:layout_height="20dp"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="4dp"
                     android:alpha="0"
                     android:gravity="center"
                     android:maxLines="1"
@@ -446,7 +446,7 @@
                     android:id="@+id/nameRow"
                     android:layout_width="wrap_content"
                     android:layout_height="20dp"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="4dp"
                     android:orientation="horizontal"
                     android:visibility="gone" />
             </LinearLayout>
@@ -456,7 +456,7 @@
             android:id="@+id/watchTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="10dp"
             android:alpha="0.7"
             android:fontFamily="sans-serif-medium"
             android:text="@string/continue_watching"
