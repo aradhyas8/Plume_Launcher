@@ -46,6 +46,11 @@ class SnapScrollView(context: Context, attrs: AttributeSet?) : HorizontalScrollV
         return 0
     }
 
+    // HorizontalScrollView moves focus only to an item within this distance of what's on screen, and drops it
+    // otherwise. On a held key the glide runs a few items behind focus (Continue watching cards are wide), so
+    // allow the whole row: the next item is always one step away.
+    override fun getMaxScrollAmount() = maxOf(width, getChildAt(0)?.width ?: 0)
+
     private fun glideTo(x: Int) {
         val max = maxOf(0, (getChildAt(0)?.width ?: 0) - (width - paddingLeft - paddingRight))
         target = x.coerceIn(0, max)
@@ -55,9 +60,11 @@ class SnapScrollView(context: Context, attrs: AttributeSet?) : HorizontalScrollV
         glide.start()
     }
 
-    // Any other scroll (a reset to the start, a layout) wins over the glide.
+    // Any other scroll (a reset to the start) wins over the glide. A layout calls scrollTo with the place we're
+    // already at (Continue watching adds cards as focus moves on); that must not stop the glide, or the row
+    // stalls while focus walks off screen.
     override fun scrollTo(x: Int, y: Int) {
-        if (!gliding && glide.isRunning) glide.cancel()
+        if (!gliding && glide.isRunning && (x != scrollX || y != scrollY)) glide.cancel()
         super.scrollTo(x, y)
     }
 
