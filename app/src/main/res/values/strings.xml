@@ -219,6 +219,8 @@
     <string name="recent_apps">Recent apps</string>
     <string name="act_plume_recents">Plume recent apps</string>
     <string name="recent_previews">App window previews</string>
+    <string name="help_recent_previews">Turn on Home opens Plume. Open an app, then press Home twice to see its last screen in Recent apps. Previews pause Smooth volume.</string>
+    <string name="smooth_volume_preview_pause">Paused for previews</string>
     <string name="recent_previews_enable">Enable previews</string>
     <string name="recent_previews_disclosure">Plume uses its Home accessibility service to capture the current screen when you press Home or open Recent apps from another app. Plume saves the last screen of up to six apps, only on this TV. It never shares them or puts them in a backup. Turn this off to delete them.</string>
     <string name="recent_open">Open</string>

@@ -3338,12 +3338,14 @@ class MainActivity : Activity() {
             R.string.recent_previews to Triple(getString(R.string.recent_previews), toggle(prefs.getBoolean(HomeOverride.RECENT_PREVIEWS, false))) {
                 if (prefs.getBoolean(HomeOverride.RECENT_PREVIEWS, false)) {
                     prefs.edit().remove(HomeOverride.RECENT_PREVIEWS).apply()
+                    HomeOverride.running?.applyKeyFilter()
                     RecentPreviews.clear(this)
                     renderSettings(R.string.recent_previews)
                 } else {
                     homePopup(0, getString(R.string.recent_previews), getString(R.string.recent_previews_disclosure), null,
                         getString(R.string.recent_previews_enable) to {
                             prefs.edit().putBoolean(HomeOverride.RECENT_PREVIEWS, true).apply()
+                            HomeOverride.running?.applyKeyFilter()
                             setupDialog?.dismiss()
                             renderSettings(R.string.recent_previews)
                         },
@@ -3467,7 +3469,9 @@ class MainActivity : Activity() {
             )
             val styles = keys.map { k ->
                 val cost = k == R.string.smooth_volume && prefs.getBoolean("smooth_volume", false)
-                RowStyle(ROW_ICONS[k], sub = if (cost) getString(R.string.smooth_volume_cost) else null, choices = choices[k],
+                val volumeNote = if (prefs.getBoolean(HomeOverride.RECENT_PREVIEWS, false) && Build.VERSION.SDK_INT >= 30)
+                    R.string.smooth_volume_preview_pause else R.string.smooth_volume_cost
+                RowStyle(ROW_ICONS[k], sub = if (cost) getString(volumeNote) else null, choices = choices[k],
                     help = help(k), area = SECTION_AREAS[section.first], art = ROW_ART[k],
                     dim = getString(R.string.glass_clear).takeIf { k == R.string.glass && currentWallpaper().startsWith("video:") },
                     // Without the adb permission, Home opens Plume is switched on in Android's Accessibility screen.
@@ -7767,6 +7771,7 @@ class MainActivity : Activity() {
             R.string.cw_apps to R.string.help_from_apps, R.string.cw_channels to R.string.help_channels, R.string.cards_rows to R.string.help_cards_rows,
             R.string.wp_sources to R.string.help_wp_sources, R.string.restore_hidden to R.string.help_hidden_shows, R.string.screensaver_timing to R.string.help_screensaver_delay,
             R.string.home_button to R.string.help_home_button, R.string.smooth_volume to R.string.help_smooth_volume,
+            R.string.recent_previews to R.string.help_recent_previews,
             R.string.default_launcher to R.string.help_default_launcher,
             R.string.setup_home to R.string.help_run_setup, R.string.section_keys to R.string.help_remote_keys,
             R.string.isl_section to R.string.help_isl_section, R.string.isl_on to R.string.help_isl_on, R.string.isl_access to R.string.help_isl_access,
