@@ -44,11 +44,13 @@ class HomeOverride : AccessibilityService() {
      * Seeing keys costs volume its hold on TVs: Android acts on Volume before any service sees it and the key never
      * repeats. Smooth volume turns key filtering off unless window previews or remote keys need it.
      * Home is then caught by the window watcher below, which shows the TV's own home for about a second.
-     * Fire OS never passes remote keys to us, so there filtering is always off.
+     * Fire OS never passes remote keys to us, so there filtering is always off. While Cue's pill shows over an app,
+     * filtering is on, so Up can open it.
      */
     fun applyKeyFilter() {
         val filter = !fireTv(this) && (!getSharedPreferences("home", MODE_PRIVATE).getBoolean("smooth_volume", false) ||
-            (Build.VERSION.SDK_INT >= 30 && previewsEnabled()) || Remap.all(this).isNotEmpty() || Remap.learn != null)
+            (Build.VERSION.SDK_INT >= 30 && previewsEnabled()) || Remap.all(this).isNotEmpty() || Remap.learn != null ||
+            CueOverlay.peeking)
         val flag = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
         serviceInfo = serviceInfo.apply { flags = if (filter) flags or flag else flags and flag.inv() }
     }
@@ -71,6 +73,7 @@ class HomeOverride : AccessibilityService() {
 
     override fun onKeyEvent(e: KeyEvent): Boolean {
         if (packageManager.getApplicationInfo(packageName, 0).flags and ApplicationInfo.FLAG_SUSPENDED != 0) return false
+        if (CueOverlay.key(e)) return true // Up while Cue's pill shows over an app opens it
         if (e.keyCode != KeyEvent.KEYCODE_HOME) { homePress.reset(); return remap(e) }
         // Decided on release, by how long it was held: this TV's remote doesn't reliably send key repeats.
         if (e.action == KeyEvent.ACTION_UP && !e.isCanceled) {

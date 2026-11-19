@@ -50,10 +50,11 @@ internal class CueItem(
     val peekUntil: Long = 0L,
     val actions: List<CueAction> = emptyList(),
     val description: String? = null,
+    val open: (() -> Unit)? = null, // opens the app at this item (a notification's own tap action)
 ) {
     /** The same item with another second line (a battery level that lands after the connect). */
     fun withSub(sub: String?) = CueItem(key, kind, title, sub, icon, mono, image, imageUri, image2Uri, progress, tick, since, until,
-        peekUntil, actions, description)
+        peekUntil, actions, description, open)
 
     /** What Cue shows of it: the same text and times mean nothing to redraw. */
     val shown get() = "$key|$kind|$title|$sub|$progress|$since|$until|$peekUntil"

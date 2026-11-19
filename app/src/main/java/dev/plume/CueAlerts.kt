@@ -117,6 +117,7 @@ internal object CueAlerts {
                 peekUntil = peekUntil,
                 actions = actions,
                 description = "$label: ${if (shownTitle == label) sub else shownTitle}",
+                open = n.contentIntent?.let { pi -> { try { pi.send() } catch (_: PendingIntent.CanceledException) {} } },
             ))
         }
         Cue.changed()
