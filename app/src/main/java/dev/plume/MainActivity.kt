@@ -567,11 +567,13 @@ class MainActivity : Activity() {
         resumed = true
         isl.start()
         CueOverlay.home(true)
-        // Back from the TV's overlay screen without allowing it: the switch goes off, and says why.
-        if (isl.on("isl_overlay", false) && !overlayOn()) {
-            prefs.edit().putBoolean("isl_overlay", false).apply()
-            toast(getString(R.string.isl_overlay_denied))
-        }
+        // Back from the TV's overlay screen without allowing it: the switch goes off, and says why. Some TVs (Hisense,
+        // Android 12) list an app that was never asked as Allowed while Android still refuses it, so the toast says
+        // how to get past that.
+        val refused = overlayAsked && !overlayOn()
+        overlayAsked = false
+        if (isl.on("isl_overlay", false) && !overlayOn()) prefs.edit().putBoolean("isl_overlay", false).apply()
+        if (refused) toast(getString(R.string.isl_overlay_denied), long = true)
         ui.postDelayed({ if (resumed && settingsScrim.visibility != View.VISIBLE) isl.askAccess() }, 1500)
         val recentAppsRequested = intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false)
         val allAppsRequested = intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || recentAppsRequested
@@ -3558,6 +3560,7 @@ class MainActivity : Activity() {
 
     private fun openAccess(screen: Intent, row: Int) {
         if (!hasScreen(screen)) return cueAdbSheet()
+        overlayAsked = screen.action == Settings.ACTION_MANAGE_OVERLAY_PERMISSION
         returnTo(row) // back from the TV's screen: the Cue page again, with the new value
         try {
             startActivity(screen)
@@ -3568,6 +3571,7 @@ class MainActivity : Activity() {
     }
 
     private var cueAdbSocket: Socket? = null
+    private var overlayAsked = false // the TV's overlay screen is open from Cue's rows
 
     /** One sheet for both accesses: the TV gives them to itself over its own ADB, or a computer does. */
     private fun cueAdbSheet(body: String? = null) {

@@ -15,7 +15,7 @@
     <string name="isl_overlay_low">Not on this TV</string>
     <string name="isl_overlay">Alerts over apps</string>
     <string name="help_isl_overlay">Calls, doorbells and finished timers show at the top while you watch other apps.</string>
-    <string name="isl_overlay_denied">Not allowed. Alerts show on Home only.</string>
+    <string name="isl_overlay_denied">Not allowed. Alerts show on Home only. If the TV shows Plume as Allowed, turn it off and on again.</string>
     <string name="isl_adb_title">Give access with ADB</string>
     <string name="isl_adb_fire">Fire TV has no screen for notification access. Amazon lets only its own apps ask for it. You can give access one time with ADB.</string>
     <string name="isl_adb_tv">This TV has no screen for this access. You can give access one time with ADB.</string>
