@@ -82,6 +82,8 @@ internal val CUE_RECENT = listOf(1, 5, 10, 30) // the timer icon's lengths befor
 
 /** The timer icon's lengths after a [used] timer: it comes first, a repeat is not listed twice, at most 4. */
 internal fun islRecent(list: List<Int>, used: Int) = (listOf(used) + (list - used)).take(4)
+internal const val CUE_OVERLAY_MS = 2_000L // how long an alert's pill shows over another app
+internal val CUE_OVERLAY_TIMES = listOf(2_000L, 4_000L, 6_000L, 10_000L) // "Alert time over apps"
 internal val CUE_IDLES = listOf(60_000L, CUE_IDLE_MS, 0L) // "Hide music when paused"; 0 is Never
 
 /** An app's name, or null when it is gone or hidden from Plume. */

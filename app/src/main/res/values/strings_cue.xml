@@ -14,8 +14,10 @@
     <string name="help_isl_overlay_access">Lets Cue show alerts on top of other apps. Cue never takes the remote from the app.</string>
     <string name="isl_overlay_low">Not on this TV</string>
     <string name="isl_overlay">Alerts over apps</string>
-    <string name="help_isl_overlay">Calls, doorbells and finished timers show at the top while you watch other apps. Press Up to open one. Needs the Home button turned on.</string>
-    <string name="isl_overlay_hint">▲ Open</string>
+    <string name="help_isl_overlay">Calls, doorbells and finished timers show at the top while you watch other apps. Press Up while one shows to open it. Needs the Home button turned on.</string>
+    <string name="isl_overlay_time">Alert time over apps</string>
+    <string name="help_isl_overlay_time">How long an alert shows over other apps. Press Up while it shows to open it. A call stays until it ends.</string>
+    <string name="isl_seconds">%d s</string>
     <string name="isl_overlay_open">Open</string>
     <string name="isl_overlay_dismiss">Dismiss</string>
     <string name="isl_overlay_denied">Not allowed. Alerts show on Home only. If the TV shows Plume as Allowed, turn it off and on again.</string>

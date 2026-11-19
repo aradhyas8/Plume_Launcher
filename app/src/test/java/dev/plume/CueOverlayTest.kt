@@ -29,6 +29,15 @@ class CueOverlayTest {
         assertEquals("call", cueOverlayPick(items, 2_000)?.key)
     }
 
+    @Test fun pillGoesAfterItsTimeButACallStays() {
+        val door = item("door", CueKind.ALERT, 1_000, 7_000)
+        assertEquals(Long.MAX_VALUE, cueOverlayUntil(door, null, 2_000)) // not shown yet
+        assertEquals(3_000L, cueOverlayUntil(door, door.shown to 1_000L, 2_000))
+        assertEquals(7_000L, cueOverlayUntil(door, door.shown to 1_000L, 10_000)) // the peek ends first
+        val call = item("call", CueKind.CALL, 1_000, Long.MAX_VALUE)
+        assertEquals(Long.MAX_VALUE, cueOverlayUntil(call, call.shown to 1_000L, 2_000))
+    }
+
     @Test fun oneShellLineGivesBothAccesses() {
         assertEquals(
             "cmd notification allow_listener dev.plume/dev.plume.MediaListener; appops set dev.plume SYSTEM_ALERT_WINDOW allow",

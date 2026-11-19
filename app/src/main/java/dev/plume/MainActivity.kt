@@ -3229,6 +3229,10 @@ class MainActivity : Activity() {
                 isl.show()
                 renderSettings(R.string.isl_idle)
             },
+            R.string.isl_overlay_time to { d ->
+                prefs.edit().putLong("isl_overlay_ms", CUE_OVERLAY_TIMES.step(prefs.getLong("isl_overlay_ms", CUE_OVERLAY_MS), d)).apply()
+                renderSettings(R.string.isl_overlay_time)
+            },
             R.string.isl_privacy to { d ->
                 prefs.edit().putString("isl_alert_privacy", CUE_PRIVACY.step(prefs.getString("isl_alert_privacy", "app")!!, d)).apply()
                 isl.show()
@@ -3388,6 +3392,8 @@ class MainActivity : Activity() {
             }
         }
         // On only with the access too. Turning it on without access asks for it; onResume undoes a refusal.
+        rows[R.string.isl_overlay_time] = Triple(getString(R.string.isl_overlay_time),
+            getString(R.string.isl_seconds, prefs.getLong("isl_overlay_ms", CUE_OVERLAY_MS) / 1000)) { steps[R.string.isl_overlay_time]!!(1) }
         rows[R.string.isl_overlay] = Triple(getString(R.string.isl_overlay), toggle(isl.on("isl_overlay", false) && overlayOn())) {
             val on = isl.on("isl_overlay", false) && overlayOn()
             prefs.edit().putBoolean("isl_overlay", !on && !overlayBlocked()).apply()
@@ -3442,6 +3448,7 @@ class MainActivity : Activity() {
                     R.string.isl_music, R.string.isl_idle.takeIf { isl.on("isl_music") },
                     R.string.isl_alerts, R.string.isl_privacy.takeIf { isl.on("isl_alerts") }, R.string.isl_alert_apps.takeIf { isl.on("isl_alerts") },
                     R.string.isl_overlay.takeIf { isl.on("isl_alerts") },
+                    R.string.isl_overlay_time.takeIf { isl.on("isl_alerts") && isl.on("isl_overlay", false) },
                     R.string.isl_sports, R.string.isl_games.takeIf { isl.on("isl_sports") },
                     R.string.isl_wx_rain_row,
                     R.string.isl_update_row)),
@@ -3482,6 +3489,7 @@ class MainActivity : Activity() {
                 R.string.show_icons to listOf(R.string.monochrome, R.string.colour).map { getString(it) to null },
                 R.string.weather_units to listOf("°C" to null, "°F" to null),
                 R.string.isl_idle to CUE_IDLE_NAMES.map { getString(it) to null },
+                R.string.isl_overlay_time to CUE_OVERLAY_TIMES.map { getString(R.string.isl_seconds, it / 1000) to null },
                 R.string.isl_privacy to CUE_PRIVACY_NAMES.map { getString(it) to null },
                 R.string.clock_style to CLOCK_STYLES.values.map { getString(it) to null },
                 R.string.clock_size to CLOCK_SIZES.values.map { getString(it) to null },
@@ -7852,7 +7860,7 @@ class MainActivity : Activity() {
             R.string.home_button to R.drawable.ms_home, R.string.default_launcher to R.drawable.ms_home_app_logo, R.string.smooth_volume to R.drawable.ms_volume_up,
             R.string.recent_previews to R.drawable.ms_view_carousel,
             R.string.section_keys to R.drawable.ms_keyboard, R.string.setup_home to R.drawable.ms_restart_alt,
-            R.string.isl_on to R.drawable.ms_widgets, R.string.isl_access to R.drawable.ms_lock, R.string.isl_overlay_access to R.drawable.ms_open_in_new, R.string.isl_overlay to R.drawable.ms_open_in_full, R.string.isl_timers to R.drawable.ms_timer,
+            R.string.isl_on to R.drawable.ms_widgets, R.string.isl_access to R.drawable.ms_lock, R.string.isl_overlay_access to R.drawable.ms_open_in_new, R.string.isl_overlay to R.drawable.ms_open_in_full, R.string.isl_overlay_time to R.drawable.ms_timer, R.string.isl_timers to R.drawable.ms_timer,
             R.string.isl_music to R.drawable.ic_music_note, R.string.isl_idle to R.drawable.ms_schedule, R.string.isl_alerts to R.drawable.ms_badge,
             R.string.isl_privacy to R.drawable.ms_visibility_off, R.string.isl_alert_apps to R.drawable.ms_checklist, R.string.isl_sports to R.drawable.ms_public,
             R.string.isl_games to R.drawable.ms_play_circle, R.string.isl_wx_rain_row to R.drawable.ms_water,
@@ -7885,7 +7893,7 @@ class MainActivity : Activity() {
             R.string.recent_previews to R.string.help_recent_previews,
             R.string.default_launcher to R.string.help_default_launcher,
             R.string.setup_home to R.string.help_run_setup, R.string.section_keys to R.string.help_remote_keys,
-            R.string.isl_section to R.string.help_isl_section, R.string.isl_on to R.string.help_isl_on, R.string.isl_access to R.string.help_isl_access, R.string.isl_overlay_access to R.string.help_isl_overlay_access, R.string.isl_overlay to R.string.help_isl_overlay,
+            R.string.isl_section to R.string.help_isl_section, R.string.isl_on to R.string.help_isl_on, R.string.isl_access to R.string.help_isl_access, R.string.isl_overlay_access to R.string.help_isl_overlay_access, R.string.isl_overlay to R.string.help_isl_overlay, R.string.isl_overlay_time to R.string.help_isl_overlay_time,
             R.string.isl_music to R.string.help_isl_music, R.string.isl_idle to R.string.help_isl_idle, R.string.isl_timers to R.string.help_isl_timers,
             R.string.isl_alerts to R.string.help_isl_alerts, R.string.isl_privacy to R.string.help_isl_privacy, R.string.isl_alert_apps to R.string.help_isl_alert_apps,
             R.string.isl_sports to R.string.help_isl_sports, R.string.isl_games to R.string.help_isl_games,

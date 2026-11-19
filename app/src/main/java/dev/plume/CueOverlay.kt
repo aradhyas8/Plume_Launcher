@@ -28,6 +28,16 @@ internal fun cueOverlayPick(items: List<CueItem>, now: Long): CueItem? =
     cuePeek(items.filter { it.kind == CueKind.CALL || it.kind == CueKind.ALERT || it.kind == CueKind.TIMER_DONE }, now)
 
 /**
+ * When [item]'s pill over an app goes: [time] after it first showed ([seen]: its [CueItem.shown] and that time),
+ * or sooner when its peek ends. A ringing call stays.
+ */
+internal fun cueOverlayUntil(item: CueItem, seen: Pair<String, Long>?, time: Long): Long = when {
+    item.kind == CueKind.CALL -> Long.MAX_VALUE
+    seen == null || seen.first != item.shown -> Long.MAX_VALUE // not shown yet: it shows now
+    else -> minOf(item.peekUntil, seen.second + time)
+}
+
+/**
  * Cue's peek over other apps ("Alerts over apps"). At rest the pill never takes focus, so the remote keeps driving
  * the app underneath. While it shows, Up opens it: Plume's Home service sees the key (Android lets an accessibility
  * service filter keys), keeps it from the app, and the pill becomes a card that has focus, with the alert's buttons,
@@ -46,6 +56,7 @@ internal object CueOverlay {
     private var open = false
     private var home = false
     private var swallowUp = false
+    private var seen: Pair<String, Long>? = null // the last item shown over an app, and when it first showed
     private val recheck = Runnable { update() }
     private val idle = Runnable { close() }
 
@@ -85,11 +96,14 @@ internal object CueOverlay {
             if (items.none { it.key == item?.key && now < it.until }) close()
             return
         }
-        val next = cueOverlayPick(items, now) ?: return hide()
-        if (next.peekUntil != Long.MAX_VALUE) main.postDelayed(recheck, next.peekUntil - now)
+        val time = prefs.getLong("isl_overlay_ms", CUE_OVERLAY_MS)
+        val next = cueOverlayPick(items, now)?.takeIf { cueOverlayUntil(it, seen, time) > now } ?: return hide()
+        if (next.shown != seen?.first) seen = next.shown to now
+        val until = cueOverlayUntil(next, seen, time)
+        if (until != Long.MAX_VALUE) main.postDelayed(recheck, until - now)
         if (next.shown == shown) return
         hide(animate = false)
-        val v = pill(c, next, HomeOverride.running != null && !HomeOverride.fireTv(c))
+        val v = pill(c, next)
         if (!add(c, v, focusable = false)) return
         view = v
         shown = next.shown
@@ -191,7 +205,7 @@ internal object CueOverlay {
         }
     }
 
-    private fun pill(c: Context, item: CueItem, canOpen: Boolean) = LinearLayout(c).apply {
+    private fun pill(c: Context, item: CueItem) = LinearLayout(c).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(c, 8), dp(c, 8), dp(c, 22), dp(c, 8))
@@ -199,8 +213,6 @@ internal object CueOverlay {
         contentDescription = item.description ?: item.title
         addView(picture(c, item, 36))
         addView(words(c, item, 1))
-        if (canOpen) addView(text(c, c.getString(R.string.isl_overlay_hint), 12f, 0.6f, 1), LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(c, 16) })
     }
 
     /** The open card: the whole text, the alert's own buttons, Open and Dismiss. Back closes it and dismisses. */
