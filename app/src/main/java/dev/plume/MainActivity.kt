@@ -270,7 +270,7 @@ internal fun isAudioDevice(name: String) = name.lowercase().let { n -> AUDIO_WOR
  */
 internal fun inRow(pkg: String, hidden: Set<String>, extra: Boolean = false) = (pkg in hidden) == extra
 
-/** A phone app the TV maker put on (no TV entry): All apps shows it only on Everything, the home row only when added. */
+/** A phone app the TV maker put on (no TV entry): All apps shows it only after Show mobile apps, the home row only when added. */
 internal fun isExtraApp(tvEntry: Boolean, systemApp: Boolean) = !tvEntry && systemApp
 
 /**
@@ -5820,7 +5820,7 @@ class MainActivity : Activity() {
         }
         val list = sortedApps().let { all -> if (recent) recentApps(all.filter { !it.pkg.startsWith(HDMI) },
             removed = { prefs.getLong("r_${it.pkg}", 0) }) { prefs.getLong("t_${it.pkg}", 0) }
-            else if (showEverything()) all else all.filter { !it.extra } }
+            else if (showMobileApps()) all else all.filter { !it.extra } }
         val info = findViewById<TextView>(R.id.allAppsInfo).apply {
             visibility = if (recent && list.isEmpty()) View.VISIBLE else View.GONE
             isFocusable = list.isEmpty()
@@ -5832,9 +5832,9 @@ class MainActivity : Activity() {
         }
         recentClear.visibility = if (recent && list.isNotEmpty()) View.VISIBLE else View.GONE
         val extras = apps.count { it.extra }
-        everythingButton.visibility = if (!recent && extras > 0) View.VISIBLE else View.GONE
-        if (extras > 0) (everythingButton.getChildAt(0) as TextView).text =
-            if (showEverything()) getString(R.string.show_my_apps) else resources.getQuantityString(R.plurals.show_everything, extras, extras)
+        mobileAppsButton.visibility = if (!recent && extras > 0) View.VISIBLE else View.GONE
+        if (extras > 0) (mobileAppsButton.getChildAt(0) as TextView).text =
+            if (showMobileApps()) getString(R.string.hide_mobile_apps) else getString(R.string.show_mobile_apps, extras)
         if (recent) {
             recentWindows.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
             recentsFocus = (selected as? String)?.takeIf { pkg -> list.any { it.pkg == pkg } }
@@ -5899,16 +5899,16 @@ class MainActivity : Activity() {
         }
     }
 
-    /** All apps: "my apps" (TV apps and apps the user installed) or everything, extras too. */
-    private fun showEverything() = prefs.getBoolean("all_apps_everything", false)
+    /** All apps: TV apps and apps the user installed, or the TV maker's mobile apps (extras) too. */
+    private fun showMobileApps() = prefs.getBoolean("all_apps_mobile", false)
 
-    /** All apps' switch between My apps and Everything, at the end of the title's line where Recent apps has Clear all. */
-    private val everythingButton: LinearLayout by lazy {
+    /** All apps' Show mobile apps / Hide mobile apps switch, at the end of the title's line where Recent apps has Clear all. */
+    private val mobileAppsButton: LinearLayout by lazy {
         val header = recentClear.parent as FrameLayout
         pill("", small = true) {
-            prefs.edit().putBoolean("all_apps_everything", !showEverything()).apply()
+            prefs.edit().putBoolean("all_apps_mobile", !showMobileApps()).apply()
             openAllApps()
-            everythingButton.requestFocus()
+            mobileAppsButton.requestFocus()
         }.also { button ->
             header.addView(button, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.END or Gravity.CENTER_VERTICAL)) // All apps' own padding sets it in from the edge

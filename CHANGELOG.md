@@ -17,7 +17,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 ## Unreleased
 
 - **Wallpaper gallery.** Browse wallpapers by source. Select photos from a TV or USB folder and preview the slideshow before you apply it.
-- **All apps** hides phone apps that came with the TV. Select **Show everything** to see them. Plume also removes them from the home row.
+- **All apps** hides mobile apps that came with the TV. Select **Show mobile apps** to see them. Plume also removes them from the home row.
 - Plume uses the **Bing picture of the day** on first install. It downloads the picture when the TV connects to the internet.
 
 - **Cue.** A glass tile at the top of Home shows what happens now: music, timers, alerts and live scores.

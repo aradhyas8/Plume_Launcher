@@ -227,11 +227,8 @@
     <string name="recent_open">Abrir</string>
     <string name="recent_remove">Quitar</string>
     <string name="recent_clear_all">Borrar todo</string>
-    <string name="show_my_apps">Mostrar mis apps</string>
-    <plurals name="show_everything">
-        <item quantity="one">Mostrar todo (%d más)</item>
-        <item quantity="other">Mostrar todo (%d más)</item>
-    </plurals>
+    <string name="show_mobile_apps">Mostrar apps móviles (%d)</string>
+    <string name="hide_mobile_apps">Ocultar apps móviles</string>
     <string name="recent_apps_empty_any">Aún no hay apps recientes. Aquí aparecen las apps que abres.</string>
     <string name="recent_apps_empty">Aún no hay apps recientes. Abre una app desde Plume para añadirla aquí.</string>
     <string name="settings">Ajustes</string>
