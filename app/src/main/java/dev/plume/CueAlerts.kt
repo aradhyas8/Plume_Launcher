@@ -17,12 +17,12 @@ import android.service.notification.StatusBarNotification
  * strict, and the privacy setting decides how much of a notification the room gets to read.
  */
 internal object CueAlerts {
-    private const val PEEK_MS = 6_000L
-    private const val LAST_MS = 120_000L
+    /** The alert someone has open (Cue selected on Home, or the card over an app): it stays while they look. */
+    @Volatile var held: String? = null
 
     internal class CachedAlert(val pkg: String, val privacy: String, val item: CueItem) {
         fun visible(now: Long, currentPrivacy: String?, muted: Set<String>) =
-            now < item.until && privacy == currentPrivacy && pkg !in muted
+            (now < item.until || item.key == held) && privacy == currentPrivacy && pkg !in muted
     }
 
     private val shown = LinkedHashMap<String, CachedAlert>()
@@ -85,25 +85,36 @@ internal object CueAlerts {
         // from there first, so an alert never shows a bare package name.
         val info = noteApp(ex)
         val label = info?.let { ctx.packageManager.getApplicationLabel(it).toString() } ?: appLabel(ctx, pkg) ?: pkg
+        val kindLabel = ctx.getString(when (n.category) {
+            Notification.CATEGORY_MESSAGE -> R.string.isl_alert_message
+            Notification.CATEGORY_ALARM, Notification.CATEGORY_REMINDER, Notification.CATEGORY_EVENT -> R.string.isl_alert_reminder
+            else -> R.string.isl_alert_new
+        })
         val (shownTitle, sub) = cueAlertText(privacy, call, label, title, text,
-            ctx.getString(R.string.isl_alert_call), ctx.getString(R.string.isl_alert_new)) ?: return removed(sbn.key)
+            ctx.getString(R.string.isl_alert_call), kindLabel) ?: return removed(sbn.key)
 
         val now = System.currentTimeMillis()
         val post = sbn.postTime.takeIf { it > 0 } ?: now
         val full = privacy == "full"
-        val picture = if (full) bigPicture(ex) ?: largeIcon(ctx, n) else null
-        val image = picture ?: appIcon(ctx, info, pkg)
-        // Reply actions need a keyboard Cue does not have, so an alert keeps only the plain buttons.
-        val actions = (n.actions?.takeIf { full } ?: emptyArray())
+        val image = (if (full) largeIcon(ctx, n) else null) ?: appIcon(ctx, info, pkg)
+        val key = sbn.key
+        fun send(pi: PendingIntent) = try { pi.send() } catch (_: PendingIntent.CanceledException) {}
+        // Every button the alert has, the same on Home and over apps: its own (no typing, Cue has no keyboard; a call's
+        // in every privacy, as Answer and Decline tell nothing), then Open and Dismiss.
+        val actions = (n.actions?.takeIf { full || call } ?: emptyArray())
             .filter { it.actionIntent != null && !it.title.isNullOrBlank() && (call || it.remoteInputs.isNullOrEmpty()) }
             .take(2)
-            .map { a -> CueAction(label = a.title.toString()) { try { a.actionIntent.send() } catch (_: PendingIntent.CanceledException) {} } }
+            .map { a -> CueAction(label = a.title.toString()) { send(a.actionIntent); removed(key) } } +
+            listOfNotNull(n.contentIntent?.let { pi -> CueAction(label = ctx.getString(R.string.isl_alert_open)) { send(pi); removed(key) } }) +
+            CueAction(label = ctx.getString(R.string.isl_alert_dismiss)) { removed(key) }
 
         synchronized(this) {
+            // An alert takes the pill for the Alert time, then it is gone from Cue (the app still has it). A ringing
+            // call stays until it ends. Too soon after the app's last one: it only updates one that still shows.
             val peekUntil = when {
-                call -> Long.MAX_VALUE // a ringing call stays open until it is answered or missed
-                cueAlertMayPeek(lastPeek[pkg], now) -> { lastPeek[pkg] = now; post + PEEK_MS }
-                else -> shown[sbn.key]?.item?.peekUntil ?: 0L // too soon after the last peek: update quietly
+                call -> Long.MAX_VALUE
+                cueAlertMayPeek(lastPeek[pkg], now) -> { lastPeek[pkg] = now; post + prefs.getLong("isl_alert_ms", CUE_ALERT_MS) }
+                else -> shown[key]?.item?.peekUntil ?: 0L
             }
             shown[sbn.key] = CachedAlert(pkg, privacy, CueItem(
                 key = sbn.key,
@@ -112,8 +123,9 @@ internal object CueAlerts {
                 sub = sub,
                 mono = image == null,
                 image = image,
+                photo = if (full) bigPicture(ex) else null,
                 since = post,
-                until = if (call) Long.MAX_VALUE else post + LAST_MS,
+                until = peekUntil,
                 peekUntil = peekUntil,
                 actions = actions,
                 description = "$label: ${if (shownTitle == label) sub else shownTitle}",
@@ -123,6 +135,7 @@ internal object CueAlerts {
     }
 
     @Synchronized fun removed(key: String) {
+        if (key == held) held = null
         if (shown.remove(key) != null) Cue.changed()
     }
 
