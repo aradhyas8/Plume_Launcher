@@ -304,7 +304,7 @@ internal class CueView(private val a: MainActivity) {
         if (focused) {
             if (cueRowAt >= rows.size) { // just opened: the buttons, on the middle one (Play for music)
                 cueRowAt = rows.indexOf(CueRow.ACTIONS).takeIf { it >= 0 } ?: (rows.size - 1).coerceAtLeast(0)
-                cueCol = if (rows.getOrNull(cueRowAt) == CueRow.ACTIONS) item.actions.size / 2 else 0
+                cueCol = if (rows.getOrNull(cueRowAt) == CueRow.ACTIONS) cueFirstButton(item) else 0
             }
             if (rows.getOrNull(cueRowAt) == CueRow.MARKS) cueCol = cueList.indexOf(item).coerceAtLeast(0)
         }
@@ -596,7 +596,7 @@ internal class CueView(private val a: MainActivity) {
         cueRowAt += d
         cueCol = when (cueRows(item).getOrNull(cueRowAt)) {
             CueRow.MARKS -> cueList.indexOfFirst { it.key == item.key }.coerceAtLeast(0)
-            CueRow.ACTIONS -> item.actions.size / 2
+            CueRow.ACTIONS -> cueFirstButton(item)
             else -> 0
         }
         bindCue(item, cueOpen)
@@ -621,7 +621,7 @@ internal class CueView(private val a: MainActivity) {
     fun MainActivity.cueOk() {
         val item = cueItem ?: return
         when (cueRows(item).getOrNull(cueRowAt)) {
-            CueRow.MARKS -> cueRows(item).indexOf(CueRow.ACTIONS).takeIf { it >= 0 }?.let { cueRowAt = it; cueCol = item.actions.size / 2; bindCue(item, cueOpen) }
+            CueRow.MARKS -> cueRows(item).indexOf(CueRow.ACTIONS).takeIf { it >= 0 }?.let { cueRowAt = it; cueCol = cueFirstButton(item); bindCue(item, cueOpen) }
             CueRow.BAR -> media?.transportControls?.let { if (mediaPlaying(media)) it.pause() else it.play() }
             CueRow.ACTIONS -> item.actions.getOrNull(cueCol)?.run?.invoke()
             null -> {}
@@ -757,6 +757,10 @@ internal class CueView(private val a: MainActivity) {
  * The music art's colour, strong enough to read as a colour on the glass: the art's mean hue, at least half
  * saturated, bright over a dark wallpaper (light ink) and deep over a light one. A grey cover stays grey.
  */
+/** Where the cursor starts on an item's buttons: music on the middle one (Play), anything else on the first. */
+internal fun cueFirstButton(item: CueItem) =
+    if (item.kind == CueKind.MEDIA || item.kind == CueKind.MEDIA_PAUSED) item.actions.size / 2 else 0
+
 internal fun cueAccent(mean: Int, lightInk: Boolean): Int {
     val hsv = FloatArray(3)
     Color.colorToHSV(mean, hsv)
