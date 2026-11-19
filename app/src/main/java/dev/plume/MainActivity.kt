@@ -108,6 +108,7 @@ import java.lang.ref.WeakReference
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.Socket
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 import java.net.URLEncoder
@@ -565,6 +566,12 @@ class MainActivity : Activity() {
         }
         resumed = true
         isl.start()
+        CueOverlay.home(true)
+        // Back from the TV's overlay screen without allowing it: the switch goes off, and says why.
+        if (isl.on("isl_overlay", false) && !overlayOn()) {
+            prefs.edit().putBoolean("isl_overlay", false).apply()
+            toast(getString(R.string.isl_overlay_denied))
+        }
         ui.postDelayed({ if (resumed && settingsScrim.visibility != View.VISIBLE) isl.askAccess() }, 1500)
         val recentAppsRequested = intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false)
         val allAppsRequested = intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || recentAppsRequested
@@ -639,6 +646,7 @@ class MainActivity : Activity() {
         if (ready) {
             resumed = false
             isl.stop()
+            CueOverlay.home(false)
             videoWallpaper.pause()
             findViewById<ImageView>(R.id.wallpaper).alpha = 1f
             ui.removeCallbacks(refreshIfDirty)
@@ -822,10 +830,17 @@ class MainActivity : Activity() {
      * Debug builds: act as another TV and start setup as on a first launch, to walk each device's popups here.
      * adb shell am start -n dev.plume/.MainActivity --es fake_device fire|google|stock|real --ei fake_sdk 33
      * Only the setup's choices change; the TV's own screens and Home key stay what they are.
+     * Cue's access rows the same way, opening the Cue page: --es fake_cue fire|noscreen|lowram|real
+     * (fire: no notification access screen; noscreen: no screen for either access; lowram: no overlays).
      */
     private fun fakeSetup(intent: Intent?): Boolean {
-        val device = intent?.getStringExtra("fake_device") ?: return false
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return false
+        intent?.getStringExtra("fake_cue")?.let { cue ->
+            fakeCue = cue.takeIf { it != "real" }
+            ui.post { openLauncherSettings(R.string.isl_access) }
+            return true
+        }
+        val device = intent?.getStringExtra("fake_device") ?: return false
         fakeDevice = device.takeIf { it != "real" }
         fakeSdk = intent.getIntExtra("fake_sdk", 0)
         ui.post { startHomeSetup() }
@@ -3359,7 +3374,27 @@ class MainActivity : Activity() {
             wxAgain()
             CueSports.start(this)
         }
-        rows[R.string.isl_access] = Triple(getString(R.string.isl_access), getString(if (listenerOn()) R.string.isl_access_on else R.string.isl_access_off)) { openListenerAccess() }
+        rows[R.string.isl_access] = Triple(getString(R.string.isl_access), accessValue(listenerOn(), listenerScreen())) {
+            if (listenerOn() && !hasScreen(listenerScreen())) toast(getString(R.string.isl_access_on)) else openListenerAccess()
+        }
+        rows[R.string.isl_overlay_access] = Triple(getString(R.string.isl_overlay_access),
+            if (overlayBlocked()) getString(R.string.isl_overlay_low) else accessValue(overlayOn(), overlayScreen())) {
+            when {
+                overlayBlocked() -> toast(getString(R.string.isl_overlay_low))
+                overlayOn() && !hasScreen(overlayScreen()) -> toast(getString(R.string.isl_access_on))
+                else -> openAccess(overlayScreen(), R.string.isl_overlay_access)
+            }
+        }
+        // On only with the access too. Turning it on without access asks for it; onResume undoes a refusal.
+        rows[R.string.isl_overlay] = Triple(getString(R.string.isl_overlay), toggle(isl.on("isl_overlay", false) && overlayOn())) {
+            val on = isl.on("isl_overlay", false) && overlayOn()
+            prefs.edit().putBoolean("isl_overlay", !on && !overlayBlocked()).apply()
+            when {
+                on || overlayOn() -> renderSettings(R.string.isl_overlay)
+                overlayBlocked() -> toast(getString(R.string.isl_overlay_low))
+                else -> openAccess(overlayScreen(), R.string.isl_overlay)
+            }
+        }
         rows[R.string.isl_music] = islRow(R.string.isl_music, "isl_music")
         rows[R.string.isl_idle] = Triple(getString(R.string.isl_idle), getString(CUE_IDLE_NAMES[CUE_IDLES.indexOf(prefs.getLong("isl_idle", CUE_IDLE_MS)).coerceAtLeast(0)])) {
             steps[R.string.isl_idle]!!(1)
@@ -3401,9 +3436,10 @@ class MainActivity : Activity() {
                 listOf(R.string.clock_style, R.string.clock_size, R.string.date_format, R.string.time_format,
                     R.string.weather, R.string.weather_units, R.string.weather_location)),
             Triple(R.string.isl_section, on(isl.on("isl_on")), if (!isl.on("isl_on")) listOf(R.string.isl_on, R.string.isl_timers)
-                else listOfNotNull(R.string.isl_on, R.string.isl_access, R.string.isl_timers,
+                else listOfNotNull(R.string.isl_access, R.string.isl_overlay_access, R.string.isl_on, R.string.isl_timers,
                     R.string.isl_music, R.string.isl_idle.takeIf { isl.on("isl_music") },
                     R.string.isl_alerts, R.string.isl_privacy.takeIf { isl.on("isl_alerts") }, R.string.isl_alert_apps.takeIf { isl.on("isl_alerts") },
+                    R.string.isl_overlay.takeIf { isl.on("isl_alerts") },
                     R.string.isl_sports, R.string.isl_games.takeIf { isl.on("isl_sports") },
                     R.string.isl_wx_rain_row,
                     R.string.isl_update_row)),
@@ -3498,13 +3534,103 @@ class MainActivity : Activity() {
     internal fun listenerOn(): Boolean = if (Build.VERSION.SDK_INT >= 27) getSystemService(android.app.NotificationManager::class.java).isNotificationListenerAccessGranted(isl.mediaAccess)
         else Settings.Secure.getString(contentResolver, "enabled_notification_listeners")?.contains(isl.mediaAccess.flattenToString()) == true
 
-    /** The TV's own Notification access screen; a TV without one gets the adb line that does the same. */
-    internal fun openListenerAccess() {
+    // ---------- Cue's access: notification access and drawing over apps ----------
+    // Plume asks Android whether the TV has each screen, never guesses from the brand. No screen: the ADB sheet.
+
+    private fun listenerScreen() = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+    private fun overlayScreen() = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+    private fun hasScreen(i: Intent) = when (fakeCue) {
+        "noscreen" -> false
+        "fire" -> i.action != Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS && i.resolveActivity(packageManager) != null
+        else -> i.resolveActivity(packageManager) != null
+    }
+    private fun cueFire() = fakeCue == "fire" || fireTv()
+    /** Android refuses overlays on low-RAM TVs, whatever the user allows. */
+    private fun overlayBlocked() = fakeCue == "lowram" || getSystemService(android.app.ActivityManager::class.java).isLowRamDevice
+    internal fun overlayOn() = Settings.canDrawOverlays(this)
+
+    /** A Cue access row's value: Allowed, Give access (the TV has the screen) or Needs ADB. */
+    private fun accessValue(on: Boolean, screen: Intent) =
+        getString(if (on) R.string.isl_access_on else if (hasScreen(screen)) R.string.isl_access_off else R.string.isl_access_adb)
+
+    /** The TV's own Notification access screen; a TV without one gets the ADB sheet. */
+    internal fun openListenerAccess() = openAccess(listenerScreen(), R.string.isl_access)
+
+    private fun openAccess(screen: Intent, row: Int) {
+        if (!hasScreen(screen)) return cueAdbSheet()
+        returnTo(row) // back from the TV's screen: the Cue page again, with the new value
         try {
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            startActivity(screen)
         } catch (e: Exception) {
-            homePopup(0, getString(R.string.isl_access), getString(R.string.isl_access_steps), null, getString(R.string.done) to { setupDialog?.dismiss() })
+            prefs.edit().remove("return_settings").apply()
+            cueAdbSheet()
         }
+    }
+
+    private var cueAdbSocket: Socket? = null
+
+    /** One sheet for both accesses: the TV gives them to itself over its own ADB, or a computer does. */
+    private fun cueAdbSheet(body: String? = null) {
+        val adbOn = Settings.Global.getInt(contentResolver, Settings.Global.ADB_ENABLED, 0) == 1
+        val text = body ?: listOfNotNull(
+            getString(if (cueFire()) R.string.isl_adb_fire else R.string.isl_adb_tv),
+            if (adbOn) null else getString(if (cueFire()) R.string.isl_adb_off_fire else R.string.isl_adb_off_tv),
+        ).joinToString("\n\n")
+        val dev = getString(R.string.isl_adb_dev) to {
+            setupDialog?.dismiss()
+            openSettings(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+        }
+        val buttons = listOfNotNull(getString(R.string.isl_adb_here) to { cueGrantHere() }, dev.takeIf { !adbOn },
+            getString(R.string.isl_adb_computer) to { cueAdbComputer() })
+        homePopup(0, getString(R.string.isl_adb_title), text, null, *buttons.toTypedArray())
+    }
+
+    private fun cueGrantHere() {
+        homePopup(0, getString(R.string.isl_adb_title), getString(R.string.isl_adb_wait), null,
+            getString(android.R.string.cancel) to { cancelCueAdb(); setupDialog?.dismiss() })
+        val socket = Socket()
+        cueAdbSocket = socket
+        Thread({
+            try {
+                socket.use { LocalAdb.shell(it, cueGrant(packageName)) }
+            } catch (e: java.io.IOException) { // the check below also covers a disconnect after the grant
+            } catch (e: java.security.GeneralSecurityException) { // no usable RSA here: a computer still works
+            }
+            ui.post {
+                if (cueAdbSocket !== socket || isDestroyed) return@post
+                cueAdbSocket = null
+                if (listenerOn()) {
+                    homePopup(0, getString(R.string.isl_adb_title), getString(R.string.isl_adb_done), null,
+                        getString(R.string.done) to { setupDialog?.dismiss() })
+                    if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.isl_access)
+                } else cueAdbSheet(getString(R.string.isl_adb_failed))
+            }
+        }, "cue-local-adb").start()
+    }
+
+    private fun cancelCueAdb() {
+        cueAdbSocket?.let { runCatching { it.close() } }
+        cueAdbSocket = null
+    }
+
+    private fun cueAdbComputer() {
+        val code = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(10).toFloat()
+                setColor(if (dark) DARK_BG else 0xFFE9EBEF.toInt())
+            }
+            listOfNotNull(lanAddress()?.let { "adb connect $it:5555" }, "adb shell \"${cueGrant(packageName)}\"").forEach {
+                addView(label(it, 12f).apply { typeface = Typeface.MONOSPACE; maxLines = 3; ellipsize = null; setPadding(0, dp(2), 0, dp(2)) })
+            }
+        }
+        val extra = FrameLayout(this).apply { setPadding(0, dp(12), 0, 0); addView(code) }
+        homePopup(0, getString(R.string.isl_adb_title), getString(R.string.isl_adb_computer_body), extra,
+            getString(R.string.done) to {
+                setupDialog?.dismiss()
+                if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.isl_access)
+            })
     }
 
     /** Timer and stopwatch. Starting one closes the panel, so it shows on Cue at once. */
@@ -7682,6 +7808,7 @@ class MainActivity : Activity() {
         val CUE_WX_ROWS = setOf(R.string.isl_wx_rain_row)
         var fakeDevice: String? = null // debug builds: see fakeSetup()
         var fakeSdk = 0
+        var fakeCue: String? = null // debug builds: see fakeSetup()
         const val TV_LISTINGS = "android.permission.READ_TV_LISTINGS"
         const val WRITE_SECURE = "android.permission.WRITE_SECURE_SETTINGS"
         const val ROLE_REQUEST = 2
@@ -7721,7 +7848,7 @@ class MainActivity : Activity() {
             R.string.home_button to R.drawable.ms_home, R.string.default_launcher to R.drawable.ms_home_app_logo, R.string.smooth_volume to R.drawable.ms_volume_up,
             R.string.recent_previews to R.drawable.ms_view_carousel,
             R.string.section_keys to R.drawable.ms_keyboard, R.string.setup_home to R.drawable.ms_restart_alt,
-            R.string.isl_on to R.drawable.ms_widgets, R.string.isl_access to R.drawable.ms_lock, R.string.isl_timers to R.drawable.ms_timer,
+            R.string.isl_on to R.drawable.ms_widgets, R.string.isl_access to R.drawable.ms_lock, R.string.isl_overlay_access to R.drawable.ms_open_in_new, R.string.isl_overlay to R.drawable.ms_open_in_full, R.string.isl_timers to R.drawable.ms_timer,
             R.string.isl_music to R.drawable.ic_music_note, R.string.isl_idle to R.drawable.ms_schedule, R.string.isl_alerts to R.drawable.ms_badge,
             R.string.isl_privacy to R.drawable.ms_visibility_off, R.string.isl_alert_apps to R.drawable.ms_checklist, R.string.isl_sports to R.drawable.ms_public,
             R.string.isl_games to R.drawable.ms_play_circle, R.string.isl_wx_rain_row to R.drawable.ms_water,
@@ -7754,7 +7881,7 @@ class MainActivity : Activity() {
             R.string.recent_previews to R.string.help_recent_previews,
             R.string.default_launcher to R.string.help_default_launcher,
             R.string.setup_home to R.string.help_run_setup, R.string.section_keys to R.string.help_remote_keys,
-            R.string.isl_section to R.string.help_isl_section, R.string.isl_on to R.string.help_isl_on, R.string.isl_access to R.string.help_isl_access,
+            R.string.isl_section to R.string.help_isl_section, R.string.isl_on to R.string.help_isl_on, R.string.isl_access to R.string.help_isl_access, R.string.isl_overlay_access to R.string.help_isl_overlay_access, R.string.isl_overlay to R.string.help_isl_overlay,
             R.string.isl_music to R.string.help_isl_music, R.string.isl_idle to R.string.help_isl_idle, R.string.isl_timers to R.string.help_isl_timers,
             R.string.isl_alerts to R.string.help_isl_alerts, R.string.isl_privacy to R.string.help_isl_privacy, R.string.isl_alert_apps to R.string.help_isl_alert_apps,
             R.string.isl_sports to R.string.help_isl_sports, R.string.isl_games to R.string.help_isl_games,

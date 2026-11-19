@@ -76,6 +76,7 @@ internal object CueTimers {
     /** Loads the saved state: ends what ended while the process was gone, and sets the Handler and alarms again. */
     fun init(ctx: Context) {
         app = ctx.applicationContext
+        CueOverlay.attach(ctx)
         check()
     }
 

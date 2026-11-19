@@ -10,7 +10,10 @@ import android.service.notification.StatusBarNotification
  * anyway, so it hands them to [CueAlerts], which decides which few Cue shows.
  */
 class MediaListener : NotificationListenerService() {
-    override fun onListenerConnected() = CueAlerts.connected(this, this)
+    override fun onListenerConnected() {
+        CueOverlay.attach(this)
+        CueAlerts.connected(this, this)
+    }
 
     override fun onListenerDisconnected() = CueAlerts.disconnected()
 

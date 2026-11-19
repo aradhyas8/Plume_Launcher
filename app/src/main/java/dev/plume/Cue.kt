@@ -109,13 +109,16 @@ internal fun cueJson(url: String): JSONObject {
 
 /**
  * Where sources tell the home screen that their items changed. Sources call [changed] from any thread; the home
- * screen sets [listener] while it is shown and gets the call on the main thread.
+ * screen sets [listener] while it is shown and gets the call on the main thread. [CueOverlay] hears every change too.
  */
 internal object Cue {
     private val main = Handler(Looper.getMainLooper())
     @Volatile var listener: (() -> Unit)? = null
 
     fun changed() {
-        main.post { listener?.invoke() }
+        main.post {
+            listener?.invoke()
+            CueOverlay.update()
+        }
     }
 }
