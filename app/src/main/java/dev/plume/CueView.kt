@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.Outline
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.media.MediaMetadata
@@ -116,11 +115,6 @@ internal class CueView(private val a: MainActivity) {
     fun on(key: String, default: Boolean = true) = a.prefs.getBoolean(key, default)
 
     fun MainActivity.setUpCue() {
-        // The art is a cover: a soft square, a little rounder open.
-        cueArt.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, dp(if (v.width < dp(40)) 8 else 12).toFloat())
-        }
-        cueArt.clipToOutline = true
         styleCue()
         cue.setOnClickListener { cueOk() }
     }

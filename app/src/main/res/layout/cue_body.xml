@@ -151,7 +151,8 @@
                 android:id="@+id/cueEq"
                 android:layout_width="12dp"
                 android:layout_height="12dp"
-                android:layout_marginStart="12dp" />
+                android:layout_marginStart="12dp"
+                android:visibility="gone" />
 
             <!-- The playing app's mark, as the Shows row shows it. Only while open. -->
             <ImageView

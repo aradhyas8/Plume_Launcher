@@ -3,6 +3,7 @@ package dev.plume
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -13,6 +14,7 @@ import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -27,6 +29,13 @@ private fun View.dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
 /** Sizes and padding for [open] (the tile) or the pill at rest. [root] holds cue_body. */
 internal fun cueShape(root: ViewGroup, open: Boolean) = with(root) {
+    // The art is a cover: a soft square, a little rounder open.
+    findViewById<View>(R.id.cueArt).apply {
+        outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, dp(if (v.width < dp(40)) 8 else 12).toFloat())
+        }
+        clipToOutline = true
+    }
     if (open) setPadding(dp(14), dp(14), dp(16), dp(14)) else setPadding(dp(4), dp(4), dp(14), dp(4))
     findViewById<View>(R.id.cueTop).layoutParams.width = if (open) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
     findViewById<View>(R.id.cueArt2).layoutParams.apply { width = dp(if (open) 48 else 28); height = width }
@@ -77,7 +86,8 @@ internal fun cueBind(
         background = GradientDrawable().apply { cornerRadius = dp(12).toFloat() }
     }
     val art = findViewById<ImageView>(R.id.cueArt)
-    val size = dp(if (!open) 28 else if (sports) 40 else 80)
+    // With a camera's snapshot above, the app's picture steps back to the pill's size.
+    val size = dp(if (!open || item.photo != null) 28 else if (sports) 40 else 80)
     if (art.layoutParams.width != size) art.layoutParams = art.layoutParams.apply { width = size; height = size }
     when {
         picture != null -> { art.clearColorFilter(); art.setImageBitmap(picture); art.background = null; art.setPadding(0, 0, 0, 0) }
@@ -86,7 +96,7 @@ internal fun cueBind(
             if (item.mono) art.setColorFilter(ink) else art.clearColorFilter()
             // An icon sits on a soft disc of the ink, the size of the picture it stands in for.
             art.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ink and 0xFFFFFF or 0x26000000) }
-            val pad = dp(if (!open) 5 else if (sports) 8 else 20)
+            val pad = dp(if (size == dp(28)) 5 else if (sports) 8 else 20)
             art.setPadding(pad, pad, pad, pad)
         }
         else -> art.setImageDrawable(null)
