@@ -23,6 +23,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - Select Cue to open it. Press Left or Right on the progress bar to seek in a song.
 - Start a timer or the stopwatch from the timer icon on the top bar. It lists the last 4 lengths you used.
 - Select **Games** in **Cue** settings. Select **Live now** to pin a game, or **Your teams** to follow a team.
+- **Alerts over apps.** Turn it on in **Cue** settings. Calls, alerts and finished timers show at the top of other apps.
+- **Notification access** and **Show over apps** are first in **Cue** settings. A TV without these screens, such as Fire TV, gives access with ADB.
 - Cue shows alerts from apps, rain soon and Plume updates.
 - Hold OK on Cue to hide an item or turn off an app's alerts.
 - **Recent apps.** Press Home twice to open a row of app windows. Press Left or Right to switch apps. Press Back to return to Plume.
