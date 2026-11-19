@@ -114,7 +114,7 @@ internal object CueOverlay {
         val ink = if (dark) MainActivity.DARK_TEXT else 0xFF111214.toInt()
         v.background = GradientDrawable().apply {
             cornerRadius = dp(c, CUE_ROUND).toFloat()
-            setColor(if (dark) 0xE61B1C20.toInt() else 0xF2F5F5F7.toInt())
+            setColor(if (dark) 0xF21B1C20.toInt() else 0xF2F5F5F7.toInt())
         }
         cueShape(v, open)
         cueBind(v, it, open, ink, { t -> t.setShadowLayer(0f, 0f, 0f, 0); t.setTextColor(ink) }, it.image, null,

@@ -120,9 +120,9 @@ The round 80 dp picture is too small to see who is at the door, so the snapshot 
 | Light + Clear | Clear glass | `inkBehind` (picks light or dark from the wallpaper) | `0xF2F5F5F7` | `0xFF111214` |
 | Light + Frosted | Frosted glass | `inkBehind` | `0xF2F5F5F7` | `0xFF111214` |
 | Light + Off | Solid tile | `fg` (`0xFF111214`) | `0xF2F5F5F7` | `0xFF111214` |
-| Dark + Clear | Clear glass | `inkBehind` | `0xE61B1C20` | `DARK_TEXT` |
-| Dark + Frosted | Frosted glass | `inkBehind` | `0xE61B1C20` | `DARK_TEXT` |
-| Dark + Off | Solid tile | `fg` (`DARK_TEXT`) | `0xE61B1C20` | `DARK_TEXT` |
+| Dark + Clear | Clear glass | `inkBehind` | `0xF21B1C20` | `DARK_TEXT` |
+| Dark + Frosted | Frosted glass | `inkBehind` | `0xF21B1C20` | `DARK_TEXT` |
+| Dark + Off | Solid tile | `fg` (`DARK_TEXT`) | `0xF21B1C20` | `DARK_TEXT` |
 
 Over apps, the Glass setting does nothing (no wallpaper to put glass on). Light or Dark still applies, so the overlay matches the user's theme. Text gets the top bar's shadow on glass only (`ink()` helper), and no shadow on a tint.
 
