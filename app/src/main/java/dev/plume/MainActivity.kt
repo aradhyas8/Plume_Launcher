@@ -3599,7 +3599,8 @@ class MainActivity : Activity() {
             ui.post {
                 if (cueAdbSocket !== socket || isDestroyed) return@post
                 cueAdbSocket = null
-                if (listenerOn()) {
+                // Both accesses, or the sheet says it failed: a TV with notification access already came here for overlays.
+                if (listenerOn() && (overlayOn() || overlayBlocked())) {
                     homePopup(0, getString(R.string.isl_adb_title), getString(R.string.isl_adb_done), null,
                         getString(R.string.done) to { setupDialog?.dismiss() })
                     if (settingsScrim.visibility == View.VISIBLE) renderSettings(R.string.isl_access)

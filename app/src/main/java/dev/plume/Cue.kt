@@ -60,9 +60,9 @@ internal class CueItem(
     val shown get() = "$key|$kind|$title|$sub|$progress|$since|$until|$peekUntil"
 }
 
-/** The items still current at [now], the pill's first: lowest rank, then newest. */
+/** The items still current at [now] (and an alert someone has open), the pill's first: lowest rank, then newest. */
 internal fun cueArrange(items: List<CueItem>, now: Long): List<CueItem> =
-    items.filter { now < it.until }.sortedWith(compareBy<CueItem> { it.kind.rank }.thenByDescending { it.since })
+    items.filter { now < it.until || it.key == CueAlerts.held }.sortedWith(compareBy<CueItem> { it.kind.rank }.thenByDescending { it.since })
 
 /** The item Cue opens by itself for at [now], if any: the newest one still peeking. */
 internal fun cuePeek(items: List<CueItem>, now: Long): CueItem? =

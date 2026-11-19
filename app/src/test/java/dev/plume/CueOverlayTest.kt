@@ -38,6 +38,12 @@ class CueOverlayTest {
         assertEquals(true, door.visible(4_000, "app", emptySet()))
         CueAlerts.held = null
         assertEquals(false, door.visible(4_000, "app", emptySet()))
+        // Home's arrangement keeps it too while it is held.
+        val item = CueItem("door", CueKind.ALERT, "door", until = 3_000, peekUntil = 3_000)
+        CueAlerts.held = "door"
+        assertEquals(listOf("door"), cueArrange(listOf(item), 4_000).map { it.key })
+        CueAlerts.held = null
+        assertEquals(emptyList<String>(), cueArrange(listOf(item), 4_000).map { it.key })
     }
 
     @Test fun oneShellLineGivesBothAccesses() {
