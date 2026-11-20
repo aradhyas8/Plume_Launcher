@@ -257,6 +257,11 @@ class ActivityTest : Instrumentation() {
             }
             check(interruptedPairMs < 350) { "Home-D-pad-Home test took $interruptedPairMs ms" }
             check(!openedAfterInterruptedPair) { "Home popup did not interrupt the Home pair" }
+            runOnMainSync {
+                val dialog = checkNotNull(activity.setupDialog)
+                dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT))
+                dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_LEFT))
+            }
             var normalPairMs = 0L
             runOnMainSync {
                 val started = SystemClock.uptimeMillis()
