@@ -30,7 +30,8 @@ class SettingsTransferTest {
         for (values in listOf(mapOf("clock_style" to "unknown"), mapOf("clock_size" to "999"),
             mapOf("app_anim" to "true"), mapOf("wp_every" to 1.5), mapOf("geo_manual" to true),
             mapOf("geo_lat" to Double.NaN), mapOf("geo_lon" to 181), mapOf("row_hidden" to listOf(3)),
-            mapOf("order" to "hdmi:local"), mapOf("row_name" to "bad\u0000text"))) {
+            mapOf("order" to "hdmi:local"), mapOf("row_name" to "bad\u0000text"), mapOf("row_extras" to listOf("hdmi:local")),
+            mapOf("row_apps" to listOf("invalid")))) {
             assertThrows(IllegalArgumentException::class.java) { SettingsTransfer.validate(values) }
         }
     }
@@ -71,7 +72,36 @@ class SettingsTransferTest {
         assertEquals(2, commits)
     }
 
-    @Test fun oldBackupClearsExtrasMovedSoTheMoveRunsAgain() {
+    @Test fun oldBackupMigratesBeforeCachedAppsRender() {
+        val stored = restoreRow(mapOf("row_hidden" to listOf("com.maker.phone", "com.user.hidden")), setOf("com.maker.phone"))
+        assertEquals(true, stored["extras_moved"])
+        assertEquals(setOf("com.user.hidden"), stored["row_hidden"])
+        assertFalse(inRow("com.maker.phone", stored["row_hidden"] as Set<String>, extra = true))
+    }
+
+    @Test fun backupKeepsVisibilityWhenAppCategoryChangesBetweenTvs() {
+        for (sourceExtra in listOf(false, true)) for (destinationExtra in listOf(false, true)) for (shown in listOf(false, true)) {
+            val app = "com.example.app"
+            val source = SettingsTransfer.portable(mapOf("extras_moved" to true,
+                "row_hidden" to if (shown == sourceExtra) setOf(app) else emptySet(),
+                "row_apps" to setOf(app),
+                "row_extras" to if (sourceExtra) setOf(app) else emptySet()))
+            val stored = restoreRow(source, if (destinationExtra) setOf(app) else emptySet())
+            assertEquals("sourceExtra=$sourceExtra destinationExtra=$destinationExtra shown=$shown",
+                shown, inRow(app, stored["row_hidden"] as Set<String>, destinationExtra))
+            assertFalse(stored.containsKey("row_extras"))
+            assertFalse(stored.containsKey("row_apps"))
+        }
+    }
+
+    @Test fun restoreKeepsNewTvMakerAppsOutOfTheRow() {
+        val stored = restoreRow(mapOf("extras_moved" to true, "row_apps" to emptySet<String>(),
+            "row_extras" to emptySet<String>()), setOf("com.maker.new"))
+        assertEquals(emptySet<String>(), stored["row_hidden"])
+        assertFalse(inRow("com.maker.new", stored["row_hidden"] as Set<String>, extra = true))
+    }
+
+    private fun restoreRow(values: Map<String, *>, extras: Set<String>): Map<String, Any?> {
         val prefs = mutableMapOf<String, Any?>("extras_moved" to true, "row_hidden" to setOf("com.maker.phone"))
         val fake = Proxy.newProxyInstance(SharedPreferences::class.java.classLoader, arrayOf(SharedPreferences::class.java)) { _, method, _ ->
             when (method.name) {
@@ -86,9 +116,7 @@ class SettingsTransferTest {
                 else -> error("Unexpected preference call")
             }
         } as SharedPreferences
-        SettingsTransfer.restore(fake, mapOf("row_hidden" to listOf("com.maker.phone"))) // a backup from before extras_moved
-        assertNull(prefs["extras_moved"])
-        assertEquals(setOf("com.maker.phone"), prefs["row_hidden"])
-        assertEquals(true, SettingsTransfer.portable(mapOf("extras_moved" to true))["extras_moved"])
+        SettingsTransfer.restore(fake, values, extras)
+        return prefs
     }
 }

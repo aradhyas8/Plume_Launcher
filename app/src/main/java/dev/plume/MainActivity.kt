@@ -6491,8 +6491,10 @@ class MainActivity : Activity() {
         io.execute {
             val result = runCatching {
                 val file = SettingsTransfer.file(this)
-                if (load) SettingsTransfer.restore(prefs, SettingsTransfer.load(file))
-                else SettingsTransfer.save(file, snapshot)
+                val list = loadApps()
+                val extras = list.filter { it.extra }.map { it.pkg }.toSet()
+                if (load) SettingsTransfer.restore(prefs, SettingsTransfer.load(file), extras)
+                else SettingsTransfer.save(file, snapshot + mapOf("row_extras" to extras, "row_apps" to list.map { it.pkg }.toSet()))
                 file.path
             }
             ui.post {
