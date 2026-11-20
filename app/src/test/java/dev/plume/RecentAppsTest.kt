@@ -70,8 +70,12 @@ class RecentAppsTest {
         home.interruptedBy(KeyEvent.KEYCODE_DPAD_RIGHT)
         assertFalse(home.released(1_200))
         assertTrue(home.released(1_350))
-        home.interruptedBy(KeyEvent.KEYCODE_DPAD_CENTER)
-        assertFalse(home.released(1_400))
+
+        val center = HomePress()
+        assertFalse(center.released(2_000))
+        center.interruptedBy(KeyEvent.KEYCODE_DPAD_CENTER)
+        assertFalse(center.released(2_200))
+        assertTrue(center.released(2_350))
     }
 
     @Test fun anEarlierEventDoesNotCountAsADoublePress() {
