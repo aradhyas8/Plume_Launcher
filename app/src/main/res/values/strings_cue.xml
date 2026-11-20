@@ -9,7 +9,30 @@
     <string name="isl_access_on">Allowed</string>
     <string name="isl_access_off">Give access</string>
     <string name="help_isl_access">Needed for music and alerts from other apps. Plume reads only what Cue shows and sends nothing.</string>
-    <string name="isl_access_steps">This TV has no screen for notification access. On a computer on the same network, run:\nadb shell cmd notification allow_listener dev.plume/dev.plume.MediaListener</string>
+    <string name="isl_access_adb">Needs ADB</string>
+    <string name="isl_overlay_access">Show over apps</string>
+    <string name="help_isl_overlay_access">Lets Cue show alerts on top of other apps. Cue never takes the remote from the app.</string>
+    <string name="isl_overlay_low">Not on this TV</string>
+    <string name="isl_overlay">Alerts over apps</string>
+    <string name="help_isl_overlay">Calls, doorbells and finished timers show at the top while you watch other apps. Press Up while one shows to open it. Needs the Home button turned on.</string>
+    <string name="isl_alert_time">Alert time</string>
+    <string name="help_isl_alert_time">How long an alert shows at the top, on Home and over other apps. Then it is gone from Cue. A call stays until it ends.</string>
+    <string name="isl_seconds">%d s</string>
+    <string name="isl_alert_open">Open</string>
+    <string name="isl_alert_dismiss">Dismiss</string>
+    <string name="isl_overlay_denied">Not allowed. Alerts show on Home only. If the TV shows Plume as Allowed, turn it off and on again.</string>
+    <string name="isl_adb_title">Give access with ADB</string>
+    <string name="isl_adb_fire">Fire TV has no screen for notification access. Amazon lets only its own apps ask for it. You can give access one time with ADB.</string>
+    <string name="isl_adb_tv">This TV has no screen for this access. You can give access one time with ADB.</string>
+    <string name="isl_adb_off_fire">First turn on ADB debugging: Settings › My Fire TV › About, select the device name 7 times, then Developer options › ADB debugging.</string>
+    <string name="isl_adb_off_tv">First turn on USB debugging: Settings › Device Preferences › About, select Build 7 times, then Developer options › USB debugging.</string>
+    <string name="isl_adb_here">Give access on this TV</string>
+    <string name="isl_adb_dev">Open Developer options</string>
+    <string name="isl_adb_wait">If the TV asks to allow debugging, select Allow.</string>
+    <string name="isl_adb_done">Access given. You can turn ADB debugging off now.</string>
+    <string name="isl_adb_failed">Plume could not give access on this TV. Check that ADB debugging is on, or use a computer.</string>
+    <string name="isl_adb_computer">Use a computer</string>
+    <string name="isl_adb_computer_body">On a computer on the same network, run these:</string>
     <string name="isl_music">Music</string>
     <string name="help_isl_music">Music that plays in other apps, with its controls.</string>
     <string name="isl_idle">Hide music when paused</string>
@@ -67,6 +90,8 @@
 
     <!-- Alerts -->
     <string name="isl_alert_new">New notification</string>
+    <string name="isl_alert_message">New message</string>
+    <string name="isl_alert_reminder">Reminder</string>
     <string name="isl_alert_call">Incoming call</string>
 
     <!-- Bluetooth -->

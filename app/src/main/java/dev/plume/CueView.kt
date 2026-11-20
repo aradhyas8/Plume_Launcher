@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.Outline
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.media.MediaMetadata
@@ -116,11 +115,6 @@ internal class CueView(private val a: MainActivity) {
     fun on(key: String, default: Boolean = true) = a.prefs.getBoolean(key, default)
 
     fun MainActivity.setUpCue() {
-        // The art is a cover: a soft square, a little rounder open.
-        cueArt.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, dp(if (v.width < dp(40)) 8 else 12).toFloat())
-        }
-        cueArt.clipToOutline = true
         styleCue()
         cue.setOnClickListener { cueOk() }
     }
@@ -128,6 +122,8 @@ internal class CueView(private val a: MainActivity) {
     /** A glass tile like the app row's, open or not: the same Glass style, theme, tint and focus light. */
     fun MainActivity.styleCue() {
         style(cue, dp(CUE_ROUND), card = true, lift = 1f, rise = false, sheen = false) { focused ->
+            // An alert selected stays while Cue is selected, then goes if its time is over.
+            CueAlerts.held = if (focused) cueItem?.key else null
             if (focused) {
                 lastTop = cue
                 peekKey?.let { peeksShown += it } // selected while it peeked: it has been seen
@@ -288,7 +284,7 @@ internal class CueView(private val a: MainActivity) {
             cueWant = null
             return
         }
-        // An alert opens Cue by itself for a moment, only while nothing else is going on on the screen.
+        // An alert takes the pill for its moment (Alert time), only while nothing else is going on on the screen.
         val peek = if (!cue.isFocused && homeInFront()) cuePeek(cueList, now)?.takeIf { "${it.key}@${it.peekUntil}" !in peeksShown } else null
         val newPeek = peek?.let { "${it.key}@${it.peekUntil}" }
         // A screen reader says what opened Cue by itself; nobody looked at it on purpose.
@@ -297,12 +293,12 @@ internal class CueView(private val a: MainActivity) {
         val focused = cue.isFocused
         val item = peek ?: (if (focused) cueList.firstOrNull { it.key == cuePick } else null) ?: cueList[0]
         cueItem = item
-        val open = focused || peek != null
+        val open = focused
         val rows = cueRows(item)
         if (focused) {
             if (cueRowAt >= rows.size) { // just opened: the buttons, on the middle one (Play for music)
                 cueRowAt = rows.indexOf(CueRow.ACTIONS).takeIf { it >= 0 } ?: (rows.size - 1).coerceAtLeast(0)
-                cueCol = if (rows.getOrNull(cueRowAt) == CueRow.ACTIONS) item.actions.size / 2 else 0
+                cueCol = if (rows.getOrNull(cueRowAt) == CueRow.ACTIONS) cueFirstButton(item) else 0
             }
             if (rows.getOrNull(cueRowAt) == CueRow.MARKS) cueCol = cueList.indexOf(item).coerceAtLeast(0)
         }
@@ -344,18 +340,7 @@ internal class CueView(private val a: MainActivity) {
         val below = open && fit < dp(MIN_OPEN)
         // At rest the pill is one line, as high as the top bar's icons (36 dp), on their line.
         (cue.layoutParams as FrameLayout.LayoutParams).topMargin = if (below) (cue.parent as View).height else 0
-        if (open) cue.setPadding(dp(14), dp(14), dp(16), dp(14)) else cue.setPadding(dp(4), dp(4), dp(14), dp(4))
-        cueTop.layoutParams.width = if (open) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
-        cueArt2.layoutParams = cueArt2.layoutParams.apply { width = dp(if (open) 48 else 28); height = dp(if (open) 48 else 28) }
-        findViewById<View>(R.id.cueText).layoutParams = (findViewById<View>(R.id.cueText).layoutParams as LinearLayout.LayoutParams).apply {
-            marginStart = dp(if (open) 14 else 9)
-            width = if (open) 0 else ViewGroup.LayoutParams.WRAP_CONTENT
-            weight = if (open) 1f else 0f
-        }
-        findViewById<TextView>(R.id.cueTitle).apply {
-            maxLines = if (open) 2 else 1
-            maxWidth = dp(if (open) 400 else 260)
-        }
+        cueShape(cue, open)
         bindCue(item, open)
         // The tile hangs over the screen: its extra height is taken back by the margin, so the rows below never move.
         cue.measure(View.MeasureSpec.makeMeasureSpec(cue.layoutParams.width.coerceAtLeast(0),
@@ -443,50 +428,15 @@ internal class CueView(private val a: MainActivity) {
         val glassy = glassActive()
         val ink = if (!glassy) fg else if (cue.isShown && cue.width > 0) inkBehind(listOf(cue)) else iconInk
         cueInk = ink
-        val sports = item.kind == CueKind.SPORTS || item.kind == CueKind.SPORTS_LIVE
-        fun TextView.inked() = if (glassy) ink(this, ink) else { setShadowLayer(0f, 0f, 0f, 0); setTextColor(fg) }
         val music = item.kind == CueKind.MEDIA || item.kind == CueKind.MEDIA_PAUSED
-        findViewById<TextView>(R.id.cueTitle).apply {
-            // At rest the music is one line: the title, then the artist a little dimmer.
-            text = if (!open && music && !item.sub.isNullOrEmpty()) android.text.SpannableString("${item.title}  ·  ${item.sub}").apply {
-                setSpan(android.text.style.ForegroundColorSpan(ink and 0xFFFFFF or 0xB3000000.toInt()), item.title.length, length, 0)
-            } else item.title
-            textSize = if (!open) 13f else if (sports) 22f else 16f
-            fontFeatureSettings = if (item.tick > 0 || item.kind == CueKind.SPORTS_LIVE) "tnum" else null // numbers that change keep their width
-            inked()
-        }
-        findViewById<TextView>(R.id.cueArtist).apply {
-            text = item.sub.orEmpty()
-            visibility = if (open && !item.sub.isNullOrEmpty()) View.VISIBLE else View.GONE
-            textSize = if (open) 13f else 11f
-            maxLines = if (open) 2 else 1 // a match's state ("ABT batting · 28.1 ov · Zimbabwe lead by 291 runs") can take two lines
-            inked()
-        }
-        cue.contentDescription = item.description ?: listOfNotNull(item.title, item.sub).joinToString(", ")
+        val rows = cueRows(item)
+        val selRow = if (cue.isFocused) rows.getOrNull(cueRowAt) else null
+        // The bars move with the music, in the art's colour: pale on a light ink and deep on a dark one.
+        accent = item.image?.takeIf { music }?.let { artTone(it) }?.let { cueAccent(it, Color.luminance(ink) > 0.5f) } ?: ink
         val (picture, picture2) = cuePictures(item)
-        val size = dp(if (!open) 28 else if (sports) 40 else 80)
-        if (cueArt.layoutParams.width != size) {
-            cueArt.layoutParams = cueArt.layoutParams.apply { width = size; height = size }
-        }
-        when {
-            picture != null -> { cueArt.clearColorFilter(); cueArt.setImageBitmap(picture); cueArt.background = null; cueArt.setPadding(0, 0, 0, 0) }
-            item.icon != 0 -> {
-                cueArt.setImageResource(item.icon)
-                if (item.mono) cueArt.setColorFilter(ink) else cueArt.clearColorFilter()
-                // An icon sits on a soft disc of the ink, the size of the picture it stands in for.
-                cueArt.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ink and 0xFFFFFF or 0x26000000) }
-                val pad = dp(if (!open) 5 else if (sports) 8 else 20)
-                cueArt.setPadding(pad, pad, pad, pad)
-            }
-            else -> cueArt.setImageDrawable(null)
-        }
-        cueArt2.visibility = if (picture2 != null) View.VISIBLE else View.GONE
-        cueArt2.setImageBitmap(picture2)
-        if (sports) {
-            cueArt.scaleType = ImageView.ScaleType.FIT_CENTER
-        } else {
-            cueArt.scaleType = ImageView.ScaleType.CENTER_CROP
-        }
+        cueBind(cue, item, open, ink, { if (glassy) ink(it, ink) else { it.setShadowLayer(0f, 0f, 0f, 0); it.setTextColor(fg) } },
+            picture, picture2, if (selRow == CueRow.ACTIONS) cueCol else -1,
+            if (music) accent and 0xFFFFFF or 0x59000000 else ink and 0xFFFFFF or 0x2E000000)
         // The music's mark as the Shows row shows it: a plain mark in the ink, or its brand colour with Colour on.
         val pkg = media?.packageName
         val logo = pkg?.let { MainActivity.LOGOS[it] }?.takeIf { !it.second }
@@ -494,21 +444,15 @@ internal class CueView(private val a: MainActivity) {
             visibility = if (open && music) View.VISIBLE else View.GONE
             setImageDrawable(if (!music || pkg == null) null else if (logo != null) getDrawable(logo.first)!!.mutate().apply { setTint(MainActivity.BRAND_COLOURS[pkg]?.takeIf { cwColour() } ?: ink) } else sourceIcon(pkg))
         }
-        // The bars move with the music, in the art's colour: pale on a light ink and deep on a dark one.
-        val light = Color.luminance(ink) > 0.5f
-        accent = item.image?.takeIf { music }?.let { artTone(it) }?.let { cueAccent(it, light) } ?: ink
         findViewById<EqBars>(R.id.cueEq).apply {
             visibility = if (!open && music) View.VISIBLE else View.GONE
             color = accent
             playing = item.kind == CueKind.MEDIA
         }
         bindMarks(open, ink)
-        // Open: the bar (music: with its times; a timer or an update: on its own), then the buttons.
-        val rows = cueRows(item)
-        val selRow = if (cue.isFocused) rows.getOrNull(cueRowAt) else null
         val bar = if (music) (media?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L) > 0L else item.progress != null
         // Open: the bar with its times and the buttons. The pill at rest has none of them.
-        cueMore.visibility = if (open && (bar || item.actions.isNotEmpty())) View.VISIBLE else View.GONE
+        if (open && bar) cueMore.visibility = View.VISIBLE
         findViewById<View>(R.id.cueTimes).visibility = if (bar) View.VISIBLE else View.GONE
         findViewById<View>(R.id.cueElapsed).visibility = if (music && open) View.VISIBLE else View.GONE
         findViewById<View>(R.id.cueLeft).visibility = if (music && open) View.VISIBLE else View.GONE
@@ -518,42 +462,6 @@ internal class CueView(private val a: MainActivity) {
             marginEnd = if (open) dp(10) else 0
         }
         if (music) showProgress() else item.progress?.let { cueBar.color = ink; cueBar.fraction = it }
-        cueActions.visibility = if (item.actions.isEmpty() || !open) View.GONE else View.VISIBLE
-        if (cueActions.childCount != item.actions.size || cueActions.tag != item.key + item.actions.joinToString { "${it.icon}${it.label}" }) {
-            cueActions.removeAllViews()
-            cueActions.tag = item.key + item.actions.joinToString { "${it.icon}${it.label}" }
-            item.actions.forEachIndexed { i, a ->
-                val big = music && a.icon == R.drawable.ic_pause || music && a.icon == R.drawable.ic_play
-                val v: View = if (a.icon != 0) ImageView(this).apply {
-                    setImageResource(a.icon)
-                    val p = dp(if (big) 9 else 8)
-                    setPadding(p, p, p, p)
-                } else TextView(this).apply {
-                    text = a.label
-                    textSize = 15f
-                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                    gravity = Gravity.CENTER
-                    setPadding(dp(16), 0, dp(16), 0)
-                }
-                v.contentDescription = a.description ?: a.label
-                val s = dp(if (big) 44 else 36)
-                cueActions.addView(v, LinearLayout.LayoutParams(if (a.icon != 0) s else ViewGroup.LayoutParams.WRAP_CONTENT, s).apply {
-                    if (i > 0) marginStart = dp(if (music) 18 else 14)
-                })
-            }
-        }
-        for (i in 0 until cueActions.childCount) {
-            val v = cueActions.getChildAt(i)
-            val on = selRow == CueRow.ACTIONS && i == cueCol
-            (v as? ImageView)?.setColorFilter(ink)
-            (v as? TextView)?.let { it.setTextColor(ink) }
-            // The picked button sits on a soft disc (a pill for a word) of the ink, like a lit top bar icon: no ring, no growth.
-            v.background = if (on) GradientDrawable().apply {
-                if (v is ImageView) shape = GradientDrawable.OVAL else cornerRadius = dp(22).toFloat()
-                setColor(if (music) accent and 0xFFFFFF or 0x59000000 else ink and 0xFFFFFF or 0x2E000000)
-            } else null
-            v.alpha = if (on || selRow != CueRow.ACTIONS) 1f else 0.75f
-        }
     }
 
     /** A row of items to choose from while Cue is open. */
@@ -682,7 +590,7 @@ internal class CueView(private val a: MainActivity) {
         cueRowAt += d
         cueCol = when (cueRows(item).getOrNull(cueRowAt)) {
             CueRow.MARKS -> cueList.indexOfFirst { it.key == item.key }.coerceAtLeast(0)
-            CueRow.ACTIONS -> item.actions.size / 2
+            CueRow.ACTIONS -> cueFirstButton(item)
             else -> 0
         }
         bindCue(item, cueOpen)
@@ -707,7 +615,7 @@ internal class CueView(private val a: MainActivity) {
     fun MainActivity.cueOk() {
         val item = cueItem ?: return
         when (cueRows(item).getOrNull(cueRowAt)) {
-            CueRow.MARKS -> cueRows(item).indexOf(CueRow.ACTIONS).takeIf { it >= 0 }?.let { cueRowAt = it; cueCol = item.actions.size / 2; bindCue(item, cueOpen) }
+            CueRow.MARKS -> cueRows(item).indexOf(CueRow.ACTIONS).takeIf { it >= 0 }?.let { cueRowAt = it; cueCol = cueFirstButton(item); bindCue(item, cueOpen) }
             CueRow.BAR -> media?.transportControls?.let { if (mediaPlaying(media)) it.pause() else it.play() }
             CueRow.ACTIONS -> item.actions.getOrNull(cueCol)?.run?.invoke()
             null -> {}
@@ -843,6 +751,10 @@ internal class CueView(private val a: MainActivity) {
  * The music art's colour, strong enough to read as a colour on the glass: the art's mean hue, at least half
  * saturated, bright over a dark wallpaper (light ink) and deep over a light one. A grey cover stays grey.
  */
+/** Where the cursor starts on an item's buttons: music on the middle one (Play), anything else on the first. */
+internal fun cueFirstButton(item: CueItem) =
+    if (item.kind == CueKind.MEDIA || item.kind == CueKind.MEDIA_PAUSED) item.actions.size / 2 else 0
+
 internal fun cueAccent(mean: Int, lightInk: Boolean): Int {
     val hsv = FloatArray(3)
     Color.colorToHSV(mean, hsv)

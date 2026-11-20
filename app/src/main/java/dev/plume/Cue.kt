@@ -50,18 +50,19 @@ internal class CueItem(
     val peekUntil: Long = 0L,
     val actions: List<CueAction> = emptyList(),
     val description: String? = null,
+    val photo: Bitmap? = null, // a camera's snapshot, shown wide above the text when open
 ) {
     /** The same item with another second line (a battery level that lands after the connect). */
     fun withSub(sub: String?) = CueItem(key, kind, title, sub, icon, mono, image, imageUri, image2Uri, progress, tick, since, until,
-        peekUntil, actions, description)
+        peekUntil, actions, description, photo)
 
     /** What Cue shows of it: the same text and times mean nothing to redraw. */
     val shown get() = "$key|$kind|$title|$sub|$progress|$since|$until|$peekUntil"
 }
 
-/** The items still current at [now], the pill's first: lowest rank, then newest. */
+/** The items still current at [now] (and an alert someone has open), the pill's first: lowest rank, then newest. */
 internal fun cueArrange(items: List<CueItem>, now: Long): List<CueItem> =
-    items.filter { now < it.until }.sortedWith(compareBy<CueItem> { it.kind.rank }.thenByDescending { it.since })
+    items.filter { now < it.until || it.key == CueAlerts.held }.sortedWith(compareBy<CueItem> { it.kind.rank }.thenByDescending { it.since })
 
 /** The item Cue opens by itself for at [now], if any: the newest one still peeking. */
 internal fun cuePeek(items: List<CueItem>, now: Long): CueItem? =
@@ -81,6 +82,8 @@ internal val CUE_RECENT = listOf(1, 5, 10, 30) // the timer icon's lengths befor
 
 /** The timer icon's lengths after a [used] timer: it comes first, a repeat is not listed twice, at most 4. */
 internal fun islRecent(list: List<Int>, used: Int) = (listOf(used) + (list - used)).take(4)
+internal const val CUE_ALERT_MS = 2_000L // how long an alert takes the pill, on Home and over apps ("Alert time")
+internal val CUE_ALERT_TIMES = listOf(2_000L, 4_000L, 6_000L, 10_000L)
 internal val CUE_IDLES = listOf(60_000L, CUE_IDLE_MS, 0L) // "Hide music when paused"; 0 is Never
 
 /** An app's name, or null when it is gone or hidden from Plume. */
@@ -109,13 +112,16 @@ internal fun cueJson(url: String): JSONObject {
 
 /**
  * Where sources tell the home screen that their items changed. Sources call [changed] from any thread; the home
- * screen sets [listener] while it is shown and gets the call on the main thread.
+ * screen sets [listener] while it is shown and gets the call on the main thread. [CueOverlay] hears every change too.
  */
 internal object Cue {
     private val main = Handler(Looper.getMainLooper())
     @Volatile var listener: (() -> Unit)? = null
 
     fun changed() {
-        main.post { listener?.invoke() }
+        main.post {
+            listener?.invoke()
+            CueOverlay.update()
+        }
     }
 }

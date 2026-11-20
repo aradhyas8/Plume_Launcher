@@ -63,7 +63,6 @@ internal object CueTimers {
 
     private const val MINUTE = 60_000L
     private const val DONE_SHOWN = 2 * MINUTE
-    private const val PEEK = 8_000L
     private const val ALARM_TIMER = 1
 
     // Lazy, because a Handler made when the object loads would also be made in unit tests that never need it.
@@ -76,6 +75,7 @@ internal object CueTimers {
     /** Loads the saved state: ends what ended while the process was gone, and sets the Handler and alarms again. */
     fun init(ctx: Context) {
         app = ctx.applicationContext
+        CueOverlay.attach(ctx)
         check()
     }
 
@@ -163,7 +163,7 @@ internal object CueTimers {
                 out += CueItem(
                     key = "timer", kind = CueKind.TIMER_DONE, title = c.getString(R.string.isl_timer_done),
                     sub = c.getString(R.string.isl_timer_done_sub, length(c, p.getLong(T_TOTAL, 0L))),
-                    icon = R.drawable.ms_timer, since = end, until = end + DONE_SHOWN, peekUntil = end + PEEK,
+                    icon = R.drawable.ms_timer, since = end, until = end + DONE_SHOWN, peekUntil = end + DONE_SHOWN, // takes the pill until it is stopped
                     actions = listOf(
                         CueAction(R.drawable.ic_isl_stop, description = c.getString(R.string.isl_timer_dismiss)) { cancelTimer(c) },
                         CueAction(label = c.getString(R.string.isl_timer_plus1), description = c.getString(R.string.isl_timer_again)) {
