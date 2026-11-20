@@ -37,6 +37,7 @@
     <li><strong>Photos</strong>, only if you choose a folder of your own photos for the wallpaper or screensaver.</li>
     <li><strong>TV inputs</strong> (HDMI sources), to show the Sources list.</li>
     <li><strong>Your settings</strong>, such as layout, theme, PIN and remote keys. They are stored in Plume's private storage on the TV.</li>
+    <li><strong>Recent apps and previews</strong>, only if you use Recent apps or turn previews on. Plume keeps the recent app list on the TV. With previews on, it captures the current screen when you press Home or open Recent apps from another app. It keeps the last screen of up to six apps in Plume's private storage on the TV. These images are not included in backups and are deleted when you turn previews off.</li>
     <li><strong>Your approximate location</strong>, only if you turn on the weather or choose a city. Besides the weather, the Auto theme uses it to work out sunrise and sunset on the TV. That calculation sends nothing. Plume keeps the location on the TV after you turn the weather off, so the Auto theme still works. Clearing Plume's data in Android settings removes it.</li>
   </ul>
 
@@ -46,7 +47,8 @@
     <tr><th>Service</th><th>Why</th><th>When</th></tr>
     <tr><td>ipwho.is</td><td>Find your approximate city from your IP address, for the weather</td><td>Only if weather is on and set to automatic location</td></tr>
     <tr><td>Open-Meteo (api.open-meteo.com, geocoding-api.open-meteo.com)</td><td>Get the weather, and find a city you type</td><td>Only if weather is on</td></tr>
-    <tr><td>Bing (www.bing.com)</td><td>Download the daily wallpaper image</td><td>Only if you choose the Bing wallpaper</td></tr>
+    <tr><td>Bing (www.bing.com)</td><td>Provide the default daily wallpaper image</td><td>By default, while the Bing wallpaper is in use; Plume checks while it is open and connected to the internet</td></tr>
+    <tr><td>ESPN (site.api.espn.com and image hosts named by ESPN)</td><td>Get scores, team lists and team logos for games and teams you select in Cue. Score requests include league and date details; Plume sends no account or device ID.</td><td>When you open Cue's Games settings, and while Plume Home is open with selected games or teams</td></tr>
     <tr><td>TMDB (api.themoviedb.org, image.tmdb.org)</td><td>Verify your API key and use it to find artwork by show title</td><td>When you add a key, and when Your shows needs artwork</td></tr>
     <tr><td>GitHub (github.com, api.github.com)</td><td>Check for updates, download updates and gallery images</td><td>Once a day for updates; gallery only if you choose it</td></tr>
   </table></div>
@@ -57,7 +59,7 @@
   <p>The TMDB key form also runs on your TV. Use trusted Wi-Fi because the form sends the key over unencrypted HTTP. Plume saves the key on the TV when you select <strong>Done</strong> and excludes it from backups. Select <strong>Turn off TMDB and remove key</strong> to stop lookups.</p>
 
   <h2>Accessibility service</h2>
-  <p>Plume includes an accessibility service. It is used for one purpose: to open Plume when you press the Home button, and to run the remote key changes you set up in Plume. The service listens to remote key presses and to which app's window is in front. It does not read screen content, text you type, or other apps' data. It does not store or send any of this information. You can turn the service off at any time in Plume's settings or in Android's Accessibility settings.</p>
+  <p>Plume includes an accessibility service. It opens Plume when you press Home and runs the remote key changes you set up in Plume. The service listens to remote key presses and to which app's window is in front. Plume uses the app name to build Recent apps; this list stays on the TV. It does not read screen content by default. If you turn on Recent app previews, Plume captures the current screen when you press Home or open Recent apps from another app. Those images stay on the TV; see the section above. Plume does not send key presses or app-window information. You can turn the service off at any time in Plume's settings or in Android's Accessibility settings.</p>
 
   <h2>Permissions</h2>
   <ul>
