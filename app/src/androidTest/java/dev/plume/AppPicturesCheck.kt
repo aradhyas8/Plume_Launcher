@@ -64,7 +64,7 @@ class AppPicturesCheck(private val runner: Instrumentation) {
                 check(Color.alpha(picture.getPixel(256, 0)) == 255)
                 picture.recycle()
             }
-            server = UploadServer("1234", temp, imagesOnly = true) { uploaded, _ ->
+            server = UploadServer(temp, imagesOnly = true) { uploaded, _ ->
                 val picture = AppPictures.fit(uploaded, false)
                 if (picture == null) null else try {
                     if (AppPictures.save(icon, picture) { true }) "Test app" else null
@@ -79,13 +79,16 @@ class AppPicturesCheck(private val runner: Instrumentation) {
                     socket.getInputStream().bufferedReader().readText()
                 }
             check(request("wrong").startsWith("HTTP/1.1 404"))
-            val page = request("1234")
+            check(request("wrong", "image/png", png).startsWith("HTTP/1.1 404"))
+            check(icon.readBytes().contentEquals(before)) { "Invalid token replaced the icon" }
+            val page = request(server.code)
             check(page.contains("Change app picture") && !page.contains("video/mp4"))
-            check(request("1234", "video/mp4").startsWith("HTTP/1.1 415"))
-            check(request("1234", "image/png", length = 5 * 1024 * 1024 + 1).startsWith("HTTP/1.1 413"))
-            check(request("1234", "image/png", "invalid".toByteArray()).startsWith("HTTP/1.1 415"))
+            check(request(server.code, "video/mp4").startsWith("HTTP/1.1 415"))
+            check(request(server.code, "image/png", length = 5 * 1024 * 1024 + 1).startsWith("HTTP/1.1 413"))
+            check(request(server.code, "image/png", "invalid".toByteArray()).startsWith("HTTP/1.1 415"))
             check(icon.readBytes().contentEquals(before)) { "Rejected upload replaced the icon" }
-            check(request("1234", "image/png", png).startsWith("HTTP/1.1 200"))
+            icon.delete()
+            check(request(server.code, "image/png", png).startsWith("HTTP/1.1 200"))
             check(BitmapFactory.decodeFile(icon.path)!!.let { it.width == 512 && it.height == 512 })
             AppPictures.reset(context, pkg)
             check(!icon.exists() && !banner.exists())

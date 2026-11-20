@@ -3014,7 +3014,7 @@ class MainActivity : Activity() {
         val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_photo), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File.createTempFile("upload-", ".tmp", cacheDir)) { file, video ->
+            UploadServer(File.createTempFile("upload-", ".tmp", cacheDir)) { file, video ->
                 if (!active.get()) return@UploadServer null
                 val saved = (if (video) importVideoWallpaper(file, dir) else importWallpaper(file, dir)) ?: return@UploadServer null
                 ui.post {
@@ -5228,7 +5228,7 @@ class MainActivity : Activity() {
         val active = AtomicBoolean(true)
         val status = label(getString(R.string.waiting_app_picture), 14f).apply { gravity = Gravity.CENTER; maxLines = 2 }
         val server = try {
-            UploadServer((1000..9999).random().toString(), File.createTempFile("app-picture-", ".tmp", cacheDir), imagesOnly = true) { file, _ ->
+            UploadServer(File.createTempFile("app-picture-", ".tmp", cacheDir), imagesOnly = true) { file, _ ->
                 if (!active.get()) return@UploadServer null
                 val bitmap = AppPictures.fit(file, banner) ?: return@UploadServer null
                 val saved = try {
