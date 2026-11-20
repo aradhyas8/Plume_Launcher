@@ -16,6 +16,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
+- Plume shows an error when the TV blocks an app launch, instead of closing.
 - **Wallpaper gallery.** Browse wallpapers by source. Select photos from a TV or USB folder and preview the slideshow before you apply it.
 - **All apps** hides mobile apps that came with the TV. Select **Show mobile apps** to see them. Plume also removes them from the home row.
 - Plume uses the **Bing picture of the day** on first install. It downloads the picture when the TV connects to the internet.

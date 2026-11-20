@@ -5864,7 +5864,12 @@ class MainActivity : Activity() {
     private fun startApp(intent: Intent, from: View?) {
         val source = from?.takeIf { animationsOn() && it.isAttachedToWindow && it.width > 0 }
         val options = source?.let { ActivityOptions.makeScaleUpAnimation(it, 0, 0, it.width, it.height).toBundle() }
-        startActivity(intent, options)
+        try {
+            startActivity(intent, options)
+        } catch (_: SecurityException) {
+            toast(getString(R.string.cant_open_app))
+            return
+        }
         openedFrom = source?.let { WeakReference(it) }
         returnTo = focusKey(from)
     }

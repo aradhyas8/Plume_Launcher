@@ -163,6 +163,7 @@
     <string name="app_info">App info</string>
     <string name="uninstall">Uninstall</string>
     <string name="cant_uninstall">Cannot uninstall this app</string>
+    <string name="cant_open_app">This TV does not allow Plume to open this app.</string>
     <string name="remove_from_cw">Remove from Continue Watching</string>
     <string name="open_app">Open app</string>
     <string name="moving_hint">Moving:  ◀ ▶ move  ·  OK place</string>
