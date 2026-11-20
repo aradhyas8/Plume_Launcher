@@ -70,4 +70,25 @@ class SettingsTransferTest {
         assertEquals(original, stored)
         assertEquals(2, commits)
     }
+
+    @Test fun oldBackupClearsExtrasMovedSoTheMoveRunsAgain() {
+        val prefs = mutableMapOf<String, Any?>("extras_moved" to true, "row_hidden" to setOf("com.maker.phone"))
+        val fake = Proxy.newProxyInstance(SharedPreferences::class.java.classLoader, arrayOf(SharedPreferences::class.java)) { _, method, _ ->
+            when (method.name) {
+                "getAll" -> prefs.toMap()
+                "edit" -> Proxy.newProxyInstance(SharedPreferences.Editor::class.java.classLoader, arrayOf(SharedPreferences.Editor::class.java)) { editor, call, args ->
+                    when (call.name) {
+                        "remove" -> { prefs.remove(args!![0]); editor }
+                        "commit" -> true
+                        else -> { prefs[args!![0] as String] = args[1]; editor }
+                    }
+                }
+                else -> error("Unexpected preference call")
+            }
+        } as SharedPreferences
+        SettingsTransfer.restore(fake, mapOf("row_hidden" to listOf("com.maker.phone"))) // a backup from before extras_moved
+        assertNull(prefs["extras_moved"])
+        assertEquals(setOf("com.maker.phone"), prefs["row_hidden"])
+        assertEquals(true, SettingsTransfer.portable(mapOf("extras_moved" to true))["extras_moved"])
+    }
 }

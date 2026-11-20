@@ -26,7 +26,9 @@ internal object SettingsTransfer {
         "weather" to setOf("off", "c", "f"),
         "wx_unit" to setOf("c", "f"),
     )
-    private val switches = setOf("glass", "colour_icons", "app_anim", "row_drop", "cw_colour", "geo_manual")
+    // extras_moved travels with row_hidden: a backup without it is from before row_hidden listed the TV maker apps put
+    // back in the row, so restore clears it and the one-time move runs again on the old list.
+    private val switches = setOf("glass", "colour_icons", "app_anim", "row_drop", "cw_colour", "geo_manual", "extras_moved", "all_apps_mobile")
     private val clockFormats = ClockFormat.entries.associateBy { it.key }
     private val keys = choices.keys + switches + clockFormats.keys + setOf("order", "row_hidden", "cw_off", "row_name", "top_bar",
         "wp_every", "geo_city", "geo_lat", "geo_lon")
