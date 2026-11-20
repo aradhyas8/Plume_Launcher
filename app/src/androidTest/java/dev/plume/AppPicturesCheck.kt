@@ -15,7 +15,7 @@ import android.widget.TextView
 import java.io.File
 import java.net.Socket
 
-/** Real bitmap and HTTP checks, using separate files and no installed app's artwork. */
+/** Bitmap and HTTP checks with isolated files and fully restored home fixtures. */
 class AppPicturesCheck(private val runner: Instrumentation) {
     fun run() {
         val context = runner.targetContext
@@ -41,6 +41,7 @@ class AppPicturesCheck(private val runner: Instrumentation) {
                 check(picture.width == 960 && picture.height == 540)
                 check(picture.getPixel(0, 0) == Color.RED) { "Banner did not fill the tile" }
                 check(AppPictures.save(banner, picture) { true })
+                picture.eraseColor(Color.BLUE)
                 check(!AppPictures.save(icon, picture) { false })
                 picture.recycle()
             }
@@ -64,6 +65,9 @@ class AppPicturesCheck(private val runner: Instrumentation) {
                 check(Color.alpha(picture.getPixel(256, 0)) == 255)
                 picture.recycle()
             }
+            source.eraseColor(Color.BLUE)
+            src.outputStream().use { source.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            val replacement = src.readBytes()
             server = UploadServer(temp, imagesOnly = true) { uploaded, _ ->
                 val picture = AppPictures.fit(uploaded, false)
                 if (picture == null) null else try {
@@ -79,7 +83,7 @@ class AppPicturesCheck(private val runner: Instrumentation) {
                     socket.getInputStream().bufferedReader().readText()
                 }
             check(request("wrong").startsWith("HTTP/1.1 404"))
-            check(request("wrong", "image/png", png).startsWith("HTTP/1.1 404"))
+            check(request("wrong", "image/png", replacement).startsWith("HTTP/1.1 404"))
             check(icon.readBytes().contentEquals(before)) { "Invalid token replaced the icon" }
             val page = request(server.code)
             check(page.contains("Change app picture") && !page.contains("video/mp4"))
@@ -87,13 +91,14 @@ class AppPicturesCheck(private val runner: Instrumentation) {
             check(request(server.code, "image/png", length = 5 * 1024 * 1024 + 1).startsWith("HTTP/1.1 413"))
             check(request(server.code, "image/png", "invalid".toByteArray()).startsWith("HTTP/1.1 415"))
             check(icon.readBytes().contentEquals(before)) { "Rejected upload replaced the icon" }
-            icon.delete()
-            check(request(server.code, "image/png", png).startsWith("HTTP/1.1 200"))
-            check(BitmapFactory.decodeFile(icon.path)!!.let { it.width == 512 && it.height == 512 })
+            checkPixels(icon, 512, 512, Color.RED)
+            check(request(server.code, "image/png", replacement).startsWith("HTTP/1.1 200"))
+            checkPixels(icon, 512, 512, Color.BLUE)
+            check(!icon.readBytes().contentEquals(before)) { "Upload kept the old icon" }
             AppPictures.reset(context, pkg)
             check(!icon.exists() && !banner.exists())
             check(AppPictures.read(context, pkg, false) == null)
-            checkHome(png)
+            checkHome(png, replacement)
         } finally {
             server?.stop()
             source.recycle()
@@ -103,7 +108,7 @@ class AppPicturesCheck(private val runner: Instrumentation) {
         }
     }
 
-    private fun checkHome(png: ByteArray) = with(runner) {
+    private fun checkHome(png: ByteArray, replacement: ByteArray) = with(runner) {
         val prefs = targetContext.getSharedPreferences("home", Context.MODE_PRIVATE)
         val setup = prefs.all["setup_shown"] as? Boolean
         val lock = prefs.getString("lock_pin", null)
@@ -115,42 +120,60 @@ class AppPicturesCheck(private val runner: Instrumentation) {
             val app = startActivitySync(Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
             home = app
             val row = app.findViewById<ViewGroup>(R.id.appRow)
-            await { row.childCount > 0 }
-            val pkg = row.getChildAt(0).tag as String
-            val name = row.getChildAt(0).contentDescription.toString()
+            val installed = targetContext.packageManager.queryIntentActivities(
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0
+            ).map { it.activityInfo.packageName }.toSet() + targetContext.packageManager.queryIntentActivities(
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+            ).map { it.activityInfo.packageName }.toSet()
+            await("Picture checks need a visible installed app") {
+                (0 until row.childCount).any { row.getChildAt(it).tag in installed }
+            }
+            val pkg = checkNotNull((0 until row.childCount).map { row.getChildAt(it).tag as String }
+                .filter { it in installed }.minOrNull()) { "Picture checks need a visible installed app" }
+            fun tile() = checkNotNull((0 until row.childCount).map { row.getChildAt(it) }.firstOrNull { it.tag == pkg })
+            val name = tile().contentDescription.toString()
             for (banner in listOf(false, true)) {
                 val file = AppPictures.file(targetContext, pkg, banner)
                 originals[file] = file.takeIf { it.exists() }?.readBytes()
             }
-            val count = row.childCount
+            val order = (0 until row.childCount).map { row.getChildAt(it).tag }
             val list = app.findViewById<ViewGroup>(R.id.settingsList)
             val upload = MainActivity::class.java.getDeclaredField("upload").apply { isAccessible = true }
             val pictures = MainActivity::class.java.getDeclaredMethod("appPictures", String::class.java, String::class.java).apply { isAccessible = true }
             val render = MainActivity::class.java.getDeclaredMethod("renderApps").apply { isAccessible = true }
-            runOnMainSync { row.getChildAt(0).requestFocus(); pictures.invoke(app, pkg, name) }
+            runOnMainSync { tile().requestFocus(); pictures.invoke(app, pkg, name) }
             await { app.findViewById<TextView>(R.id.settingsTitle).text.toString() == targetContext.getString(R.string.change_app_picture) }
             for (banner in listOf(false, true)) {
+                val file = AppPictures.file(targetContext, pkg, banner)
+                file.parentFile!!.mkdirs()
+                file.writeBytes(png)
+                val before = file.readBytes()
                 runOnMainSync { list.getChildAt(if (banner) 1 else 0).performClick() }
                 val server = upload.get(app) as UploadServer
-                val response = Socket("127.0.0.1", server.port).use { socket ->
+                fun request(code: String) = Socket("127.0.0.1", server.port).use { socket ->
                     socket.soTimeout = 5_000
                     socket.getOutputStream().apply {
-                        write("POST /${server.code} HTTP/1.1\r\nHost: localhost\r\nContent-Type: image/png\r\nContent-Length: ${png.size}\r\n\r\n".toByteArray())
-                        write(png)
+                        write("POST /$code HTTP/1.1\r\nHost: localhost\r\nContent-Type: image/png\r\nContent-Length: ${replacement.size}\r\n\r\n".toByteArray())
+                        write(replacement)
                         flush()
                     }
                     socket.getInputStream().bufferedReader().readText()
                 }
+                check(request("wrong").startsWith("HTTP/1.1 404"))
+                check(file.readBytes().contentEquals(before)) { "Denied upload replaced the app picture" }
+                checkPixels(file, 64, 32, Color.RED)
+                val response = request(server.code)
                 check(response.startsWith("HTTP/1.1 200")) { response }
                 waitForIdleSync()
-                check(AppPictures.file(targetContext, pkg, banner).exists())
-                check(row.childCount == count && row.getChildAt(0).tag == pkg) { "Upload changed the app row" }
-                check(row.getChildAt(0).contentDescription.toString() == name)
+                checkPixels(file, if (banner) 960 else 512, if (banner) 540 else 512, Color.BLUE)
+                check(!file.readBytes().contentEquals(before)) { "Upload kept the old app picture" }
+                check((0 until row.childCount).map { row.getChildAt(it).tag } == order) { "Upload changed the app row" }
+                check(tile().contentDescription.toString() == name)
                 if (!banner) {
                     for (style in listOf("mono", "colour")) {
                         prefs.edit().putString("icon_style", style).commit()
                         runOnMainSync { render.invoke(app) }
-                        val image = (row.getChildAt(0) as ViewGroup).getChildAt(0) as ImageView
+                        val image = (tile() as ViewGroup).getChildAt(0) as ImageView
                         check((image.drawable.colorFilter != null) == (style == "mono")) { "Uploaded icon ignored $style style" }
                     }
                 }
@@ -159,7 +182,7 @@ class AppPicturesCheck(private val runner: Instrumentation) {
             }
             prefs.edit().putString("icon_style", "banner").commit()
             runOnMainSync { render.invoke(app) }
-            check(row.getChildAt(0) is FrameLayout) { "Custom banner did not use the banner tile" }
+            check(tile() is FrameLayout) { "Custom banner did not use the banner tile" }
             runOnMainSync { list.getChildAt(2).performClick() }
             check(listOf(false, true).none { AppPictures.file(targetContext, pkg, it).exists() }) { "Reset left custom pictures" }
             runOnMainSync { app.onBackPressed() }
@@ -185,7 +208,15 @@ class AppPicturesCheck(private val runner: Instrumentation) {
         }
     }
 
-    private fun await(condition: () -> Boolean) {
+    private fun checkPixels(file: File, width: Int, height: Int, color: Int) {
+        val bitmap = checkNotNull(BitmapFactory.decodeFile(file.path)) { "Saved picture did not decode" }
+        try {
+            check(bitmap.width == width && bitmap.height == height) { "Saved picture has incorrect dimensions" }
+            check(bitmap.getPixel(width / 2, height / 2) == color) { "Saved picture has incorrect pixels" }
+        } finally { bitmap.recycle() }
+    }
+
+    private fun await(message: String = "Home did not reach the expected state", condition: () -> Boolean) {
         val until = SystemClock.uptimeMillis() + 5_000
         do {
             var done = false
@@ -193,6 +224,6 @@ class AppPicturesCheck(private val runner: Instrumentation) {
             if (done) return
             SystemClock.sleep(50)
         } while (SystemClock.uptimeMillis() < until)
-        error("Home did not reach the expected state")
+        error(message)
     }
 }
