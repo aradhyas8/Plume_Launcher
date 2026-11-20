@@ -24,6 +24,7 @@ class ActivityTest : Instrumentation() {
     private var transferOnly = false
     private var muteOnly = false
     private var picturesOnly = false
+    private var protectedLaunchOnly = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -31,10 +32,16 @@ class ActivityTest : Instrumentation() {
         transferOnly = arguments?.getString("class") == SettingsTransferCheck::class.java.name
         muteOnly = arguments?.getString("class") == MuteCheck::class.java.name
         picturesOnly = arguments?.getString("class") == AppPicturesCheck::class.java.name
+        protectedLaunchOnly = arguments?.getString("class") == "dev.plume.ActivityTest#protectedAppLaunch"
         start()
     }
 
     override fun onStart() {
+        if (protectedLaunchOnly) {
+            test("protectedAppLaunch") { checkProtectedLaunch() }
+            finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
+            return
+        }
         if (picturesOnly) {
             test("appPictureUploadSizingTransparencyAndReset") { AppPicturesCheck(this).run() }
             finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
@@ -57,6 +64,7 @@ class ActivityTest : Instrumentation() {
         }
         ParcelFileDescriptor.AutoCloseInputStream(uiAutomation.executeShellCommand(
             "pm grant ${targetContext.packageName} android.permission.READ_TV_LISTINGS")).use { it.readBytes() }
+        test("protectedAppLaunch") { checkProtectedLaunch() }
         test("missingInputShowsError") { checkInput(null, R.string.input_failed) }
         test("unknownInputShowsError") { checkInput("invalid/.Input/HW5", R.string.input_failed) }
         test("tunerInputShowsError") {
@@ -145,7 +153,7 @@ class ActivityTest : Instrumentation() {
         val result = Bundle().apply {
             putString("class", this@ActivityTest.javaClass.name)
             putString("test", name)
-            putInt("numtests", if (previewOnly || transferOnly || muteOnly) 1 else 11)
+            putInt("numtests", if (previewOnly || transferOnly || muteOnly || protectedLaunchOnly) 1 else 12)
             putInt("current", ++current)
         }
         sendStatus(1, result)
@@ -172,6 +180,45 @@ class ActivityTest : Instrumentation() {
             check(it.action == Intent.ACTION_MAIN && it.hasCategory(Intent.CATEGORY_HOME))
             check(it.getBooleanExtra(Remap.OPEN_ALL_APPS, false))
             check(it.component?.className == MainActivity::class.java.name)
+        }
+    }
+
+    private fun checkProtectedLaunch() {
+        targetContext.getSharedPreferences("home", Context.MODE_PRIVATE).edit()
+            .putString("glass_style", "frosted").putString("theme", "light")
+            .putBoolean("setup_shown", true).commit()
+        val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            waitForIdleSync()
+            val startApp = MainActivity::class.java.getDeclaredMethod("startApp", Intent::class.java, View::class.java)
+                .apply { isAccessible = true }
+            val returnTo = MainActivity::class.java.getDeclaredField("returnTo").apply { isAccessible = true }
+            var attempts = 0
+            val monitor = object : ActivityMonitor() {
+                override fun onStartActivity(intent: Intent): ActivityResult? {
+                    attempts++
+                    throw SecurityException("Activity requires a permission that Plume does not have")
+                }
+            }
+            addMonitor(monitor)
+            try {
+                runOnMainSync {
+                    returnTo.set(activity, "previous")
+                    startApp.invoke(activity, Intent("dev.plume.test.PROTECTED"), null)
+                    check(returnTo.get(activity) == "previous") { "Failed launch changed return focus" }
+                    check(targetContext.getString(R.string.cant_open_app) in texts(activity.window.decorView)) {
+                        "Missing app launch error"
+                    }
+                }
+                check(attempts == 1) { "Denied launch was retried" }
+                check(!activity.isFinishing && !activity.isDestroyed) { "Denied launch closed Plume" }
+            } finally {
+                removeMonitor(monitor)
+            }
+        } finally {
+            runOnMainSync { activity.finish() }
+            waitForIdleSync()
         }
     }
 
