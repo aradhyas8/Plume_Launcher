@@ -1036,6 +1036,10 @@ class MainActivity : Activity() {
         val dialog = Dialog(this)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.setContentView(card)
+        dialog.setOnKeyListener { _, code, event ->
+            if (event.action == KeyEvent.ACTION_DOWN) systemHomePress.interruptedBy(code)
+            false
+        }
         dialog.window?.run {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setLayout(dp(if (extra != null) 600 else 480), ViewGroup.LayoutParams.WRAP_CONTENT)

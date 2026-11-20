@@ -24,6 +24,7 @@ class ActivityTest : Instrumentation() {
     private var transferOnly = false
     private var muteOnly = false
     private var picturesOnly = false
+    private var homeOnly = false
     private var protectedLaunchOnly = false
 
     override fun onCreate(arguments: Bundle?) {
@@ -32,6 +33,7 @@ class ActivityTest : Instrumentation() {
         transferOnly = arguments?.getString("class") == SettingsTransferCheck::class.java.name
         muteOnly = arguments?.getString("class") == MuteCheck::class.java.name
         picturesOnly = arguments?.getString("class") == AppPicturesCheck::class.java.name
+        homeOnly = arguments?.getString("class") == "dev.plume.ActivityTest#homePopupHomeSequence"
         protectedLaunchOnly = arguments?.getString("class") == "dev.plume.ActivityTest#protectedAppLaunch"
         start()
     }
@@ -59,6 +61,11 @@ class ActivityTest : Instrumentation() {
         }
         if (previewOnly) {
             test("galleryPreviewControlsAndReturn") { GalleryPreviewTest(this).run() }
+            finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
+            return
+        }
+        if (homeOnly) {
+            test("homePopupHomeSequence") { checkHomePopupHomeSequence() }
             finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
             return
         }
@@ -155,6 +162,7 @@ class ActivityTest : Instrumentation() {
             putString("test", name)
             putInt("numtests", if (previewOnly || transferOnly || muteOnly || protectedLaunchOnly) 1 else 12)
             putInt("current", ++current)
+            if (homeOnly) putInt("numtests", 1)
         }
         sendStatus(1, result)
         try {
@@ -216,6 +224,53 @@ class ActivityTest : Instrumentation() {
             } finally {
                 removeMonitor(monitor)
             }
+        } finally {
+            runOnMainSync { activity.finish() }
+            waitForIdleSync()
+        }
+    }
+
+    private fun checkHomePopupHomeSequence() {
+        targetContext.getSharedPreferences("home", Context.MODE_PRIVATE).edit()
+            .putString("theme", "light").putBoolean("setup_shown", true).commit()
+        val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val onNewIntent = MainActivity::class.java.getDeclaredMethod("onNewIntent", Intent::class.java)
+            .apply { isAccessible = true }
+        try {
+            await("Home screen did not gain focus") { activity.hasWindowFocus() }
+            runOnMainSync { activity.homePopup(0, "Test", null, null, "Done" to {}) }
+            await("Home popup did not open") { activity.setupDialog?.isShowing == true }
+            await("Home popup did not get focus") { activity.setupDialog?.window?.decorView?.hasWindowFocus() == true }
+            var interruptedPairMs = 0L
+            var openedAfterInterruptedPair = false
+            runOnMainSync {
+                val started = SystemClock.uptimeMillis()
+                onNewIntent.invoke(activity, home)
+                val dialog = checkNotNull(activity.setupDialog)
+                dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT))
+                dialog.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_RIGHT))
+                onNewIntent.invoke(activity, home)
+                interruptedPairMs = SystemClock.uptimeMillis() - started
+                openedAfterInterruptedPair = activity.findViewById<View>(R.id.allApps).isShown
+            }
+            check(interruptedPairMs < 350) { "Home-D-pad-Home test took $interruptedPairMs ms" }
+            check(!openedAfterInterruptedPair) { "Home popup did not interrupt the Home pair" }
+            var normalPairMs = 0L
+            runOnMainSync {
+                val started = SystemClock.uptimeMillis()
+                onNewIntent.invoke(activity, home)
+                onNewIntent.invoke(activity, home)
+                normalPairMs = SystemClock.uptimeMillis() - started
+            }
+            check(normalPairMs < 350) { "Normal double-Home test took $normalPairMs ms" }
+            await("A normal double-Home did not open Recent apps") {
+                activity.findViewById<View>(R.id.allApps).isShown
+            }
+            var title = ""
+            runOnMainSync { title = activity.findViewById<TextView>(R.id.allAppsTitle).text.toString() }
+            check(title == targetContext.getString(R.string.recent_apps)) { "A normal double-Home did not open Recent apps" }
         } finally {
             runOnMainSync { activity.finish() }
             waitForIdleSync()
