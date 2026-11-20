@@ -25,6 +25,7 @@ class ActivityTest : Instrumentation() {
     private var muteOnly = false
     private var picturesOnly = false
     private var protectedLaunchOnly = false
+    private var cueOnly = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -33,10 +34,16 @@ class ActivityTest : Instrumentation() {
         muteOnly = arguments?.getString("class") == MuteCheck::class.java.name
         picturesOnly = arguments?.getString("class") == AppPicturesCheck::class.java.name
         protectedLaunchOnly = arguments?.getString("class") == "dev.plume.ActivityTest#protectedAppLaunch"
+        cueOnly = arguments?.getString("class") == CueSettingsCheck::class.java.name
         start()
     }
 
     override fun onStart() {
+        if (cueOnly) {
+            test("cueSettingsRequestsNavigationAndExpiry") { CueSettingsCheck(this).run() }
+            finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
+            return
+        }
         if (protectedLaunchOnly) {
             test("protectedAppLaunch") { checkProtectedLaunch() }
             finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
@@ -156,6 +163,7 @@ class ActivityTest : Instrumentation() {
             putInt("numtests", if (previewOnly || transferOnly || muteOnly || protectedLaunchOnly) 1 else 12)
             putInt("current", ++current)
         }
+        if (cueOnly) result.putInt("numtests", 1)
         sendStatus(1, result)
         try {
             action()

@@ -685,6 +685,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        cancelCueAdb()
         unregisterReceiver(unlockReceiver)
         if (ready) {
             videoWallpaper.clear()
@@ -1042,6 +1043,7 @@ class MainActivity : Activity() {
             setDimAmount((if (frost) GlassStyle.FROSTED else glassLook().active)?.dim ?: 0.6f) // glass shows what is behind, so it needs less dimming
         }
         dialog.setOnDismissListener {
+            if (cueAdbDialog === dialog) cancelCueAdb()
             if (setupDialog !== dialog) return@setOnDismissListener
             setupDialog = null // closed with Back or a button: setup stops here, and Settings can start it again
             setupStep = 0
@@ -3574,6 +3576,7 @@ class MainActivity : Activity() {
     }
 
     private var cueAdbSocket: Socket? = null
+    private var cueAdbDialog: Dialog? = null
     private var overlayAsked = false // the TV's overlay screen is open from Cue's rows
 
     /** One sheet for both accesses: the TV gives them to itself over its own ADB, or a computer does. */
@@ -3593,9 +3596,12 @@ class MainActivity : Activity() {
     }
 
     private fun cueGrantHere() {
+        cancelCueAdb()
         homePopup(0, getString(R.string.isl_adb_title), getString(R.string.isl_adb_wait), null,
             getString(android.R.string.cancel) to { cancelCueAdb(); setupDialog?.dismiss() })
+        val dialog = setupDialog!!
         val socket = Socket()
+        cueAdbDialog = dialog
         cueAdbSocket = socket
         Thread({
             try {
@@ -3604,8 +3610,9 @@ class MainActivity : Activity() {
             } catch (e: java.security.GeneralSecurityException) { // no usable RSA here: a computer still works
             }
             ui.post {
-                if (cueAdbSocket !== socket || isDestroyed) return@post
+                if (cueAdbSocket !== socket || cueAdbDialog !== dialog || !dialog.isShowing || isDestroyed) return@post
                 cueAdbSocket = null
+                cueAdbDialog = null
                 // Both accesses, or the sheet says it failed: a TV with notification access already came here for overlays.
                 if (listenerOn() && (overlayOn() || overlayBlocked())) {
                     homePopup(0, getString(R.string.isl_adb_title), getString(R.string.isl_adb_done), null,
@@ -3619,6 +3626,7 @@ class MainActivity : Activity() {
     private fun cancelCueAdb() {
         cueAdbSocket?.let { runCatching { it.close() } }
         cueAdbSocket = null
+        cueAdbDialog = null
     }
 
     private fun cueAdbComputer() {
@@ -3718,8 +3726,10 @@ class MainActivity : Activity() {
         val crumb = getString(R.string.isl_games_now)
         if (list == null) {
             showPage(l.name, listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = crumb, back = back)
+            var active = true
+            pageExit = { active = false }
             return CueSports.leagueGames(this, l) { games ->
-                if (isDestroyed || settingsScrim.visibility != View.VISIBLE) return@leagueGames
+                if (!active || isDestroyed || settingsScrim.visibility != View.VISIBLE) return@leagueGames
                 when {
                     games == null -> showPage(l.name, listOf(page(getString(R.string.isl_games_failed)) { pickLeagueGames(l, back = back) }), crumb = crumb, back = back)
                     games.isEmpty() -> showPage(l.name, listOf(page(getString(R.string.isl_league_none)) {}), crumb = crumb, back = back)
@@ -3759,8 +3769,10 @@ class MainActivity : Activity() {
     private fun pickTeams(l: CueSports.League, focus: Int = 0, list: List<CueSports.Team>? = null, back: () -> Unit) {
         if (list == null) {
             showPage(l.name, listOf(page(getString(R.string.isl_teams_loading)) {}), crumb = getString(R.string.isl_teams), back = back)
+            var active = true
+            pageExit = { active = false }
             return CueSports.teams(l.sport, l.league) { teams ->
-                if (isDestroyed || settingsScrim.visibility != View.VISIBLE) return@teams
+                if (!active || isDestroyed || settingsScrim.visibility != View.VISIBLE) return@teams
                 if (teams.isEmpty()) showPage(l.name, listOf(page(getString(R.string.isl_teams_failed)) { pickTeams(l, back = back) }),
                     crumb = getString(R.string.isl_teams), back = back)
                 else pickTeams(l, 0, teams, back)
@@ -3771,7 +3783,7 @@ class MainActivity : Activity() {
         val jump = { from: Int, d: Int ->
             val letter = list[from].name.first().uppercaseChar()
             val to = if (d > 0) list.indices.drop(from + 1).firstOrNull { list[it].name.first().uppercaseChar() != letter && list[it].id !in today }
-                else list.indices.take(from).lastOrNull { list[it].name.first().uppercaseChar() != letter }?.let { j ->
+                else list.indices.take(from).lastOrNull { list[it].name.first().uppercaseChar() != letter && list[it].id !in today }?.let { j ->
                     val l2 = list[j].name.first().uppercaseChar()
                     list.indices.first { list[it].name.first().uppercaseChar() == l2 && list[it].id !in today }
                 }
