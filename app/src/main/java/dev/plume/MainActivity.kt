@@ -265,8 +265,14 @@ internal fun hdmiIcon(name: String, named: Boolean): String {
 /** Soundbars and AV receivers name themselves over CEC too, but there's nothing to switch to. */
 internal fun isAudioDevice(name: String) = name.lowercase().let { n -> AUDIO_WORDS.any { it in n } }
 
-/** An app is in the home row unless it was taken out; it stays in All apps either way. */
-internal fun inRow(pkg: String, hidden: Set<String>) = pkg !in hidden
+/**
+ * An app is in the home row unless it was taken out; it stays in All apps either way. An [extra] app starts out of
+ * the row, so for it [hidden] lists the ones put in.
+ */
+internal fun inRow(pkg: String, hidden: Set<String>, extra: Boolean = false) = (pkg in hidden) == extra
+
+/** A phone app the TV maker put on (no TV entry): All apps shows it only after Show mobile apps, the home row only when added. */
+internal fun isExtraApp(tvEntry: Boolean, systemApp: Boolean) = !tvEntry && systemApp
 
 /**
  * Before the Sources list, an input with a signal or a CEC name was in the row without a pin. Once, on the update,
@@ -315,7 +321,8 @@ class MainActivity : Activity() {
      * If the garbage collector took it before it was needed, [load] brings it back.
      * [offline]: an HDMI port with no signal right now (the Sources list says so).
      */
-    private class App(val pkg: String, val label: String, val launch: Intent, icon: Drawable, val offline: Boolean = false, private val load: (() -> Drawable)? = null) {
+    private class App(val pkg: String, val label: String, val launch: Intent, icon: Drawable, val offline: Boolean = false,
+                      private val load: (() -> Drawable)? = null, val extra: Boolean = false) {
         private val strong = if (load == null) icon else null // our own drawables (HDMI marks) are tiny and have no loader
         private var weak = java.lang.ref.WeakReference(icon)
         val icon: Drawable get() = strong ?: weak.get() ?: load!!().also { weak = java.lang.ref.WeakReference(it) }
@@ -3159,7 +3166,7 @@ class MainActivity : Activity() {
         val weather = prefs.getString("weather", "off")!!
         val unit = if (weather == "off") prefs.getString("wx_unit", "c")!! else weather
         val cwOff = prefs.getStringSet("cw_off", emptySet())!!.count { pkg -> apps.any { it.pkg == pkg } } // uninstalled ones don't count
-        val rowHidden = rowHiddenSet().count { pkg -> apps.any { it.pkg == pkg } }
+        val rowHidden = rowHiddenSet().let { set -> apps.count { !inRow(it.pkg, set, it.extra) } }
         val chFlip = prefs.getStringSet("ch_flip", emptySet())!!
         val channelsOn = (if (WATCH_NEXT in chFlip) 0 else 1) + appChannels().distinctBy { (_, p, n) -> channelKey(p, n) }.count { (_, p, n) -> channelOn(n, channelKey(p, n), chFlip) }
         val names = rowNames()
@@ -4518,6 +4525,9 @@ class MainActivity : Activity() {
             ui.post {
                 if (isDestroyed) return@post
                 if (inputs.isNotEmpty() && !prefs.getBoolean("inputs_moved", false)) moveInputsToSources(inputs)
+                // Once: extra apps leave the home row. row_hidden lists the extras put back in from now on.
+                if (!prefs.getBoolean("extras_moved", false)) prefs.edit().putBoolean("extras_moved", true)
+                    .putStringSet("row_hidden", rowHiddenSet() - list.filter { it.extra }.map { it.pkg }.toSet()).apply()
                 apps = list
                 APPS = list
                 sources = inputs
@@ -4545,6 +4555,7 @@ class MainActivity : Activity() {
                         .setComponent(ComponentName(a.packageName, a.name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     a.loadIcon(pm),
                     load = { a.loadIcon(pm) },
+                    extra = isExtraApp(category == Intent.CATEGORY_LEANBACK_LAUNCHER, a.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0),
                 )
             }
     }
@@ -4658,7 +4669,7 @@ class MainActivity : Activity() {
         }
         appRow.removeAllViews()
         val hidden = rowHiddenSet()
-        val tiles = sortedApps().filter { inRow(it.pkg, hidden) }.map { appTile(it, labeled = false) }
+        val tiles = sortedApps().filter { inRow(it.pkg, hidden, it.extra) }.map { appTile(it, labeled = false) }
         if (tiles.isEmpty()) return showNames()
         tiles.forEachIndexed { i, t ->
             t.id = View.generateViewId()
@@ -5144,7 +5155,7 @@ class MainActivity : Activity() {
         when {
             recentAppsOpen -> if (tag != null && v.parent?.parent === recentWindowRow) recentMenu(v, tag)
             allApps.visibility == View.VISIBLE && tag != null -> unlock { // grid: pin to the front of the row (unhiding it)
-                prefs.edit().putStringSet("row_hidden", rowHiddenSet() - tag).apply()
+                putInRow(tag, true)
                 saveOrder(listOf(tag) + sortedApps().map { it.pkg }.filter { it != tag })
                 closeAllApps()
                 appRow.getChildAt(0)?.requestFocus() // show the app just pinned
@@ -5172,7 +5183,7 @@ class MainActivity : Activity() {
                 val i = appRow.indexOfChild(v)
                 // An input just unpins: it is in the Sources list anyway, so there is nothing to hide.
                 if (pkg.startsWith(HDMI)) prefs.edit().putStringSet("inputs_pinned", pinnedInputs() - pkg).apply()
-                else prefs.edit().putStringSet("row_hidden", rowHiddenSet() + pkg).apply()
+                else putInRow(pkg, false)
                 renderApps()
                 appRow.getChildAt(minOf(i, appRow.childCount - 1))?.requestFocus()
                 toast(getString(R.string.removed_from_row))
@@ -5800,9 +5811,15 @@ class MainActivity : Activity() {
     /** Apps left out of the home row; they stay in All apps. New installs show until hidden. */
     private fun rowHiddenSet() = prefs.getStringSet("row_hidden", emptySet())!!
 
+    private fun putInRow(pkg: String, show: Boolean) {
+        val listed = show != apps.any { it.pkg == pkg && it.extra } // see inRow
+        prefs.edit().putStringSet("row_hidden", if (listed) rowHiddenSet() - pkg else rowHiddenSet() + pkg).apply()
+    }
+
     private fun pickRowApps() {
         val list = sortedApps().filter { !it.pkg.startsWith(HDMI) } // inputs are pinned from the Sources list
-        toggles(getString(R.string.apps_in_row), list.map { it.label to it.pkg }, "row_hidden", getString(R.string.shown), getString(R.string.hidden)) {
+        toggles(getString(R.string.apps_in_row), list.map { it.label to it.pkg }, "row_hidden", getString(R.string.shown), getString(R.string.hidden),
+            startsOff = list.filter { it.extra }.map { it.pkg }.toSet()) {
             renderApps()
             renderSettings(R.string.apps_in_row)
         }
@@ -5929,7 +5946,8 @@ class MainActivity : Activity() {
             alpha = if (recent) 0.7f else 1f
         }
         val list = sortedApps().let { all -> if (recent) recentApps(all.filter { !it.pkg.startsWith(HDMI) },
-            removed = { prefs.getLong("r_${it.pkg}", 0) }) { prefs.getLong("t_${it.pkg}", 0) } else all }
+            removed = { prefs.getLong("r_${it.pkg}", 0) }) { prefs.getLong("t_${it.pkg}", 0) }
+            else if (showMobileApps()) all else all.filter { !it.extra } }
         val info = findViewById<TextView>(R.id.allAppsInfo).apply {
             visibility = if (recent && list.isEmpty()) View.VISIBLE else View.GONE
             isFocusable = list.isEmpty()
@@ -5940,6 +5958,10 @@ class MainActivity : Activity() {
             (layoutParams as ViewGroup.MarginLayoutParams).topMargin = if (recent) resources.displayMetrics.heightPixels / 4 else dp(26)
         }
         recentClear.visibility = if (recent && list.isNotEmpty()) View.VISIBLE else View.GONE
+        val extras = apps.count { it.extra }
+        mobileAppsButton.visibility = if (!recent && extras > 0) View.VISIBLE else View.GONE
+        if (extras > 0) (mobileAppsButton.getChildAt(0) as TextView).text =
+            if (showMobileApps()) getString(R.string.hide_mobile_apps) else getString(R.string.show_mobile_apps, extras)
         if (recent) {
             recentWindows.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
             recentsFocus = (selected as? String)?.takeIf { pkg -> list.any { it.pkg == pkg } }
@@ -5998,6 +6020,25 @@ class MainActivity : Activity() {
         pill(getString(R.string.recent_clear_all), small = true) { clearRecentApps() }.also { button ->
             header.addView(button, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.END or Gravity.CENTER_VERTICAL).apply { marginEnd = dp(48) })
+            button.nextFocusLeftId = button.id
+            button.nextFocusRightId = button.id
+            button.nextFocusUpId = button.id
+        }
+    }
+
+    /** All apps: TV apps and apps the user installed, or the TV maker's mobile apps (extras) too. */
+    private fun showMobileApps() = prefs.getBoolean("all_apps_mobile", false)
+
+    /** All apps' Show mobile apps / Hide mobile apps switch, at the end of the title's line where Recent apps has Clear all. */
+    private val mobileAppsButton: LinearLayout by lazy {
+        val header = recentClear.parent as FrameLayout
+        pill("", small = true) {
+            prefs.edit().putBoolean("all_apps_mobile", !showMobileApps()).apply()
+            openAllApps()
+            mobileAppsButton.requestFocus()
+        }.also { button ->
+            header.addView(button, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.END or Gravity.CENTER_VERTICAL)) // All apps' own padding sets it in from the edge
             button.nextFocusLeftId = button.id
             button.nextFocusRightId = button.id
             button.nextFocusUpId = button.id
@@ -6577,8 +6618,10 @@ class MainActivity : Activity() {
         io.execute {
             val result = runCatching {
                 val file = SettingsTransfer.file(this)
-                if (load) SettingsTransfer.restore(prefs, SettingsTransfer.load(file))
-                else SettingsTransfer.save(file, snapshot)
+                val list = loadApps()
+                val extras = list.filter { it.extra }.map { it.pkg }.toSet()
+                if (load) SettingsTransfer.restore(prefs, SettingsTransfer.load(file), extras)
+                else SettingsTransfer.save(file, snapshot + mapOf("row_extras" to extras, "row_apps" to list.map { it.pkg }.toSet()))
                 file.path
             }
             ui.post {

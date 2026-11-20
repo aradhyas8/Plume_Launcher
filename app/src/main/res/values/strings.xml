@@ -226,6 +226,8 @@
     <string name="recent_open">Open</string>
     <string name="recent_remove">Remove</string>
     <string name="recent_clear_all">Clear all</string>
+    <string name="show_mobile_apps">Show mobile apps (%d)</string>
+    <string name="hide_mobile_apps">Hide mobile apps</string>
     <string name="recent_apps_empty_any">No recent apps yet. The apps you open show here.</string>
     <string name="recent_apps_empty">No recent apps yet. Open an app from Plume to add it here.</string>
     <string name="settings">Settings</string>

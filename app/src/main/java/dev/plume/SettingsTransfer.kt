@@ -26,9 +26,10 @@ internal object SettingsTransfer {
         "weather" to setOf("off", "c", "f"),
         "wx_unit" to setOf("c", "f"),
     )
-    private val switches = setOf("glass", "colour_icons", "app_anim", "row_drop", "cw_colour", "geo_manual")
+    // Backups record the source TV's apps and defaults so row_hidden keeps its meaning on another TV.
+    private val switches = setOf("glass", "colour_icons", "app_anim", "row_drop", "cw_colour", "geo_manual", "extras_moved", "all_apps_mobile")
     private val clockFormats = ClockFormat.entries.associateBy { it.key }
-    private val keys = choices.keys + switches + clockFormats.keys + setOf("order", "row_hidden", "cw_off", "row_name", "top_bar",
+    private val keys = choices.keys + switches + clockFormats.keys + setOf("order", "row_hidden", "row_extras", "row_apps", "cw_off", "row_name", "top_bar",
         "wp_every", "geo_city", "geo_lat", "geo_lon")
     private val pkg = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")
 
@@ -70,7 +71,7 @@ internal object SettingsTransfer {
                     require(value is Number && value.toDouble() in setOf(1.0, 5.0, 10.0, 15.0, 30.0, 60.0, 1440.0, 10080.0, 43200.0)) { "Invalid $key" }
                     value.toInt()
                 }
-                key == "row_hidden" || key == "cw_off" -> {
+                key in setOf("row_hidden", "row_extras", "row_apps", "cw_off") -> {
                     require(value is Collection<*> && value.size <= 512 && value.all { it is String && pkg.matches(it) }) { "Invalid $key" }
                     value.filterIsInstance<String>().toSet()
                 }
@@ -145,8 +146,20 @@ internal object SettingsTransfer {
         decode(bytes.copyOf(size))
     }
 
-    fun restore(prefs: SharedPreferences, values: Map<String, *>) {
-        val valid = validate(values)
+    fun restore(prefs: SharedPreferences, values: Map<String, *>, extras: Set<String> = emptySet()) {
+        val valid = validate(values).toMutableMap()
+        val hidden = (valid["row_hidden"] as? Set<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
+        val sourceExtras = (valid.remove("row_extras") as? Set<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
+        val sourceApps = (valid.remove("row_apps") as? Set<*>)?.filterIsInstance<String>()?.toSet()
+        // Finish legacy migration here: activity recreation can reuse the cached app list.
+        valid["row_hidden"] = if (valid["extras_moved"] != true) hidden - extras
+            // shortcut: early feature builds omit categories; save a new backup before transferring between TVs.
+            else if (sourceApps == null) hidden
+            else {
+                val off = hidden - sourceExtras + (sourceExtras - hidden)
+                off - extras + ((extras intersect sourceApps) - off)
+            }
+        valid["extras_moved"] = true
         val before = prefs.all.filterKeys { it in keys || it == "geo_time" || it == "wx_time" }
         fun write(values: Map<String, *>): Boolean {
             val edit = prefs.edit()
