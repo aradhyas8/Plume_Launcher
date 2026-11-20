@@ -12,6 +12,7 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.URL
@@ -63,7 +64,7 @@ class CueSettingsCheck(private val runner: Instrumentation) {
             runOnMainSync { activity.findViewById<View>(R.id.launcherSettings).performClick() }
             checkLetterJumps(activity)
             checkExpiredGame(activity)
-            checkAbandonedPages(activity)
+            checkSportsPages(activity)
             checkAdbDismissal(activity)
         } finally {
             runOnMainSync { home?.setupDialog?.dismiss(); home?.finish() }
@@ -140,67 +141,111 @@ class CueSettingsCheck(private val runner: Instrumentation) {
         }
     }
 
-    private fun checkAbandonedPages(activity: MainActivity) {
+    private fun checkSportsPages(activity: MainActivity) {
         val teams = """{"sports":[{"leagues":[{"teams":[{"team":{"id":"a","displayName":"Alpha","abbreviation":"A"}}]}]}]}"""
         val games = """{"events":[]}"""
-        for ((method, body) in listOf("pickTeams" to teams, "pickTeams" to null, "pickLeagueGames" to games, "pickLeagueGames" to null)) {
-            val response = Response(body)
-            responses.add(response)
-            runner.runOnMainSync { pick(activity, method) }
-            check(response.started.await(3, TimeUnit.SECONDS)) { "Sports request did not start" }
-            runner.runOnMainSync {
-                activity.pickGames()
-                activity.closeLauncherSettings()
-                activity.findViewById<View>(R.id.launcherSettings).performClick()
-                activity.pickGames()
-            }
-            response.release.countDown()
-            response.worker.join(3_000)
-            check(!response.worker.isAlive) { "Sports request did not finish" }
-            runner.waitForIdleSync()
-            runner.runOnMainSync {
-                check(activity.findViewById<TextView>(R.id.settingsTitle).text == activity.getString(R.string.isl_games)) {
-                    "Abandoned sports callback reopened its page"
+        @Suppress("UNCHECKED_CAST")
+        val boards = sportsField("lastBoard").get(CueSports) as MutableMap<String, List<SportsGame>>
+        val key = CueSports.LEAGUES.first().key
+        val saved = boards[key]
+        try {
+            boards[key] = emptyList() // Team requests do not need a second scoreboard fetch in this check.
+            for (leave in 0..2) {
+                for ((method, body) in listOf("pickTeams" to teams, "pickTeams" to null, "pickLeagueGames" to games, "pickLeagueGames" to null)) {
+                    val response = Response(body)
+                    repeat(if (method == "pickLeagueGames" && body != null) 2 else 1) { responses.add(response) }
+                    runner.runOnMainSync { pick(activity, method) }
+                    check(response.started.await(3, TimeUnit.SECONDS)) { "Sports request did not start" }
+                    when (leave) {
+                        1 -> runner.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                        2 -> runner.runOnMainSync {
+                            activity.pickGames()
+                            activity.closeLauncherSettings()
+                            activity.findViewById<View>(R.id.launcherSettings).performClick()
+                            activity.pickGames()
+                        }
+                    }
+                    if (leave == 1) runner.runOnMainSync {
+                        check(activity.findViewById<TextView>(R.id.settingsTitle).text == activity.getString(R.string.isl_games)) {
+                            "Back did not return to Games"
+                        }
+                    }
+                    response.release.countDown()
+                    response.worker.join(3_000)
+                    check(!response.worker.isAlive) { "Sports request did not finish" }
+                    check(responses.isEmpty()) { "Sports fixture did not serve every request" }
+                    runner.waitForIdleSync()
+                    runner.runOnMainSync {
+                        val title = activity.findViewById<TextView>(R.id.settingsTitle).text
+                        if (leave == 0) {
+                            check(title == CueSports.LEAGUES.first().name)
+                            val expected = when {
+                                method == "pickTeams" && body != null -> "Alpha"
+                                method == "pickTeams" -> activity.getString(R.string.isl_teams_failed)
+                                body != null -> activity.getString(R.string.isl_league_none)
+                                else -> activity.getString(R.string.isl_games_failed)
+                            }
+                            check(hasText(activity.findViewById(R.id.settingsList), expected)) { "Active sports response did not update its page" }
+                        } else check(title == activity.getString(R.string.isl_games)) { "Abandoned sports callback reopened its page" }
+                    }
                 }
             }
+        } finally {
+            if (saved == null) boards.remove(key) else boards[key] = saved
         }
+    }
+
+    private fun hasText(view: View, text: String): Boolean = when (view) {
+        is TextView -> view.text.toString() == text
+        is ViewGroup -> (0 until view.childCount).any { hasText(view.getChildAt(it), text) }
+        else -> false
     }
 
     private fun checkAdbDismissal(activity: MainActivity) {
         // The emulator uses its own transport; this peer never contacts the host or the user's TV.
-        ServerSocket(5555, 1, InetAddress.getByName("127.0.0.1")).use { server ->
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
             server.soTimeout = 3_000
-            for (mode in 0..3) {
-                runner.runOnMainSync { call(activity, "cueGrantHere") }
-                server.accept().use { peer ->
-                    peer.soTimeout = 3_000
-                    lateinit var socket: Socket
-                    runner.runOnMainSync {
-                        socket = field("cueAdbSocket").get(activity) as Socket
-                        when (mode) {
-                            0 -> activity.setupDialog!!.cancel() // Back uses Dialog.cancel().
-                            1 -> activity.setupDialog!!.dismiss()
-                            2 -> activity.homePopup(0, "Replacement", null, null, "Done" to {})
-                            else -> activity.finish()
+            val endpoint = field("cueAdbEndpoint")
+            val saved = endpoint.get(activity)
+            try {
+                runner.runOnMainSync {
+                    check(saved == InetSocketAddress("127.0.0.1", 5555))
+                    endpoint.set(activity, server.localSocketAddress)
+                }
+                for (mode in 0..3) {
+                    runner.runOnMainSync { call(activity, "cueGrantHere") }
+                    server.accept().use { peer ->
+                        peer.soTimeout = 3_000
+                        lateinit var socket: Socket
+                        runner.runOnMainSync {
+                            socket = field("cueAdbSocket").get(activity) as Socket
+                            when (mode) {
+                                0 -> activity.setupDialog!!.cancel() // Back uses Dialog.cancel().
+                                1 -> activity.setupDialog!!.dismiss()
+                                2 -> activity.homePopup(0, "Replacement", null, null, "Done" to {})
+                                else -> activity.finish()
+                            }
                         }
-                    }
-                    await { socket.isClosed }
-                    peer.getInputStream().readBytes() // Closing the request must release its blocked read.
-                    val worker = Thread.getAllStackTraces().keys.firstOrNull { it.name == "cue-local-adb" }
-                    worker?.join(3_000)
-                    check(worker?.isAlive != true)
-                    runner.waitForIdleSync()
-                    runner.runOnMainSync {
-                        check(field("cueAdbSocket").get(activity) == null)
-                        check(field("cueAdbDialog").get(activity) == null)
-                        when (mode) {
-                            2 -> check(activity.setupDialog?.isShowing == true)
-                            3 -> check(activity.isDestroyed)
-                            else -> check(activity.setupDialog == null) { "Late ADB result reopened a dismissed sheet" }
+                        await { socket.isClosed }
+                        peer.getInputStream().readBytes() // Closing the request must release its blocked read.
+                        val worker = Thread.getAllStackTraces().keys.firstOrNull { it.name == "cue-local-adb" }
+                        worker?.join(3_000)
+                        check(worker?.isAlive != true)
+                        runner.waitForIdleSync()
+                        runner.runOnMainSync {
+                            check(field("cueAdbSocket").get(activity) == null)
+                            check(field("cueAdbDialog").get(activity) == null)
+                            when (mode) {
+                                2 -> check(activity.setupDialog?.isShowing == true)
+                                3 -> check(activity.isDestroyed)
+                                else -> check(activity.setupDialog == null) { "Late ADB result reopened a dismissed sheet" }
+                            }
+                            activity.setupDialog?.dismiss()
                         }
-                        activity.setupDialog?.dismiss()
                     }
                 }
+            } finally {
+                runner.runOnMainSync { endpoint.set(activity, saved) }
             }
         }
     }

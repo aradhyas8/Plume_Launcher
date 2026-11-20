@@ -3,7 +3,9 @@ package dev.plume
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder.LITTLE_ENDIAN
 import java.util.Base64
@@ -49,6 +51,18 @@ class LocalAdbTest {
         val sent = ByteBuffer.wrap(peer.sent.toByteArray()).order(LITTLE_ENDIAN)
         assertEquals("CNXN", read(sent).first)
         assertTrue(!sent.hasRemaining())
+    }
+
+    @Test fun connectsToTheGivenEndpoint() {
+        val endpoint = InetSocketAddress("127.0.0.1", 43123)
+        val peer = object : Socket() {
+            override fun connect(address: SocketAddress, timeout: Int) {
+                assertEquals(endpoint, address)
+                assertEquals(2_000, timeout)
+                throw IOException("End after checking the endpoint")
+            }
+        }
+        assertTrue(runCatching { LocalAdb.shell(peer, GRANT, endpoint) }.exceptionOrNull() is IOException)
     }
 
     private class Peer(replies: ByteArray) : Socket() {

@@ -24,9 +24,9 @@ internal object LocalAdb {
     private val sha1DigestInfo = byteArrayOf(0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14)
 
     /** Runs one [command] in the TV's own shell, after the TV asks the user to allow debugging. */
-    fun shell(socket: Socket, command: String) {
+    fun shell(socket: Socket, command: String, endpoint: InetSocketAddress) {
         // ponytail: only legacy port 5555; add TLS pairing when the pairing code can stay off the LAN.
-        socket.connect(InetSocketAddress("127.0.0.1", 5555), 2_000)
+        socket.connect(endpoint, 2_000)
         shellOnConnectedSocket(socket, command)
     }
 

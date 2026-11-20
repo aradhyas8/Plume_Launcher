@@ -108,6 +108,7 @@ import java.lang.ref.WeakReference
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
@@ -3577,6 +3578,7 @@ class MainActivity : Activity() {
 
     private var cueAdbSocket: Socket? = null
     private var cueAdbDialog: Dialog? = null
+    private var cueAdbEndpoint = InetSocketAddress("127.0.0.1", 5555)
     private var overlayAsked = false // the TV's overlay screen is open from Cue's rows
 
     /** One sheet for both accesses: the TV gives them to itself over its own ADB, or a computer does. */
@@ -3605,7 +3607,7 @@ class MainActivity : Activity() {
         cueAdbSocket = socket
         Thread({
             try {
-                socket.use { LocalAdb.shell(it, cueGrant(packageName)) }
+                socket.use { LocalAdb.shell(it, cueGrant(packageName), cueAdbEndpoint) }
             } catch (e: java.io.IOException) { // the check below also covers a disconnect after the grant
             } catch (e: java.security.GeneralSecurityException) { // no usable RSA here: a computer still works
             }
