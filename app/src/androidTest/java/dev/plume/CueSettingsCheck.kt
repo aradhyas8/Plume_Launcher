@@ -105,7 +105,7 @@ class CueSettingsCheck(private val runner: Instrumentation) {
             }
             fun jump(from: Int, keyCode: Int, expected: Int) {
                 pick(activity, "pickTeams", teams, from)
-                activity.currentFocus!!.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+                activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
                 val rows = activity.findViewById<ViewGroup>(R.id.settingsList)
                 check(rows.getChildAt(expected).hasFocus()) { "Team jump selected the wrong row" }
             }
@@ -156,6 +156,12 @@ class CueSettingsCheck(private val runner: Instrumentation) {
                     repeat(if (method == "pickLeagueGames" && body != null) 2 else 1) { responses.add(response) }
                     runner.runOnMainSync { pick(activity, method) }
                     check(response.started.await(3, TimeUnit.SECONDS)) { "Sports request did not start" }
+                    runner.runOnMainSync {
+                        val rows = activity.findViewById<ViewGroup>(R.id.settingsList)
+                        check(rows.childCount == 1 && hasText(rows, activity.getString(R.string.isl_teams_loading))) {
+                            "Sports page did not show its loading row"
+                        }
+                    }
                     when (leave) {
                         1 -> runner.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                         2 -> runner.runOnMainSync {
