@@ -20,6 +20,8 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - **Wallpaper gallery.** Browse wallpapers by source. Select photos from a TV or USB folder and preview the slideshow before you apply it.
 - **All apps** hides mobile apps that came with the TV. Select **Show mobile apps** to see them. Plume also removes them from the home row.
 - Plume uses the **Bing picture of the day** on first install. It downloads the picture when the TV connects to the internet.
+- **Spanish.** Plume is now available in Spanish.
+- **Smooth row scrolling.** Rows glide smoothly when you hold a direction key. Plume plays focus sounds when you move.
 
 - **Cue.** A glass tile at the top of Home shows what happens now: music, timers, alerts and live scores.
 - Select Cue to open it. Press Left or Right on the progress bar to seek in a song.
