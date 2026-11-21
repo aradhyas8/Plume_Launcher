@@ -370,7 +370,7 @@ internal object CueSports {
         val ctx = app ?: return emptyList()
         // The games the user picked first, then a followed team's (live before soon), and only as many as the user allows.
         return shown.sortedWith(compareBy<Shown>({ it.source }, { if (it.game.state == "in") 0 else 1 }, { it.game.start }))
-            .mapNotNull { item(ctx, it, now) }.take(max(ctx))
+            .mapNotNull { item(ctx, it, now) }.filter { now < it.until }.take(max(ctx))
     }
 
     private fun item(ctx: Context, s: Shown, now: Long): CueItem? {
