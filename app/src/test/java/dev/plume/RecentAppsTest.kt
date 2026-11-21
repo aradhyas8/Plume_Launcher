@@ -1,5 +1,6 @@
 package dev.plume
 
+import android.view.KeyEvent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -61,6 +62,20 @@ class RecentAppsTest {
         home.released(1_000)
         home.reset()
         assertFalse(home.released(1_200))
+    }
+
+    @Test fun dpadBetweenHomePressesCancelsThePair() {
+        val home = HomePress()
+        assertFalse(home.released(1_000))
+        home.interruptedBy(KeyEvent.KEYCODE_DPAD_RIGHT)
+        assertFalse(home.released(1_200))
+        assertTrue(home.released(1_350))
+
+        val center = HomePress()
+        assertFalse(center.released(2_000))
+        center.interruptedBy(KeyEvent.KEYCODE_DPAD_CENTER)
+        assertFalse(center.released(2_200))
+        assertTrue(center.released(2_350))
     }
 
     @Test fun anEarlierEventDoesNotCountAsADoublePress() {

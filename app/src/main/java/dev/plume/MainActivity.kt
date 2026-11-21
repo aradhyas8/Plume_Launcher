@@ -1039,6 +1039,10 @@ class MainActivity : Activity() {
         val dialog = Dialog(this)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.setContentView(card)
+        dialog.setOnKeyListener { _, code, event ->
+            if (event.action == KeyEvent.ACTION_DOWN) systemHomePress.interruptedBy(code)
+            false
+        }
         dialog.window?.run {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setLayout(dp(if (extra != null) 600 else 480), ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -5001,6 +5005,7 @@ class MainActivity : Activity() {
      * listener in style() is a fallback for remotes that send no repeats. [holdFired] stops both firing.
      */
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+        if (e.action == KeyEvent.ACTION_DOWN) systemHomePress.interruptedBy(e.keyCode)
         val before = currentFocus
         val used = routeKey(e)
         // Android plays the move sound only for keys nobody took. Our rows and homeNav take them, so play it

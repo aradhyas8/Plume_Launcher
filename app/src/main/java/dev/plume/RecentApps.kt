@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.util.AttributeSet
 import android.util.LruCache
+import android.view.KeyEvent
 import android.widget.HorizontalScrollView
 import java.io.File
 import java.util.concurrent.Executors
@@ -34,6 +35,10 @@ internal class HomePress {
         val twice = previous?.let { now >= it && now - it <= 350L } == true
         previous = if (twice) null else now
         return twice
+    }
+
+    fun interruptedBy(keyCode: Int) {
+        if (keyCode != KeyEvent.KEYCODE_HOME) reset()
     }
 
     fun reset() { previous = null }
