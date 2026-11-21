@@ -111,7 +111,10 @@
     <string name="help_isl_games">Pick a game to follow it, or add your teams to see all their games.</string>
     <string name="isl_game">Game</string>
     <string name="isl_game_replaced">Replaced %1$s</string>
-    <string name="isl_league_none">No games today or tomorrow.</string>
+    <string name="isl_league_none">No games live now.</string>
+    <string name="isl_live_none">No games live now. Follow your teams to see their next games.</string>
+    <string name="isl_games_loading">Loading games…</string>
+    <string name="isl_n_live">%d live</string>
     <string name="isl_games_failed">Couldn\'t load games. Check the internet and try again.</string>
     <string name="isl_cricket_batting">%1$s batting</string>
     <string name="isl_cricket_batting_overs">%1$s batting · %2$s ov</string>
