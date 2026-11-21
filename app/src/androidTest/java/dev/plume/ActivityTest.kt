@@ -146,6 +146,7 @@ class ActivityTest : Instrumentation() {
         test("galleryPreviewControlsAndReturn") { GalleryPreviewTest(this).run() }
         test("settingsTransferRoundTripAndRejectedFiles") { SettingsTransferCheck(this).run() }
         test("remoteMuteTogglesAndPreservesVolume") { MuteCheck(this).run() }
+        test("appPictureUploadSizingTransparencyAndReset") { AppPicturesCheck(this).run() }
         finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
     }
 
@@ -153,7 +154,7 @@ class ActivityTest : Instrumentation() {
         val result = Bundle().apply {
             putString("class", this@ActivityTest.javaClass.name)
             putString("test", name)
-            putInt("numtests", if (previewOnly || transferOnly || muteOnly || protectedLaunchOnly) 1 else 12)
+            putInt("numtests", if (previewOnly || transferOnly || muteOnly || picturesOnly || protectedLaunchOnly) 1 else 13)
             putInt("current", ++current)
         }
         sendStatus(1, result)

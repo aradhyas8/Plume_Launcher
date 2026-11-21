@@ -14,15 +14,19 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.ServerSocket
 import java.net.Socket
+import java.security.SecureRandom
+import java.util.Base64
 
 /**
  * A one-page web server for adding pictures or videos from a phone. It only runs while the upload panel is open,
- * and only answers on /<code> (the random code is in the QR code), so others on the Wi-Fi can't post.
+ * and only answers on /<code> (a secret random token in the QR code).
  * The page sends the photo as the raw request body, so there's no multipart parsing.
  * [onUpload] runs on the server thread with the uploaded file and whether it is a video, and returns the saved item's name, or null.
  */
-internal class UploadServer(val code: String, private val temp: File, private val imagesOnly: Boolean = false,
+internal class UploadServer(private val temp: File, private val imagesOnly: Boolean = false,
                             private val onUpload: (File, Boolean) -> String?) {
+    val code: String = Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(ByteArray(24).also(SecureRandom()::nextBytes))
     private val socket = try {
         ServerSocket(8080)
     } catch (e: IOException) {
