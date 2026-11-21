@@ -92,6 +92,15 @@ class CueSportsTest {
     @Test fun laterIsNotNow() = assertFalse(sportsNow(game("pre", start = 3 * hour + 1), 0L))
     @Test fun finalIsNotNow() = assertFalse(sportsNow(game("post"), 0L))
 
+    @Test fun liveNowKeepsOnlyLiveLeaguesAndGames() {
+        val on = game("in")
+        // League 0: one live, one to come. League 1: nothing on. League 2: failed. League 3: only a final.
+        val live = sportsLive(listOf(listOf(on, game("pre", start = hour)), listOf(game("pre")), null, listOf(game("post"))))
+        assertEquals(listOf(0 to listOf(on)), live)
+    }
+    @Test fun liveNowNothingOnIsEmpty() = assertEquals(emptyList<Any>(), sportsLive(listOf(listOf(game("pre")), null)))
+    @Test fun liveNowAllFailedIsNull() = assertNull(sportsLive(listOf(null, null)))
+
     @Test fun playingTodayIsLocalDay() {
         val utc = ZoneId.of("UTC")
         val today = game("pre", start = noonNy + 5 * hour) // 23:00 UTC, still 15 November

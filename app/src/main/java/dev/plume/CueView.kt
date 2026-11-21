@@ -634,7 +634,7 @@ internal class CueView(private val a: MainActivity) {
             recent.map { m -> mins(m) to { startTimer(m) } } +
             listOf(
                 getString(R.string.isl_custom) to { showPanel(); editTimer() },
-                getString(R.string.isl_games_now) to { showPanel(); pickSport(teams = false) },
+                getString(R.string.isl_games_now) to { showPanel(); pickLiveNow() },
             ), below = true,
             holds = listOf(null) + recent.map { m -> { saveRecent(recentTimers() - m); timerMenu(anchor) } })
     }

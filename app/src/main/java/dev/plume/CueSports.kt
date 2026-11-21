@@ -9,6 +9,7 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
@@ -221,17 +222,47 @@ internal object CueSports {
         sportsPlayingToday(lastBoard["$sport/$league"].orEmpty(), System.currentTimeMillis(), ZoneId.systemDefault())
 
     /**
-     * One league's games for the Games now pages: live, or starting within a day, live first. [done] runs on the main
-     * thread, with null when the request fails.
+     * One league's games for the Live now pages: only the ones on now. [done] runs on the main thread, with null when
+     * the request fails.
      */
     fun leagueGames(ctx: Context, l: League, done: (List<NowGame>?) -> Unit) {
         Thread {
             val now = System.currentTimeMillis()
-            val list = fetch(l, now)?.filter { it.state == "in" || it.state == "pre" && it.start - now in -HOUR..24 * HOUR }
-                ?.map { nowGame(ctx, l, it, now) }?.sortedWith(compareBy<NowGame>({ it.rank }, { it.start }))
+            val list = fetch(l, now)?.filter { it.state == "in" }?.let { liveGames(ctx, l, it, now) }
             main.post { done(list) }
         }.start()
     }
+
+    /** A league on the Live now page, with only its games that are on now. */
+    class LiveLeague(val league: League, val games: List<NowGame>)
+
+    @Volatile private var liveAt = 0L
+    @Volatile private var live: List<LiveLeague>? = null
+
+    /** The last [liveNow] answer while it is less than a minute old, so Back and forth does not ask again. */
+    fun liveNowKept(): List<LiveLeague>? = live?.takeIf { System.currentTimeMillis() - liveAt < MINUTE }
+
+    /**
+     * The leagues with a game on now, in [LEAGUES] order, each with only its live games. Asks every league at once,
+     * six requests at a time. [done] runs on the main thread, with null when every request fails.
+     */
+    fun liveNow(ctx: Context, done: (List<LiveLeague>?) -> Unit) {
+        Thread {
+            val now = System.currentTimeMillis()
+            val pool = Executors.newFixedThreadPool(6)
+            val boards = try {
+                pool.invokeAll(LEAGUES.map { l -> Callable { fetch(l, now) } }).map { it.get() }
+            } finally {
+                pool.shutdown()
+            }
+            val list = sportsLive(boards)?.map { (i, games) -> LiveLeague(LEAGUES[i], liveGames(ctx, LEAGUES[i], games, now)) }
+            if (list != null) { live = list; liveAt = now }
+            main.post { done(list) }
+        }.start()
+    }
+
+    private fun liveGames(ctx: Context, l: League, games: List<SportsGame>, now: Long) =
+        games.map { nowGame(ctx, l, it, now) }.sortedWith(compareBy<NowGame>({ it.rank }, { it.start }))
 
     /** A game as a row to pick: the score when live, else who plays and when ("Tomorrow 7:30 PM"). */
     private fun nowGame(ctx: Context, l: League, g: SportsGame, now: Long): NowGame {
@@ -556,6 +587,14 @@ private const val SINCE_STEP = 10_000_000_000_000L
  * comes first.
  */
 internal fun sportsSince(source: Int, live: Boolean, order: Long) = order - source * 2 * SINCE_STEP - if (live) 0L else SINCE_STEP
+
+/**
+ * For Live now: by [LEAGUES] index, each scoreboard's games that are on now, without the scoreboards that have none.
+ * Null when every request failed (a null scoreboard), so the page can offer to try again.
+ */
+internal fun sportsLive(boards: List<List<SportsGame>?>): List<Pair<Int, List<SportsGame>>>? =
+    if (boards.isNotEmpty() && boards.all { it == null }) null
+    else boards.mapIndexedNotNull { i, b -> b?.filter { it.state == "in" }?.takeIf { it.isNotEmpty() }?.let { i to it } }
 
 /** A game for "Games now": live, or starting within three hours (or late by less than an hour). */
 internal fun sportsNow(g: SportsGame, now: Long) = g.state == "in" || g.state == "pre" && g.start - now in -HOUR..3 * HOUR
