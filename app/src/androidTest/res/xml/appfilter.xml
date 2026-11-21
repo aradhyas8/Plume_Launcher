@@ -1,0 +1,6 @@
+<resources>
+    <item component="ComponentInfo{dev.plume.test/dev.plume.IconPackFixtureActivity}" drawable="pack_test_wide" />
+    <item component="ComponentInfo{tv.fixture/.Main}" drawable="pack_test_wide" />
+    <item component="ComponentInfo{tv.missing/.Main}" drawable="missing_drawable" />
+    <calendar component="ComponentInfo{tv.calendar/.Main}" prefix="calendar_" />
+</resources>

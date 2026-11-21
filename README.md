@@ -235,6 +235,17 @@ Fire TV does not send Home presses to the service. Smooth volume can also turn H
 
 Plume shows every wallpaper as it is, with no dark fades on top.
 
+## Icon packs
+
+Install a compatible Android TV icon pack, then select **Plume settings → Apps row → Icon pack**.
+One shared reader supports static ADW-style mappings in `appfilter.xml`; packs do not need a separate Plume build.
+The selected pack supplies artwork for the home row and All apps, including banner layouts.
+Plume preserves the artwork's aspect ratio and keeps your uploaded pictures on the home row.
+Apps without a matching icon keep their existing artwork. Select **Default** to restore Plume's artwork.
+An unavailable pack uses the existing artwork until you reinstall or enable it.
+Pack updates refresh the artwork. Animated icons, generated masks, and individual image collections need separate support.
+The pack selection follows settings backups; install the pack separately on the destination TV.
+
 ## Transfer settings
 
 Open **Plume settings → Backup → Save backup**. Plume shows the file path after saving.

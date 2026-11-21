@@ -360,6 +360,9 @@ class MainActivity : Activity() {
     private var sources = SOURCES ?: emptyList() // HDMI ports and the devices on them: the Sources list, not the apps
     private var cvteSourcePanel = CVTE_SOURCE_PANEL
     private var appsDirty = APPS == null
+    private var appGeneration = 0
+    private var iconPack: IconPacks.Pack? = null
+    private var iconPackStamp = ""
     private var watchKey: String? = null
     private var cardSources = emptyList<CardSource>() // By title and Per channel: the sources the shows row is split in
     private var cardCurrent: CardSource? = null
@@ -402,6 +405,7 @@ class MainActivity : Activity() {
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             appsDirty = true
+            appGeneration++ // discard work that started before this package changed
             i.data?.schemeSpecificPart?.let { GLYPHS.remove(it); ACCENTS.remove(it) } // an update may bring a new icon
             // The system can tell us after we are back in front, for example after an uninstall: onResume has run already.
             if (resumed) {
@@ -604,6 +608,7 @@ class MainActivity : Activity() {
         }
         // Only rebuild what changed, so focus stays where it was when returning from an app.
         if (appsDirty) refreshApps() else if (appRow.childCount == 0) renderApps()
+        checkIconPack()
         refreshWatchNext()
         showWeather()
         ui.removeCallbacks(weatherTick)
@@ -3286,6 +3291,9 @@ class MainActivity : Activity() {
             R.string.icon_style to Triple(getString(R.string.icon_style), getString(ICON_STYLES.getValue(iconStyle()))) {
                 steps[R.string.icon_style]!!(1)
             },
+            R.string.icon_pack to Triple(getString(R.string.icon_pack),
+                if (prefs.getString("icon_pack", null) == null) getString(R.string.icon_pack_default)
+                else iconPack?.label ?: getString(R.string.icon_pack_unavailable)) { pickIconPack() },
             R.string.row_size to Triple(getString(R.string.row_size), getString(ROW_SIZES.getValue(rowSize()).first)) {
                 steps[R.string.row_size]!!(1)
             },
@@ -3444,7 +3452,7 @@ class MainActivity : Activity() {
             Triple(R.string.section_style, "${rows[R.string.theme]!!.second} · ${getString(glassName())}",
                 listOf(R.string.theme, R.string.glass, R.string.app_animations)),
             Triple(R.string.section_app_row, "${rows[R.string.apps_in_row]!!.second} · ${rows[R.string.row_position]!!.second}",
-                listOf(R.string.edit_apps_row, R.string.apps_in_row, R.string.sort_apps, R.string.icon_style, R.string.row_size, R.string.app_names, R.string.row_position)),
+                listOf(R.string.edit_apps_row, R.string.apps_in_row, R.string.sort_apps, R.string.icon_style, R.string.icon_pack, R.string.row_size, R.string.app_names, R.string.row_position)),
             // "When hidden" only means something once the row can hide.
             Triple(R.string.bottom_row, "${rowName()} · ${rows[R.string.show_row]!!.second}", listOfNotNull(R.string.show_row, R.string.apps_when_hidden.takeIf { rowShow() != "always" },
                 R.string.row_name, R.string.show_icons, R.string.cw_apps, R.string.cw_channels, R.string.cards_rows, R.string.restore_hidden)),
@@ -4529,12 +4537,31 @@ class MainActivity : Activity() {
     // ---------- apps row ----------
 
     /** Labels and icons come from each app's resources, ~200 ms on this TV: done off the UI thread. */
-    private fun refreshApps() {
+    private fun refreshApps(pack: String? = prefs.getString("icon_pack", null), selectPack: Boolean = false) {
         appsDirty = false
+        val generation = ++appGeneration
         io.execute {
             val list = try {
                 loadApps()
             } catch (e: Exception) {
+                ui.post { if (generation == appGeneration) {
+                    appsDirty = true
+                    if (selectPack) toast(getString(R.string.icon_pack_failed), long = true)
+                } }
+                return@execute
+            }
+            val stamp = IconPacks.stamp(this, pack)
+            val artwork = if (pack == null) null else try {
+                IconPacks.load(this, pack, list.mapNotNull { it.launch.component?.flattenToString() })
+            } catch (e: Exception) {
+                android.util.Log.w("Plume", "Icon pack unavailable: $pack", e)
+                null
+            }
+            if (selectPack && pack != null && artwork == null) {
+                ui.post { if (!isDestroyed && generation == appGeneration) {
+                    toast(getString(R.string.icon_pack_failed), long = true)
+                    updateIconPackSetting()
+                } }
                 return@execute
             }
             val inputs = hdmiInputs()
@@ -4542,7 +4569,10 @@ class MainActivity : Activity() {
                 it.resolveActivityInfo(packageManager, PackageManager.MATCH_DEFAULT_ONLY)?.exported == true
             }
             ui.post {
-                if (isDestroyed) return@post
+                if (isDestroyed || generation != appGeneration) return@post
+                if (selectPack) prefs.edit().putString("icon_pack", pack).apply()
+                iconPack = artwork
+                iconPackStamp = stamp
                 if (inputs.isNotEmpty() && !prefs.getBoolean("inputs_moved", false)) moveInputsToSources(inputs)
                 // Once: extra apps leave the home row. row_hidden lists the extras put back in from now on.
                 if (!prefs.getBoolean("extras_moved", false)) prefs.edit().putBoolean("extras_moved", true)
@@ -4555,7 +4585,54 @@ class MainActivity : Activity() {
                 CVTE_SOURCE_PANEL = panel
                 if (!topEditing) applyTopBar()
                 renderApps()
-                if (allApps.visibility == View.VISIBLE) openAllApps(recentAppsOpen) // a fresh remote request can precede the app list
+                if (allApps.visibility == View.VISIBLE) {
+                    val selected = currentFocus?.tag
+                    openAllApps(recentAppsOpen)
+                    allAppsGrid.findViewWithTag<View>(selected)?.requestFocus()
+                }
+                updateIconPackSetting()
+            }
+        }
+    }
+
+    private fun checkIconPack() {
+        val pack = prefs.getString("icon_pack", null)
+        val generation = appGeneration
+        io.execute {
+            val stamp = IconPacks.stamp(this, pack)
+            ui.post {
+                if (!isDestroyed && generation == appGeneration && stamp != iconPackStamp) refreshApps()
+            }
+        }
+    }
+
+    private fun updateIconPackSetting() {
+        if (settingsScrim.visibility != View.VISIBLE || findViewById<TextView>(R.id.settingsTitle).text != getString(R.string.section_app_row)) return
+        val focus = settingsList.indexOfChild(currentFocus)
+        renderSettings(R.string.icon_pack)
+        settingsList.getChildAt(focus)?.requestFocus()
+    }
+
+    private fun pickIconPack() {
+        var active = true
+        showPage(getString(R.string.icon_pack), emptyList(), top = label(getString(R.string.icon_pack_loading), 14f)) {
+            renderSettings(R.string.icon_pack)
+        }
+        pageExit = { active = false }
+        io.execute {
+            val packs = try { IconPacks.discover(this) } catch (_: Exception) { emptyList() }
+            ui.post {
+                if (!active || isDestroyed) return@post
+                val chosen = prefs.getString("icon_pack", null)
+                val choices = listOf(IconPacks.Choice("", getString(R.string.icon_pack_default))) + packs
+                showPage(getString(R.string.icon_pack), choices.map { choice ->
+                    page(choice.label, if (choice.pkg == (chosen ?: "")) CHOSEN else "") {
+                        refreshApps(choice.pkg.takeIf { it.isNotEmpty() }, selectPack = true)
+                        renderSettings(R.string.icon_pack)
+                    }
+                }, focus = choices.indexOfFirst { it.pkg == (chosen ?: "") }.coerceAtLeast(0),
+                    top = label(getString(if (packs.isEmpty()) R.string.icon_pack_empty else R.string.help_icon_pack), 14f)
+                        .apply { maxLines = 6; ellipsize = null }) { renderSettings(R.string.icon_pack) }
             }
         }
     }
@@ -4743,11 +4820,12 @@ class MainActivity : Activity() {
             null
         }
 
-    private fun bannerTile(a: App): View? {
+    /** [art] is a banner-shaped icon pack picture; it skips the size check, as packs ship small artwork. */
+    private fun bannerTile(a: App, art: Drawable? = null): View? {
         if (a.pkg.startsWith(HDMI)) return null
-        val banner = appBanner(a) ?: return null
+        val banner = art ?: appBanner(a) ?: return null
         val w = rowTileWidth()
-        if (banner.intrinsicWidth in 1 until rowTileWidth(ROW_TILES)) return null
+        if (art == null && banner.intrinsicWidth in 1 until rowTileWidth(ROW_TILES)) return null
         // Drawn once, centre-cropped, at the tile's exact size: a row of banners then costs ~80 KB each, not the
         // banner's own size, and the full-size banner isn't kept.
         val h = w * 9 / 16
@@ -4788,7 +4866,24 @@ class MainActivity : Activity() {
 
     /** The home row shows marks only by default (see rowNames); the All apps grid always labels them. */
     private fun appTile(a: App, labeled: Boolean = true, window: Boolean = false): View {
-        if (!labeled && !window && isBannerStyle(iconStyle())) bannerTile(a)?.let { it.contentDescription = a.label; return it }
+        val component = if (a.pkg.startsWith(HDMI)) null else a.launch.component?.flattenToString()
+        val bannerRow = !labeled && !window && isBannerStyle(iconStyle())
+        if (bannerRow) {
+            // Order: the person's uploaded banner, then banner-shaped pack art, then the app's own banner. All go
+            // through bannerTile, so Banner and Monochrome banner treat them the same at every row size.
+            val art = component?.takeIf { AppPictures.read(this, a.pkg, banner = true) == null }
+                ?.let { iconPack?.banner(resources, it) }
+            bannerTile(a, art)?.let { it.contentDescription = a.label; return it }
+        }
+        component?.let { iconPack?.icon(resources, it) }?.let { packed ->
+            // A person's uploaded icon keeps precedence over a globally selected pack.
+            if (labeled || bannerRow || AppPictures.read(this, a.pkg, banner = false) == null) {
+                val drawable = customIcon(a.pkg) ?: packed
+                if (!colourIcons()) drawable.colorFilter = GREYSCALE
+                return tile(a.label.takeIf { labeled }, drawable, false, a.pkg) { launch(a) }
+                    .apply { contentDescription = a.label }
+            }
+        }
         val logo = LOGOS[a.pkg]
         val custom = (if (!labeled && !a.pkg.startsWith(HDMI) && !isBannerStyle(iconStyle())) AppPictures.read(this, a.pkg, banner = false) else null)
             ?.apply { if (!colourIcons()) colorFilter = GREYSCALE }
@@ -7904,7 +7999,7 @@ class MainActivity : Activity() {
         val ROW_ICONS = mapOf(
             R.string.theme to R.drawable.ms_contrast, R.string.glass to R.drawable.ms_blur_on, R.string.app_animations to R.drawable.ms_open_in_full,
             R.string.edit_apps_row to R.drawable.ms_swap_horiz, R.string.apps_in_row to R.drawable.ms_checklist, R.string.sort_apps to R.drawable.ms_sort,
-            R.string.icon_style to R.drawable.ms_apps, R.string.row_size to R.drawable.ms_format_size, R.string.app_names to R.drawable.ms_label,
+            R.string.icon_style to R.drawable.ms_apps, R.string.icon_pack to R.drawable.ms_apps, R.string.row_size to R.drawable.ms_format_size, R.string.app_names to R.drawable.ms_label,
             R.string.row_position to R.drawable.ms_format_align_left,
             R.string.show_row to R.drawable.ms_visibility, R.string.apps_when_hidden to R.drawable.ms_vertical_align_bottom, R.string.row_name to R.drawable.ms_edit,
             R.string.show_icons to R.drawable.ms_badge, R.string.cw_apps to R.drawable.ms_widgets, R.string.cw_channels to R.drawable.ms_podcasts,
@@ -7940,7 +8035,7 @@ class MainActivity : Activity() {
             R.string.section_lock to R.string.help_lock,
             R.string.weather_location to R.string.help_location,
             R.string.edit_apps_row to R.string.help_rearrange, R.string.apps_in_row to R.string.help_choose_apps,
-            R.string.sort_apps to R.string.help_order, R.string.icon_style to R.string.help_icon_style, R.string.row_size to R.string.help_row_size,
+            R.string.sort_apps to R.string.help_order, R.string.icon_style to R.string.help_icon_style, R.string.icon_pack to R.string.help_icon_pack, R.string.row_size to R.string.help_row_size,
             R.string.apps_when_hidden to R.string.help_apps_when_hidden, R.string.row_name to R.string.help_row_name,
             R.string.show_icons to R.string.help_show_icons,
             R.string.cw_apps to R.string.help_from_apps, R.string.cw_channels to R.string.help_channels, R.string.cards_rows to R.string.help_cards_rows,

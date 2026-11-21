@@ -1,4 +1,11 @@
 <resources>
+    <string name="icon_pack">حزمة الأيقونات</string>
+    <string name="icon_pack_default">الافتراضي</string>
+    <string name="icon_pack_unavailable">غير متاح</string>
+    <string name="icon_pack_loading">جارٍ البحث عن حزم الأيقونات…</string>
+    <string name="icon_pack_empty">ثبّت حزمة أيقونات متوافقة على هذا التلفزيون. ستظهر هنا.</string>
+    <string name="icon_pack_failed">تعذر تحميل هذه الحزمة. يحتفظ Plume بالاختيار الحالي.</string>
+    <string name="help_icon_pack">اختر حزمة مثبتة. تحتفظ التطبيقات التي ليس لها رمز مطابق بصورها الحالية.</string>
     <string name="override_desc">يفتح Plume كلما ظهرت الشاشة الرئيسية لـ Google TV، فيعيدك زر الرئيسية إلى هنا.</string>
     <string name="delete_photo">حذف \"%1$s\"؟</string>
     <string name="photo_added">تمت إضافة \"%1$s\". أرسل صورة أخرى، أو اضغط تم.</string>

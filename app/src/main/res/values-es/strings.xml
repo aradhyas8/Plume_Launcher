@@ -1,4 +1,11 @@
 <resources>
+    <string name="icon_pack">Paquete de iconos</string>
+    <string name="icon_pack_default">Predeterminado</string>
+    <string name="icon_pack_unavailable">No disponible</string>
+    <string name="icon_pack_loading">Buscando paquetes de iconos…</string>
+    <string name="icon_pack_empty">Instala un paquete de iconos compatible en este televisor. Aparecerá aquí.</string>
+    <string name="icon_pack_failed">No se puede cargar este paquete. Plume conserva la selección actual.</string>
+    <string name="help_icon_pack">Selecciona un paquete instalado. Las aplicaciones sin un icono coincidente conservan su imagen.</string>
     <string name="change_app_picture">Cambiar imagen</string>
     <string name="app_picture_icon">Icono</string>
     <string name="app_picture_icon_hint">Se usa con los estilos Monocromo y Color</string>

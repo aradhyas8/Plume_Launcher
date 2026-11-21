@@ -90,6 +90,13 @@
     <string name="always">Always</string>
     <string name="never">Never</string>
     <string name="icon_style">Icon style</string>
+    <string name="icon_pack">Icon pack</string>
+    <string name="icon_pack_default">Default</string>
+    <string name="icon_pack_unavailable">Unavailable</string>
+    <string name="icon_pack_loading">Finding icon packs…</string>
+    <string name="icon_pack_empty">Install a compatible icon pack on this TV. It will appear here.</string>
+    <string name="icon_pack_failed">Cannot load this icon pack. Plume keeps the current selection.</string>
+    <string name="help_icon_pack">Select an installed icon pack. Apps without a matching icon keep their current artwork.</string>
     <string name="colour">Colour</string>
     <string name="monochrome">Monochrome</string>
     <string name="banner">Banner</string>
