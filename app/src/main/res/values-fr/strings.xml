@@ -1,4 +1,11 @@
 <resources>
+    <string name="icon_pack">Pack d’icônes</string>
+    <string name="icon_pack_default">Par défaut</string>
+    <string name="icon_pack_unavailable">Indisponible</string>
+    <string name="icon_pack_loading">Recherche des packs d’icônes…</string>
+    <string name="icon_pack_empty">Installez un pack d’icônes compatible sur ce téléviseur. Il apparaîtra ici.</string>
+    <string name="icon_pack_failed">Impossible de charger ce pack. Plume conserve la sélection actuelle.</string>
+    <string name="help_icon_pack">Sélectionnez un pack installé. Les applications sans icône correspondante conservent leur image.</string>
     <string name="override_desc">Ouvre Plume dès que l\'écran d\'accueil Google TV apparaît, pour que le bouton Accueil arrive ici.</string>
     <string name="delete_photo">Supprimer « %1$s » ?</string>
     <string name="photo_added">« %1$s » ajoutée. Envoyez-en une autre ou appuyez sur Terminé.</string>

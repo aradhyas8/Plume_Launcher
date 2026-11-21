@@ -28,6 +28,15 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <queries>
+        <!-- Standard icon-pack discovery; also finds new packs without a package allowlist. -->
+        <intent><action android:name="org.adw.launcher.THEMES" /></intent>
+        <intent><action android:name="org.adw.ActivityStarter.THEMES" /></intent>
+        <intent><action android:name="com.novalauncher.THEME" /></intent>
+        <intent><action android:name="ch.deletescape.lawnchair.ICONPACK" /></intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="com.anddoes.launcher.THEME" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LEANBACK_LAUNCHER" />

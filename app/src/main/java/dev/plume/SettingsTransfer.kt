@@ -30,7 +30,7 @@ internal object SettingsTransfer {
     private val switches = setOf("glass", "colour_icons", "app_anim", "row_drop", "cw_colour", "geo_manual", "extras_moved", "all_apps_mobile")
     private val clockFormats = ClockFormat.entries.associateBy { it.key }
     private val keys = choices.keys + switches + clockFormats.keys + setOf("order", "row_hidden", "row_extras", "row_apps", "cw_off", "row_name", "top_bar",
-        "wp_every", "geo_city", "geo_lat", "geo_lon")
+        "wp_every", "geo_city", "geo_lat", "geo_lon", "icon_pack")
     private val pkg = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")
 
     @Suppress("DEPRECATION")
@@ -56,6 +56,7 @@ internal object SettingsTransfer {
                     value
                 }
                 key in switches -> { require(value is Boolean) { "Invalid $key" }; value }
+                key == "icon_pack" -> { require(value is String && value.length <= 255 && pkg.matches(value)) { "Invalid $key" }; value }
                 key in clockFormats -> {
                     require(value is String && clockFormats.getValue(key).accepts(value)) { "Invalid $key" }
                     value

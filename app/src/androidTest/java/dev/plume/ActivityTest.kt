@@ -29,6 +29,7 @@ class ActivityTest : Instrumentation() {
     private var homeSequence = 0
     private var protectedLaunchOnly = false
     private var cueOnly = false
+    private var iconsOnly = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -39,10 +40,16 @@ class ActivityTest : Instrumentation() {
         homeOnly = arguments?.getString("class") == "dev.plume.ActivityTest#homePopupHomeSequence"
         protectedLaunchOnly = arguments?.getString("class") == "dev.plume.ActivityTest#protectedAppLaunch"
         cueOnly = arguments?.getString("class") == CueSettingsCheck::class.java.name
+        iconsOnly = arguments?.getString("class") == IconPacksCheck::class.java.name
         start()
     }
 
     override fun onStart() {
+        if (iconsOnly) {
+            test("sharedIconPackResourcesAndRejectedMappings") { IconPacksCheck(this).run() }
+            finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
+            return
+        }
         if (cueOnly) {
             test("cueSettingsRequestsNavigationAndExpiry") { CueSettingsCheck(this).run() }
             finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
@@ -197,7 +204,7 @@ class ActivityTest : Instrumentation() {
         val result = Bundle().apply {
             putString("class", this@ActivityTest.javaClass.name)
             putString("test", name)
-            putInt("numtests", if (previewOnly || transferOnly || muteOnly || picturesOnly || protectedLaunchOnly) 1 else 13)
+            putInt("numtests", if (previewOnly || transferOnly || muteOnly || picturesOnly || protectedLaunchOnly || iconsOnly) 1 else 13)
             putInt("current", ++current)
             if (homeOnly) putInt("numtests", 4)
         }

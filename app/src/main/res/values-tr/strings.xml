@@ -1,4 +1,11 @@
 <resources>
+    <string name="icon_pack">Simge paketi</string>
+    <string name="icon_pack_default">Varsayılan</string>
+    <string name="icon_pack_unavailable">Kullanılamıyor</string>
+    <string name="icon_pack_loading">Simge paketleri aranıyor…</string>
+    <string name="icon_pack_empty">Bu TV’ye uyumlu bir simge paketi yükleyin. Burada görünecektir.</string>
+    <string name="icon_pack_failed">Bu paket yüklenemiyor. Plume mevcut seçimi korur.</string>
+    <string name="help_icon_pack">Yüklü bir paket seçin. Eşleşen simgesi olmayan uygulamalar mevcut görsellerini korur.</string>
     <string name="override_desc">Google TV ana ekranı her açıldığında Plume\'u başlatır, böylece kumandanın Ana Ekran tuşu buraya gelir.</string>
     <string name="delete_photo">\"%1$s\" silinsin mi?</string>
     <string name="photo_added">\"%1$s\" eklendi. Başka bir fotoğraf gönderin veya Bitti\'ye basın.</string>
