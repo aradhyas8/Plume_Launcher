@@ -26,6 +26,7 @@ class ActivityTest : Instrumentation() {
     private var muteOnly = false
     private var picturesOnly = false
     private var homeOnly = false
+    private var homeSequence = 0
     private var protectedLaunchOnly = false
 
     override fun onCreate(arguments: Bundle?) {
@@ -66,10 +67,34 @@ class ActivityTest : Instrumentation() {
             return
         }
         if (homeOnly) {
-            test("normalDoubleHome") { checkHomeSequence() }
-            test("homeMainDpadHome") { checkHomeSequence(KeyEvent.KEYCODE_DPAD_RIGHT) }
-            test("homePopupHomeSequence") { checkHomeSequence(KeyEvent.KEYCODE_DPAD_DOWN, popup = true) }
-            test("homeOtherKeyHome") { checkHomeSequence(KeyEvent.KEYCODE_F1) }
+            var activity: MainActivity? = null
+            try {
+                test("normalDoubleHome") {
+                    targetContext.getSharedPreferences("home", Context.MODE_PRIVATE).edit()
+                        .putString("theme", "light").putBoolean("setup_shown", true)
+                        .putString("seen_notes", targetContext.packageManager.getPackageInfo(targetContext.packageName, 0).versionName)
+                        .putString("top_bar", "wifi,sources,apps,system,plume").remove("return_dream").commit()
+                    val monitor = addMonitor(MainActivity::class.java.name, null, false)
+                    try {
+                        android.util.Log.i("HomeSequenceCheck", "STARTUP REQUEST")
+                        targetContext.startActivity(homeIntent())
+                        activity = monitor.waitForActivityWithTimeout(5_000) as? MainActivity
+                        val started = checkNotNull(activity) { "Home Activity did not start within 5 seconds" }
+                        await("Startup Home did not reach the Activity") {
+                            started.intent.getIntExtra("test_home_sequence", 0) == homeSequence
+                        }
+                        android.util.Log.i("HomeSequenceCheck", "STARTUP DELIVERED activity=${System.identityHashCode(started)}")
+                    } finally {
+                        removeMonitor(monitor)
+                    }
+                    checkHomeSequence(checkNotNull(activity))
+                }
+                test("homeMainDpadHome") { checkHomeSequence(checkNotNull(activity), KeyEvent.KEYCODE_DPAD_RIGHT) }
+                test("homePopupHomeSequence") { checkHomeSequence(checkNotNull(activity), KeyEvent.KEYCODE_DPAD_DOWN, popup = true) }
+                test("homeOtherKeyHome") { checkHomeSequence(checkNotNull(activity), KeyEvent.KEYCODE_F1) }
+            } finally {
+                runOnMainSync { activity?.finish() }
+            }
             finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
             return
         }
@@ -234,36 +259,43 @@ class ActivityTest : Instrumentation() {
         }
     }
 
-    private fun checkHomeSequence(keyCode: Int? = null, popup: Boolean = false) {
-        targetContext.getSharedPreferences("home", Context.MODE_PRIVATE).edit()
-            .putString("theme", "light").putBoolean("setup_shown", true)
-            .putString("top_bar", "wifi,sources,apps,system,plume").remove("return_dream").commit()
-        val activity = startActivitySync(Intent(targetContext, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+    private fun homeIntent() = Intent(targetContext, MainActivity::class.java)
+        .setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("test_home_sequence", ++homeSequence)
+
+    private fun checkHomeSequence(activity: MainActivity, keyCode: Int? = null, popup: Boolean = false) {
+        android.util.Log.i("HomeSequenceCheck", "START popup=$popup key=$keyCode activity=${System.identityHashCode(activity)}")
         val homePress = MainActivity::class.java.getDeclaredField("systemHomePress").apply { isAccessible = true }
         val previous = HomePress::class.java.getDeclaredField("previous").apply { isAccessible = true }
         fun armedAt(): Long? = previous.get(homePress.get(activity)) as Long?
-        var sequence = 0
         fun home() {
-            val expected = ++sequence
-            targetContext.startActivity(Intent(targetContext, MainActivity::class.java)
-                .setAction(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("test_home_sequence", expected))
+            val intent = homeIntent()
+            val expected = intent.getIntExtra("test_home_sequence", 0)
+            android.util.Log.i("HomeSequenceCheck", "REQUEST Home $expected")
+            targetContext.startActivity(intent)
             await("Home $expected did not reach the existing Activity") {
                 activity.intent.getIntExtra("test_home_sequence", 0) == expected && !activity.isDestroyed
             }
+            android.util.Log.i("HomeSequenceCheck", "DELIVERED Home $expected")
         }
+        check(HomeOverride.running == null) { "Home service bypasses the Activity Home pair" }
+        runOnMainSync { activity.setupDialog?.dismiss() }
+        await("Home screen did not gain focus") { activity.hasWindowFocus() }
+        var drawerOpen = false
+        runOnMainSync { drawerOpen = activity.findViewById<View>(R.id.allApps).isShown }
+        if (drawerOpen) {
+            sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            await("Back did not close Recent apps") { !activity.findViewById<View>(R.id.allApps).isShown }
+        }
+        sendKeyDownUpSync(KeyEvent.KEYCODE_F1)
+        runOnMainSync {
+            check(armedAt() == null) { "Case started with an armed Home pair" }
+            if (popup) activity.homePopup(0, "Test", null, null, "First" to {}, "Second" to {})
+        }
+        val window = if (popup) checkNotNull(activity.setupDialog?.window) else activity.window
+        val callback = window.callback
         try {
-            await("Home screen did not gain focus") { activity.hasWindowFocus() }
-            check(HomeOverride.running == null) { "Home service bypasses the Activity Home pair" }
-            runOnMainSync {
-                activity.setupDialog?.dismiss()
-                check(armedAt() == null) { "Activity started with an armed Home pair" }
-                if (popup) activity.homePopup(0, "Test", null, null, "First" to {}, "Second" to {})
-            }
-            val window = if (popup) checkNotNull(activity.setupDialog?.window) else activity.window
             await("Target window did not gain focus") { window.decorView.hasWindowFocus() }
-            val callback = window.callback
             val delivered = mutableListOf<Int>()
             runOnMainSync {
                 check(if (popup) callback === activity.setupDialog else callback === activity) { "Unexpected key route" }
@@ -309,12 +341,11 @@ class ActivityTest : Instrumentation() {
                     check(checkNotNull(armedAt()) > first) { "Second Home did not start a fresh pair" }
                     if (popup) check(activity.setupDialog?.isShowing == true) { "Home closed the popup" }
                 }
-                android.util.Log.i("HomeSequenceCheck", "popup=$popup key=$keyCode delivered=$delivered pairMs=$elapsed")
-                window.callback = callback
+                android.util.Log.i("HomeSequenceCheck", "PASS popup=$popup key=$keyCode delivered=$delivered pairMs=$elapsed")
             }
         } finally {
-            runOnMainSync { activity.finish() }
-            waitForIdleSync()
+            runOnMainSync { window.callback = callback; activity.setupDialog?.dismiss() }
+            android.util.Log.i("HomeSequenceCheck", "END popup=$popup key=$keyCode")
         }
     }
 
