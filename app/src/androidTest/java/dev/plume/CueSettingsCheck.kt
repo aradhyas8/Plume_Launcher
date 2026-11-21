@@ -1,5 +1,6 @@
 package dev.plume
 
+import android.app.Dialog
 import android.app.Instrumentation
 import android.content.Context
 import android.content.Intent
@@ -225,8 +226,10 @@ class CueSettingsCheck(private val runner: Instrumentation) {
                     server.accept().use { peer ->
                         peer.soTimeout = 3_000
                         lateinit var socket: Socket
+                        lateinit var dialog: Dialog
                         runner.runOnMainSync {
                             socket = field("cueAdbSocket").get(activity) as Socket
+                            dialog = activity.setupDialog!!
                             when (mode) {
                                 0 -> activity.setupDialog!!.cancel() // Back uses Dialog.cancel().
                                 1 -> activity.setupDialog!!.dismiss()
@@ -245,7 +248,12 @@ class CueSettingsCheck(private val runner: Instrumentation) {
                             check(field("cueAdbDialog").get(activity) == null)
                             when (mode) {
                                 2 -> check(activity.setupDialog?.isShowing == true)
-                                3 -> check(activity.isDestroyed)
+                                3 -> {
+                                    check(activity.isDestroyed)
+                                    check(!dialog.isShowing && dialog.window?.decorView?.isAttachedToWindow != true) {
+                                        "Destroyed activity kept the ADB dialog window"
+                                    }
+                                }
                                 else -> check(activity.setupDialog == null) { "Late ADB result reopened a dismissed sheet" }
                             }
                             if (!activity.isDestroyed) activity.setupDialog?.dismiss()

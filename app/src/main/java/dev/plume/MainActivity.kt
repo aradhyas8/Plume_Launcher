@@ -686,6 +686,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        cueAdbDialog?.dismiss()
         cancelCueAdb()
         unregisterReceiver(unlockReceiver)
         if (ready) {
