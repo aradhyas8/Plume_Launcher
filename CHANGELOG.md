@@ -16,61 +16,35 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ## Unreleased
 
-- Plume shows an error when the TV blocks an app launch, instead of closing.
-- **Icon packs.** Select an installed pack in **Apps row → Icon pack**. Apps without matching icons keep their artwork.
-- **Wallpaper gallery.** Browse wallpapers by source. Select photos from a TV or USB folder and preview the slideshow before you apply it.
-- **All apps** hides mobile apps that came with the TV. Select **Show mobile apps** to see them. Plume also removes them from the home row.
-- Plume uses the **Bing picture of the day** on first install. It downloads the picture when the TV connects to the internet.
-- **Spanish.** Plume is now available in Spanish.
-- **Smooth row scrolling.** Rows glide smoothly when you hold a direction key. Plume plays focus sounds when you move.
+### New
+- **Meet Cue.** A live glass tile at the top of your home screen. See your music, timers, alerts, rain and live scores at a glance. Pin a game, or follow your teams.
+- **Alerts over any app.** Calls, doorbells and finished timers show over your movie. Press Up to open one. Turn it on in **Cue** settings.
+- **Recent apps.** Press Home two times to see your open apps. Press Left or Right to jump between them.
+- **Icon packs.** Give every app a new look with an icon pack that you install. Select **Apps row → Icon pack**.
+- **Wallpaper gallery.** Browse every wallpaper source in one place. Preview a slideshow of your own photos before you apply it.
+- **Silky scrolling.** Hold a direction button and the rows glide. Soft sounds follow your every move.
+- **Your app, your picture.** Hold **OK** on an app and select **Change picture**. Upload a new icon or banner from your phone.
+- **Settings backup.** Save your home screen setup. Restore it on another TV in seconds.
+- **Edit the top bar in place.** Hold **OK** on an icon, then move, add or remove icons right on the bar.
+- **Hola.** Plume now speaks Spanish.
 
-- **Cue.** A glass tile at the top of Home shows what happens now: music, timers, alerts and live scores.
-- Select Cue to open it. Press Left or Right on the progress bar to seek in a song.
-- Start a timer or the stopwatch from the timer icon on the top bar. It lists the last 4 lengths you used.
-- Select **Games** in **Cue** settings. Select **Live now** to pin a game, or **Your teams** to follow a team.
-- **Alerts over apps.** Turn it on in **Cue** settings. Calls, alerts and finished timers show at the top of other apps. Press Up while one shows to open it. Select **Open** or **Dismiss** on any alert. Set how long alerts show in **Alert time**.
-- **Notification access** and **Show over apps** are first in **Cue** settings. A TV without these screens, such as Fire TV, gives access with ADB.
-- Cue shows alerts from apps, rain soon and Plume updates.
-- Hold OK on Cue to hide an item or turn off an app's alerts.
-- **Recent apps.** Press Home twice to open a row of app windows. Press Left or Right to switch apps. Press Back to return to Plume.
-- Add the Recent apps icon to the top bar. You can also assign Plume recent apps to a remote key.
-- Enable **App window previews** to show each app's last screen on Android 11 and later. Plume keeps them on the TV after a restart.
-- Plume pauses **Smooth volume** while **App window previews** are on.
-- With no captured screen, a window shows the app's Continue Watching picture.
-- Hold OK on a window to remove it from the list, or select **Clear all**.
-- **Edit the top bar in place.** Hold OK on an icon. Lift, move, add or remove icons right on the bar. It holds up to 5 icons.
-- Choose a date or time format in **Clock & weather**. Select a preset or enter a custom format with a preview.
-- **Faster Home on Fire TV.** Plume uses an alarm to open sooner after you press Home. This needs the `WRITE_SECURE_SETTINGS` grant. Plume restores the previous alarm setting when you turn its Home button off.
+### More to like
+- **App window previews.** Recent apps show the last screen of each app, on Android 11 and later.
+- **Timers.** Start a timer or a stopwatch from the top bar. Your last 4 lengths are one press away.
+- **Your clock, your format.** Pick a date and time format in **Clock & weather**, or type your own.
+- **More remote buttons.** Assign **Mute**, **Plume All apps** or **Plume recent apps** to any button.
+- **Screensaver control.** Select **Start after** to choose when it starts, or **Never**. Preview every screensaver in Plume.
+- **Sharper show art.** **Your shows** uses pictures that fill the screen, in 4K on supported TVs. Add a TMDB key from your phone for even better art.
+- **A cleaner home.** **All apps** hides the mobile apps that came with your TV. Press Right on the last app to go back to the first.
+- A fresh **Bing picture of the day** greets you on a new install.
+- The Shows row slides in the direction that you press, with dots that show where you are.
+- Plume settings shows more on each screen, and the home screen rows sit closer together.
 
-- Fire TV: Settings opened from Plume stays open on slow TVs. Before, Plume came back in front of it in under a second (#227).
-- Shows row: when you change sources, the source name, show titles, details and posters slide in the direction of the button you push. Cards keep their positions. The row has one title with dots that show which source is on screen.
-- **Custom app pictures.** Hold **OK** on an app, then select **Change picture**. Upload an icon or banner from your phone.
-- Press Right on the last app tile to select the first app tile.
-- **Mute action.** Assign **Mute** to a remote button to switch sound off and on.
-
-- **Settings backup.** Select **Backup** to save display and layout settings, then restore them on another TV.
-
-- **Screensaver timing.** Choose **Start after** in Plume to set the TV timeout or select **Never**.
-
-- **Screensaver preview.** Gallery, photos, and Aerial Views preview without the TV's system preview activity.
-
-- **Plume All apps.** Assign this action to a remote key to open Plume's app list.
-- Fire TVs with DroidLogic inputs play HDMI inside Plume instead of using Amazon's input switcher.
-- Plume opens when the Shield's Android TV home screen appears with the Home button service enabled.
-- Plume leaves the system launcher in front while Google TV suspends Plume in a kids profile.
-- Plume starts at cold boot when it is the only Home app. Before, the TV stayed on the boot screen.
-- On Xiaomi TVs, Home opens Plume when **Smooth volume** is on. Before, Home opened the Xiaomi home screen.
-- On Xiaomi TVs, **Remote & Home button** shows Off until the **Home button** is on. Before, it showed On, but Home opened the Xiaomi home screen.
-- On supported CVTE TVs, press **Source** or select **TV sources** to open the TV source panel.
-- Plume settings shows more rows by using less space for the wallpaper preview and help text.
-- **Wallpaper** opens at the top. Press Back in a submenu to return to the control you opened.
-- **Your shows** uses artwork that fills a 1080p wallpaper. Supported TVs show 4K when the image is large enough.
-- With a TMDB key, **Your shows** tries TMDB artwork first. It uses the app's picture if TMDB has no usable image. Select **Send key from phone** to scan a QR code.
-- Plume uses 1080p wallpapers on Hisense lushan TVs to prevent a black background.
-- Top icons use a smaller, lighter shadow over wallpapers.
-- The Edit panel opens closer to the top bar.
-- The Apps and Shows rows sit closer together.
-- Continue Watching shows Watch Next on Philips TVs with Android 12. Before, the row stayed empty (#265).
+### Fixes
+- **Faster Home on Fire TV.** Plume opens sooner after you press Home.
+- HDMI plays inside Plume on Fire TVs with DroidLogic inputs.
+- Plume shows a message when the TV blocks an app, and no longer closes.
+- Plus 10 more fixes for Fire TV, Shield, Google TV, Xiaomi, CVTE, Hisense and Philips TVs.
 
 ## 1.7.1
 
