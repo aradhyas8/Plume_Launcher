@@ -25,7 +25,7 @@ class UploadServerTest {
             assertTrue(server.code.matches(Regex("[A-Za-z0-9_-]{32}")))
             assertTrue(Base64.getUrlDecoder().decode(server.code).size == 24)
             assertTrue(Qr.encode("http://255.255.255.255:65535/${server.code}").isNotEmpty())
-            fun request(code: String, data: ByteArray? = null): Pair<Int, String> {
+            fun request(code: String, data: ByteArray? = null, readBody: Boolean = false): Pair<Int, String> {
                 val connection = URL("http://127.0.0.1:${server.port}/$code").openConnection() as HttpURLConnection
                 return try {
                     connection.connectTimeout = 5_000
@@ -38,8 +38,7 @@ class UploadServerTest {
                         connection.outputStream.use { it.write(data) }
                     }
                     val status = connection.responseCode
-                    val body = (if (status < 400) connection.inputStream else connection.errorStream)
-                        ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    val body = if (readBody) connection.inputStream.bufferedReader().use { it.readText() } else ""
                     status to body
                 } finally {
                     connection.disconnect()
@@ -48,7 +47,7 @@ class UploadServerTest {
             assertEquals(404, request("wrong").first)
             assertEquals(404, request("wrong", replacement).first)
             assertArrayEquals(before, picture.readBytes())
-            val page = request(server.code)
+            val page = request(server.code, readBody = true)
             assertEquals(200, page.first)
             assertTrue(page.second.contains("fetch(location.pathname"))
             assertEquals(200, request(server.code, replacement).first)
