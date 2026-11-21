@@ -67,7 +67,9 @@ class CueSettingsCheck(private val runner: Instrumentation) {
             checkSportsPages(activity)
             checkAdbDismissal(activity)
         } finally {
-            runOnMainSync { home?.setupDialog?.dismiss(); home?.finish() }
+            runOnMainSync {
+                home?.takeUnless { it.isDestroyed }?.let { it.setupDialog?.dismiss(); it.finish() }
+            }
             prefs.edit().apply {
                 saved.forEach { (key, value) ->
                     when (value) {
@@ -246,7 +248,7 @@ class CueSettingsCheck(private val runner: Instrumentation) {
                                 3 -> check(activity.isDestroyed)
                                 else -> check(activity.setupDialog == null) { "Late ADB result reopened a dismissed sheet" }
                             }
-                            activity.setupDialog?.dismiss()
+                            if (!activity.isDestroyed) activity.setupDialog?.dismiss()
                         }
                     }
                 }
