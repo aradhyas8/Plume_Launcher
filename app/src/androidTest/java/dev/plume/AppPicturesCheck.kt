@@ -12,7 +12,9 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 import java.net.Socket
 
 /** Bitmap and HTTP checks with isolated files and fully restored home fixtures. */
@@ -80,7 +82,7 @@ class AppPicturesCheck(private val runner: Instrumentation) {
                     val headers = "${if (type == null) "GET" else "POST"} /$path HTTP/1.1\r\nHost: localhost\r\n" +
                         if (type == null) "\r\n" else "Content-Type: $type\r\nContent-Length: $length\r\n\r\n"
                     socket.getOutputStream().apply { write(headers.toByteArray()); write(data); flush() }
-                    socket.getInputStream().bufferedReader().readText()
+                    readResponse(socket.getInputStream())
                 }
             check(request("wrong").startsWith("HTTP/1.1 404"))
             check(request("wrong", "image/png", replacement).startsWith("HTTP/1.1 404"))
@@ -157,7 +159,7 @@ class AppPicturesCheck(private val runner: Instrumentation) {
                         write(replacement)
                         flush()
                     }
-                    socket.getInputStream().bufferedReader().readText()
+                    readResponse(socket.getInputStream())
                 }
                 check(request("wrong").startsWith("HTTP/1.1 404"))
                 check(file.readBytes().contentEquals(before)) { "Denied upload replaced the app picture" }
@@ -214,6 +216,33 @@ class AppPicturesCheck(private val runner: Instrumentation) {
             check(bitmap.width == width && bitmap.height == height) { "Saved picture has incorrect dimensions" }
             check(bitmap.getPixel(width / 2, height / 2) == color) { "Saved picture has incorrect pixels" }
         } finally { bitmap.recycle() }
+    }
+
+    private fun readResponse(input: InputStream): String {
+        val response = ByteArrayOutputStream()
+        var marker = 0
+        while (marker < 4) {
+            val byte = input.read()
+            check(byte >= 0) { "HTTP response ended before its headers" }
+            response.write(byte)
+            marker = when {
+                marker == 0 && byte == '\r'.code -> 1
+                marker == 1 && byte == '\n'.code -> 2
+                marker == 2 && byte == '\r'.code -> 3
+                marker == 3 && byte == '\n'.code -> 4
+                byte == '\r'.code -> 1
+                else -> 0
+            }
+        }
+        val headers = response.toByteArray().toString(Charsets.US_ASCII)
+        val length = headers.lineSequence().first { it.startsWith("Content-Length:", ignoreCase = true) }
+            .substringAfter(':').trim().toInt()
+        repeat(length) {
+            val byte = input.read()
+            check(byte >= 0) { "HTTP response ended before its body" }
+            response.write(byte)
+        }
+        return response.toByteArray().toString(Charsets.UTF_8)
     }
 
     private fun await(message: String = "Home did not reach the expected state", condition: () -> Boolean) {
