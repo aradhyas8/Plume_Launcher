@@ -40,7 +40,7 @@
     <string name="isl_idle_1">After 1 min</string>
     <string name="isl_idle_5">After 5 min</string>
     <string name="isl_timers">Timers</string>
-    <string name="help_isl_timers">Start a timer or the stopwatch. You can add a timer icon to the top bar.</string>
+    <string name="help_isl_timers">Start a timer or the stopwatch. You can add Timers to the top bar.</string>
     <string name="isl_timer">Timer</string>
     <string name="isl_stopwatch">Stopwatch</string>
     <plurals name="isl_minutes">
@@ -146,8 +146,7 @@
     <string name="isl_timer_done">Time\'s up</string>
     <string name="isl_timer_done_sub">%s timer</string>
     <string name="isl_timer_toast">Timer done</string>
-    <string name="isl_timer_stopwatch">Stopwatch</string>
-    <string name="isl_timer_paused">Paused</string>
+    <string name="isl_stopwatch_paused">Stopwatch · Paused</string>
     <string name="isl_timer_plus1">+1</string>
 
     <!-- Spoken by screen readers for Cue's buttons. -->

@@ -180,7 +180,7 @@ internal object CueTimers {
             out += CueItem(
                 key = "stopwatch", kind = CueKind.STOPWATCH,
                 title = cueClock(islElapsed(p.getLong(W_BASE, 0L), p.getLong(W_SHOWN, 0L), running, now), countdown = false),
-                sub = c.getString(if (running) R.string.isl_timer_stopwatch else R.string.isl_timer_paused),
+                sub = c.getString(if (running) R.string.isl_stopwatch else R.string.isl_stopwatch_paused),
                 icon = R.drawable.ic_isl_stopwatch, tick = if (running) 1000L else 0L, since = p.getLong(W_START, 0L),
                 actions = listOf(
                     CueAction(R.drawable.ic_isl_replay, description = c.getString(R.string.isl_timer_reset)) { zeroStopwatch(c) },

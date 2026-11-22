@@ -630,7 +630,7 @@ internal class CueView(private val a: MainActivity) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
         val recent = recentTimers()
         holdMenu(anchor, listOf(
-            getString(R.string.isl_timer) to { showPanel(); editTimer(::closeLauncherSettings) },
+            getString(R.string.isl_timer) to { showPanel(); editTimer(R.string.isl_timer, ::closeLauncherSettings) },
             getString(R.string.isl_stopwatch) to { CueTimers.startStopwatch(this); cueStarted("stopwatch") },
         ) +
             recent.map { m -> mins(m) to { startTimer(m) } } +
@@ -680,7 +680,7 @@ internal class CueView(private val a: MainActivity) {
     }
 
     /** A timer of any length: minutes typed with the remote's number keys. */
-    fun MainActivity.editTimer(back: () -> Unit) {
+    fun MainActivity.editTimer(title: Int, back: () -> Unit) {
         fun start(value: String, field: EditText) {
             val m = value.trim().toIntOrNull()?.takeIf { it in 1..999 } ?: return
             getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(field.windowToken, 0)
@@ -690,7 +690,7 @@ internal class CueView(private val a: MainActivity) {
         lateinit var field: EditText
         field = textField("", getString(R.string.isl_custom_hint), InputType.TYPE_CLASS_NUMBER, EditorInfo.IME_ACTION_DONE) { start(it, field) }
         field.filters = arrayOf(InputFilter.LengthFilter(3))
-        showPage(getString(R.string.isl_timer), listOf(page(getString(R.string.isl_start)) { start(field.text.toString(), field) }),
+        showPage(getString(title), listOf(page(getString(R.string.isl_start)) { start(field.text.toString(), field) }),
             top = field.parent as LinearLayout, crumb = getString(R.string.isl_timers), back = back)
         val go = settingsList.getChildAt(1)
         go.nextFocusUpId = field.id
@@ -715,6 +715,7 @@ internal class CueView(private val a: MainActivity) {
 
     /** A timer just started: make sure Cue is on to show it. */
     fun MainActivity.cueStarted(key: String) {
+        cueHidden -= key
         if (!on("isl_on")) prefs.edit().putBoolean("isl_on", true).apply()
         showCue()
         cue.requestFocus()
@@ -735,7 +736,7 @@ internal class CueView(private val a: MainActivity) {
     fun hold() = a.cueHoldMenu()
     fun started(key: String) = a.cueStarted(key)
     fun askAccess() = a.askCueAccess()
-    fun customTimer() = a.editTimer { a.pickCueTimer(0) }
+    fun customTimer(back: () -> Unit) = a.editTimer(R.string.isl_custom, back)
     fun startTimer(m: Int) = a.startTimer(m)
 
     /** A logo from an address into [into], 24 dp, for settings rows. */
