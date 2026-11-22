@@ -39,6 +39,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - A fresh **Bing picture of the day** greets you on a new install.
 - The Shows row slides in the direction that you press, with dots that show where you are.
 - Plume settings shows more on each screen, and the home screen rows sit closer together.
+- The remote's Apps button opens **All apps** directly via Android's `ALL_APPS` action.
 
 ### Fixes
 - **Faster Home on Fire TV.** Plume opens sooner after you press Home.

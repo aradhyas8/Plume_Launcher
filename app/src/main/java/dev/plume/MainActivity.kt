@@ -536,7 +536,7 @@ class MainActivity : Activity() {
             setOnLongClickListener { if (!holdFired) fireHold(this); true } // hold OK: edit the bar
         }
         isl.setUp()
-        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false) || fakeSetup(intent)) {
+        if (allAppsIntent(intent) || intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false) || fakeSetup(intent)) {
             // An explicit drawer request takes priority over setup and update cards.
         } else if (prefs.getBoolean("reopen_settings", false)) {
             prefs.edit().remove("reopen_settings").apply()
@@ -588,7 +588,7 @@ class MainActivity : Activity() {
         if (refused) toast(getString(R.string.isl_overlay_denied), long = true)
         ui.postDelayed({ if (resumed && settingsScrim.visibility != View.VISIBLE) isl.askAccess() }, 1500)
         val recentAppsRequested = intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false)
-        val allAppsRequested = intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || recentAppsRequested
+        val allAppsRequested = allAppsIntent(intent) || recentAppsRequested
         if (currentWallpaper().startsWith("video:")) videoWallpaper.resume()
         returnTo = null // back by another way than Home: the next Home starts again at the first tile
         openedFrom?.get()?.let { tile -> ui.post { if (tile.isAttachedToWindow) settleRow(tile) } }
@@ -624,6 +624,7 @@ class MainActivity : Activity() {
         Bing.refresh(applicationContext, prefs)
         ui.post { updateBadge() } // after layout, so the icon has its size
         if (allAppsRequested) {
+            if (intent.action == Intent.ACTION_ALL_APPS) intent.action = null
             intent.removeExtra(Remap.OPEN_ALL_APPS) // consume only after initialization and any theme recreation
             intent.removeExtra(Remap.OPEN_RECENT_APPS)
             prefs.edit().remove("return_settings").remove("return_dream").remove("reopen_settings").apply()
@@ -1080,6 +1081,9 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun allAppsIntent(i: Intent?) =
+        i?.action == Intent.ACTION_ALL_APPS || i?.getBooleanExtra(Remap.OPEN_ALL_APPS, false) == true
+
     /** Home pressed while already home: close whatever is open and go back to the start of the apps row. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -1088,7 +1092,7 @@ class MainActivity : Activity() {
         // Home pressed in Android's settings means home, not settings; the screensaver's end comes in as Home too.
         if (intent.hasCategory(Intent.CATEGORY_HOME) && !prefs.getBoolean("return_dream", false)) prefs.edit().remove("return_settings").apply()
         if (intent.action == UPDATE_STATUS) return installStatus(intent)
-        if (intent.getBooleanExtra(Remap.OPEN_ALL_APPS, false) || intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false)) return // onResume handles new and existing activities
+        if (allAppsIntent(intent) || intent.getBooleanExtra(Remap.OPEN_RECENT_APPS, false)) return // onResume handles new and existing activities
         if (fakeSetup(intent)) return
         if (homeTest != 0 && intent.hasCategory(Intent.CATEGORY_HOME)) { // the Home press reached us: setup works
             homeTest = 0
