@@ -30,6 +30,7 @@ class ActivityTest : Instrumentation() {
     private var protectedLaunchOnly = false
     private var cueOnly = false
     private var iconsOnly = false
+    private var uploadsOnly = false
 
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -41,10 +42,16 @@ class ActivityTest : Instrumentation() {
         protectedLaunchOnly = arguments?.getString("class") == "dev.plume.ActivityTest#protectedAppLaunch"
         cueOnly = arguments?.getString("class") == CueSettingsCheck::class.java.name
         iconsOnly = arguments?.getString("class") == IconPacksCheck::class.java.name
+        uploadsOnly = arguments?.getString("class") == WallpaperUploadsCheck::class.java.name
         start()
     }
 
     override fun onStart() {
+        if (uploadsOnly) {
+            test("uploadedWallpaperValidationAndFade") { WallpaperUploadsCheck(this).run() }
+            finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
+            return
+        }
         if (iconsOnly) {
             test("sharedIconPackResourcesAndRejectedMappings") { IconPacksCheck(this).run() }
             finish(Activity.RESULT_OK, Bundle().apply { putString("stream", "\n$current tests, $failures failures\n") })
