@@ -17,17 +17,17 @@
 </p>
 
 <p align="center">
-  <img src="docs/home-forest-dark-frosted.png" alt="Plume home screen with Forest Mist wallpaper, dark theme and frosted glass tiles" width="100%">
+  <img src="docs/home-dunes-dark-frosted.png" alt="Plume home screen with Sossusvlei Dunes wallpaper, dark theme and frosted glass tiles" width="100%">
 </p>
 
-<p align="center"><em>Forest Mist · Dark theme · Frosted glass</em></p>
+<p align="center"><em>Sossusvlei Dunes · Dark theme · Frosted glass</em></p>
 
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="docs/home-alpine-light-frosted.png" alt="Plume home screen with Alpine Dawn wallpaper, light theme and frosted glass tiles" width="100%">
+      <img src="docs/home-whale-light-frosted.png" alt="Plume home screen with Humpback Whale wallpaper, light theme and frosted glass tiles" width="100%">
       <br>
-      <em>Alpine Dawn · Light theme · Frosted glass</em>
+      <em>Humpback Whale · Light theme · Frosted glass</em>
     </td>
     <td width="50%" align="center">
       <img src="docs/home-moonlit-dark-clear.png" alt="Plume home screen with Moonlit Ridge wallpaper, dark theme and clear glass tiles" width="100%">
