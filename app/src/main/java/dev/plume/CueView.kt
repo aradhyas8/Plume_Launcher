@@ -61,7 +61,6 @@ internal class CueView(private val a: MainActivity) {
 
     var cueOpen = false // the shape the tile has now; the wanted shape can be ahead of it while content fades
     var cueWant: Boolean? = null // the shape the running fade is heading for
-    var cueInk = 0 // the ink last picked, for the progress between full refreshes
     var accent = 0 // the music art's colour (else the ink): its bars, its progress and its picked button
     var cueList: List<CueItem> = emptyList() // everything on Cue, in order, as last shown
     var cueItem: CueItem? = null // the one the tile shows
@@ -351,7 +350,6 @@ internal class CueView(private val a: MainActivity) {
         cueChips.animate().alpha(1f).setStartDelay(140).setDuration(150).start()
         cueTop.animate().alpha(1f).setStartDelay(140).setDuration(150).withEndAction(null).start()
         cueMore.animate().alpha(1f).setStartDelay(170).setDuration(150).start()
-        ui.postDelayed({ if (!isDestroyed) cueItem?.let { bindCue(it, cueOpen) } }, 320) // the ink again, over the new size
     }
 
     /** The tile hangs over the screen: its extra height (and any drop below the bar) is taken back, so nothing moves. */
@@ -423,11 +421,8 @@ internal class CueView(private val a: MainActivity) {
 
     /** Puts [item] on the tile in its [open] or resting form. */
     fun MainActivity.bindCue(item: CueItem, open: Boolean) {
-        // Cue is glass over the picture, open or not, so its text, bars and buttons take the ink fitted to the
-        // wallpaper behind it, with the top bar's shadow. A solid tile (Glass off) keeps the theme's colour.
         val glassy = glassActive()
-        val ink = if (!glassy) fg else if (cue.isShown && cue.width > 0) inkBehind(listOf(cue)) else iconInk
-        cueInk = ink
+        val ink = fg // Match the monochrome app tiles on the same themed surface.
         val music = item.kind == CueKind.MEDIA || item.kind == CueKind.MEDIA_PAUSED
         val rows = cueRows(item)
         val selRow = if (cue.isFocused) rows.getOrNull(cueRowAt) else null
@@ -540,8 +535,8 @@ internal class CueView(private val a: MainActivity) {
             else cuePosition(s.position, s.lastPositionUpdateTime, android.os.SystemClock.elapsedRealtime(), s.playbackSpeed, mediaPlaying(c), length)
         cueBar.color = accent
         cueBar.fraction = at.toFloat() / length
-        findViewById<TextView>(R.id.cueElapsed).apply { text = cueTime(at); if (glassActive()) ink(this, cueInk) else setTextColor(cueInk) }
-        findViewById<TextView>(R.id.cueLeft).apply { text = "-" + cueTime(length - at); if (glassActive()) ink(this, cueInk) else setTextColor(cueInk) }
+        findViewById<TextView>(R.id.cueElapsed).apply { text = cueTime(at); if (glassActive()) ink(this, fg) else setTextColor(fg) }
+        findViewById<TextView>(R.id.cueLeft).apply { text = "-" + cueTime(length - at); if (glassActive()) ink(this, fg) else setTextColor(fg) }
     }
 
     /**

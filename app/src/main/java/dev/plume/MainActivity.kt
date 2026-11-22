@@ -1187,7 +1187,7 @@ class MainActivity : Activity() {
     private var wpThumb: Bitmap? = null
     private var wpFrames: List<Bitmap> = emptyList() // what the text is measured on: the still's thumb, or a video's frames
     private var watchInk = Color.BLACK
-    internal var iconInk = Color.BLACK
+    private var iconInk = Color.BLACK
     private var appsInk = Color.BLACK
 
     private fun topIcons() = TOP_KEYS.keys.toList()
@@ -1218,7 +1218,6 @@ class MainActivity : Activity() {
             is ProgressBar -> v.progressDrawable = progressBarDrawable(watchInk)
             is TextView -> if (v.tag == INK_MARK) v.compoundDrawablesRelative[0]?.setTint(watchInk)
         }
-        isl.show() // the pill at rest takes the top bar's ink
     }
 
     /**
@@ -1250,7 +1249,7 @@ class MainActivity : Activity() {
      * White or near-black for text over [views], readable on every frame of the wallpaper (one for a photo, a video's
      * samples, see [inkFor]); the theme colour without a picture.
      */
-    internal fun inkBehind(views: List<View>): Int {
+    private fun inkBehind(views: List<View>): Int {
         val t = wpFrames.firstOrNull() ?: return fg
         val wall = findViewById<View>(R.id.wallpaper)
         val at = IntArray(2)
