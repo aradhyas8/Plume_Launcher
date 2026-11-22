@@ -1,7 +1,6 @@
 package dev.plume
 
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.view.SurfaceHolder
@@ -9,8 +8,9 @@ import android.view.SurfaceView
 import android.view.View
 
 /** A full-resolution photo layer on TVs that render the app window at 1080p. */
-internal class PhotoWallpaperSurface(private val view: SurfaceView) : SurfaceHolder.Callback {
-    private var photo: Bitmap? = null
+internal class PhotoWallpaperSurface(private val view: SurfaceView, private val ground: () -> Int) : SurfaceHolder.Callback {
+    var photo: Bitmap? = null
+        private set
     private var onDraw: ((Boolean) -> Unit)? = null
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
 
@@ -41,7 +41,7 @@ internal class PhotoWallpaperSurface(private val view: SurfaceView) : SurfaceHol
         val ok = try {
             val canvas = holder.lockHardwareCanvas()
             try {
-                canvas.drawColor(Color.BLACK)
+                canvas.drawColor(ground())
                 canvas.drawBitmap(bitmap, null, Rect(0, 0, canvas.width, canvas.height), paint)
                 canvas.width == UHD_WIDTH && canvas.height == UHD_HEIGHT
             } finally {

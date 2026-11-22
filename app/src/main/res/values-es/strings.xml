@@ -462,6 +462,7 @@
     <string name="wall_single_photo">Tu foto</string>
     <string name="wall_select_hint">Pulsa OK para marcar o desmarcar la foto.</string>
     <string name="wall_preview_hint">Pulsa OK para ver la foto.</string>
+    <string name="wall_apply_photo_hint">Pulsa OK para usar esta foto como fondo de pantalla.</string>
     <string name="wall_select_photos">Seleccionar fotos</string>
     <string name="wall_whole_folder">Usar toda la carpeta</string>
     <string name="wall_numbered_photo">Foto %1$d</string>

@@ -1483,7 +1483,7 @@ class MainActivity : Activity() {
         else -> choice.substringAfter(':').substringBeforeLast('.').let { n -> WALLPAPER_NAMES[n]?.let { getString(it) } ?: n }
     }
 
-    private val photoWallpaper by lazy { PhotoWallpaperSurface(findViewById(R.id.photoWallpaper)) }
+    private val photoWallpaper by lazy { PhotoWallpaperSurface(findViewById(R.id.photoWallpaper)) { ground } }
 
     @Suppress("DEPRECATION") // defaultDisplay is the fallback on Android 8 and 9.
     private fun supportsUhdWallpaper(): Boolean {
@@ -1495,9 +1495,17 @@ class MainActivity : Activity() {
         return !memory.isLowRamDevice && memory.memoryClass >= 192
     }
 
-    private fun loadWallpaper() {
-        val view = findViewById<ImageView>(R.id.wallpaper)
+    private fun loadWallpaper(decodedUpload: Bitmap? = null) {
         val choice = currentWallpaper()
+        if (wallpaperFadeRunning) {
+            // Finish the visible blend before loading the latest selection.
+            if (decodedUpload != null || pendingWallpaperLoad?.first != choice) {
+                pendingWallpaperLoad?.second?.recycle()
+                pendingWallpaperLoad = choice to decodedUpload
+            }
+            return
+        }
+        val view = findViewById<ImageView>(R.id.wallpaper)
         if (resumed && choice == Bing.CHOICE) Bing.refresh(applicationContext, prefs)
         val video = choice.startsWith("video:")
         val slideshow = choice.startsWith("folder:")
@@ -1522,13 +1530,7 @@ class MainActivity : Activity() {
                 slideshow -> photo?.let { decodeMediaPhoto(it, uhd) }
                 else -> decodeWallpaper(choice, uhd)
             }
-            val bmp = try {
-                decode(allowUhd)
-            } catch (_: Exception) {
-                null
-            } catch (_: OutOfMemoryError) {
-                if (allowUhd) runCatching { decode(false) }.getOrNull() else null
-            }
+            val bmp = decodedUpload ?: decodeWallpaperBitmap(allowUhd, ::decode)
             if (slideshow) {
                 if (bmp == null) {
                     folderPending = true
@@ -1568,46 +1570,64 @@ class MainActivity : Activity() {
                 thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
                 if (wantDark() != dark && !wallpaperPickerOpen()) return@post recreate()
                 fitInk()
-                if (allowUhd && shown?.width == UHD_WIDTH && shown.height == UHD_HEIGHT) {
-                    glassPixels = screen
-                    sharpPixels = sharp
-                    applyGlass()
-                    photoWallpaper.show(shown) { drewUhd ->
-                        if (load == wallpaperLoad && !isDestroyed) view.setImageBitmap(if (drewUhd) null else shown)
-                    }
-                    return@post
-                }
-                photoWallpaper.clear()
-                val old = view.drawable
-                if (video && thumb != null) io.execute {
-                    val frames = videoFrames(File(wallpaperDir(), choice.removePrefix("video:")), thumb.width, thumb.height)
-                    if (frames.isNotEmpty()) ui.post { if (load == wallpaperLoad) { wpFrames = frames; fitInk() } }
-                }
-                if (old == null || shown == null) {
+                val uhd = shown?.takeIf { allowUhd && it.width == UHD_WIDTH && it.height == UHD_HEIGHT }
+                val oldSurfacePhoto = photoWallpaper.photo
+                val old = view.drawable ?: oldSurfacePhoto?.let { BitmapDrawable(resources, it) }
+                    ?: ColorDrawable(ground).takeIf { choice.startsWith("file:") && wallpaperPickerOpen() }
+                fun showWallpaper() {
                     glassPixels = screen
                     sharpPixels = sharp
                     applyGlass()
                     view.setImageBitmap(shown)
+                    if (uhd != null) {
+                        val fallback = view.drawable
+                        photoWallpaper.show(uhd) { drewUhd ->
+                            if (!isDestroyed && (view.drawable === fallback || (view.drawable == null && load == wallpaperLoad))) {
+                                view.setImageDrawable(if (drewUhd) null else fallback)
+                            }
+                        }
+                    } else {
+                        photoWallpaper.clear()
+                    }
+                }
+                if (video && thumb != null) io.execute {
+                    val frames = videoFrames(File(wallpaperDir(), choice.removePrefix("video:")), thumb.width, thumb.height)
+                    if (frames.isNotEmpty()) ui.post { if (load == wallpaperLoad) { wpFrames = frames; fitInk() } }
+                }
+                val duration = (800 * Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)).toInt()
+                if (old == null || shown == null || duration <= 0) {
+                    showWallpaper()
                     if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
                     return@post
                 }
                 // Soft change from one photo to the next; then drop the old one so only one stays in memory.
                 val fade = TransitionDrawable(arrayOf(old, BitmapDrawable(resources, shown))).apply { isCrossFadeEnabled = true }
                 view.setImageDrawable(fade)
-                fade.startTransition(800)
+                if (oldSurfacePhoto != null) photoWallpaper.clear()
+                wallpaperFadeRunning = true
+                fade.startTransition(duration)
                 ui.postDelayed({
-                    if (isDestroyed || load != wallpaperLoad) return@postDelayed
-                    if (view.drawable === fade) view.setImageBitmap(shown)
-                    glassPixels = screen
-                    sharpPixels = sharp
-                    applyGlass() // the frost changes with the picture, when the crossfade lands
-                }, 900)
+                    wallpaperFadeRunning = false
+                    if (isDestroyed) return@postDelayed
+                    showWallpaper()
+                    pendingWallpaperLoad?.let { (pendingChoice, decoded) ->
+                        pendingWallpaperLoad = null
+                        if (pendingChoice == currentWallpaper()) {
+                            loadWallpaper(decoded)
+                        } else {
+                            decoded?.recycle()
+                            loadWallpaper()
+                        }
+                    }
+                }, duration.toLong())
                 if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
             }
         }
     }
 
     private var wallpaperLoad = 0
+    private var wallpaperFadeRunning = false
+    private var pendingWallpaperLoad: Pair<String, Bitmap?>? = null
     private var folderPending = false
     private var folderRetries = 0
 
@@ -1687,6 +1707,14 @@ class MainActivity : Activity() {
         } finally {
             r.release()
         }
+    }
+
+    private inline fun decodeWallpaperBitmap(allowUhd: Boolean, decode: (Boolean) -> Bitmap?): Bitmap? = try {
+        decode(allowUhd)
+    } catch (_: Exception) {
+        null
+    } catch (_: OutOfMemoryError) {
+        if (allowUhd) runCatching { decode(false) }.getOrNull() else null
     }
 
     private fun decodeWallpaper(choice: String, allowUhd: Boolean = false): Bitmap? {
@@ -1996,10 +2024,29 @@ class MainActivity : Activity() {
         val uploads = ownUploads(forDark, videoScenes(this))
         val photos = wallpaperChoices(forDark).filter { it.second.startsWith("file:") }
         val videos = uploads.mapNotNull { it.second }
+        var photoRequest = 0
         val tiles = uploads.map { (choice, video) ->
-            Tile(wallpaperName(choice), choice) {
+            Tile(wallpaperName(choice), choice, help = R.string.wall_apply_photo_hint.takeIf { video == null }) {
+                val request = ++photoRequest
                 if (video != null) previewVideo(forDark, video) { pickUploads(forDark, choice) }
-                else previewPhotoChoice(forDark, choice, listOf(choice)) { pickUploads(forDark, choice) }
+                else if (choice != currentWallpaper(forDark)) {
+                    val allowUhd = supportsUhdWallpaper()
+                    io.execute {
+                        val decoded = decodeWallpaperBitmap(allowUhd) { decodeWallpaper(choice, it) }
+                        ui.post {
+                            if (isDestroyed || request != photoRequest) {
+                                decoded?.recycle()
+                                return@post
+                            }
+                            if (decoded == null) {
+                                toast(getString(R.string.wall_photo_unavailable), long = true)
+                                return@post
+                            }
+                            setWallpaper(forDark, choice, decodedUpload = decoded)
+                            pickUploads(forDark, choice)
+                        }
+                    }
+                }
             }
         } + listOf(Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) {
             uploadWallpaper(forDark, applyPhoto = false) { pickUploads(forDark, getString(R.string.add_from_phone)) }
@@ -2013,6 +2060,7 @@ class MainActivity : Activity() {
         wallGrid(getString(R.string.my_uploads), listOf(null to tiles), forDark, current, focusOn) {
             pickMyPhotos(forDark, getString(R.string.my_uploads))
         }
+        pageExit = { photoRequest++ }
     }
 
     /** One wallpaper in the grid: its picture (or an icon for an action), its name, and a check on the one in use. */
@@ -2375,7 +2423,8 @@ class MainActivity : Activity() {
         }, focus, back = back)
     }
 
-    private fun setWallpaper(forDark: Boolean, choice: String, selected: Set<Long> = emptySet(), firstPhoto: Long? = null) {
+    private fun setWallpaper(forDark: Boolean, choice: String, selected: Set<Long> = emptySet(), firstPhoto: Long? = null,
+                             decodedUpload: Bitmap? = null) {
         prefs.edit().putString("wp_dark", choice).putString("wp_light", choice)
             .putLong(photoAtKey(), System.currentTimeMillis()).apply {
                 if (firstPhoto == null) remove(photoKey()) else putLong(photoKey(), firstPhoto)
@@ -2396,7 +2445,7 @@ class MainActivity : Activity() {
             wallpaperDir()?.let { cleanUnusedVideoWallpapers(it) }
         }
         updateFeatured()
-        loadWallpaper()
+        loadWallpaper(decodedUpload)
     }
 
     private val bingChanged: () -> Unit = { if (currentWallpaper() == Bing.CHOICE) loadWallpaper() }
