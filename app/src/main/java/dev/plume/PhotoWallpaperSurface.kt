@@ -10,7 +10,8 @@ import android.view.View
 
 /** A full-resolution photo layer on TVs that render the app window at 1080p. */
 internal class PhotoWallpaperSurface(private val view: SurfaceView) : SurfaceHolder.Callback {
-    private var photo: Bitmap? = null
+    var photo: Bitmap? = null
+        private set
     private var onDraw: ((Boolean) -> Unit)? = null
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
 

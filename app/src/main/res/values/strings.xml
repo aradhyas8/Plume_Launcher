@@ -472,6 +472,7 @@
     <string name="wall_single_photo">Your photo</string>
     <string name="wall_select_hint">Press OK to select or deselect the photo.</string>
     <string name="wall_preview_hint">Press OK to preview the photo.</string>
+    <string name="wall_apply_photo_hint">Press OK to set this photo as wallpaper.</string>
     <string name="wall_select_photos">Select photos</string>
     <string name="wall_whole_folder">Use whole folder</string>
     <string name="wall_numbered_photo">Photo %1$d</string>

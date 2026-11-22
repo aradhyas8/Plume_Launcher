@@ -1569,40 +1569,42 @@ class MainActivity : Activity() {
                 thumb?.let { t -> prefs.edit().putInt("glass_hue", meanColour(IntArray(t.width * t.height).also { t.getPixels(it, 0, t.width, 0, 0, t.width, t.height) })).apply() }
                 if (wantDark() != dark && !wallpaperPickerOpen()) return@post recreate()
                 fitInk()
-                if (allowUhd && shown?.width == UHD_WIDTH && shown.height == UHD_HEIGHT) {
+                val uhd = shown?.takeIf { allowUhd && it.width == UHD_WIDTH && it.height == UHD_HEIGHT }
+                val current = view.drawable
+                val old = (current as? TransitionDrawable)?.getDrawable(1) ?: current
+                    ?: photoWallpaper.photo?.let { BitmapDrawable(resources, it) }
+                    ?: ColorDrawable(ground).takeIf { choice.startsWith("file:") && wallpaperPickerOpen() }
+                fun showWallpaper() {
                     glassPixels = screen
                     sharpPixels = sharp
                     applyGlass()
-                    photoWallpaper.show(shown) { drewUhd ->
-                        if (load == wallpaperLoad && !isDestroyed) view.setImageBitmap(if (drewUhd) null else shown)
+                    if (uhd != null) {
+                        photoWallpaper.show(uhd) { drewUhd ->
+                            if (load == wallpaperLoad && !isDestroyed) view.setImageBitmap(if (drewUhd) null else uhd)
+                        }
+                    } else {
+                        view.setImageBitmap(shown)
+                        photoWallpaper.clear()
                     }
-                    return@post
                 }
-                photoWallpaper.clear()
-                val old = view.drawable
                 if (video && thumb != null) io.execute {
                     val frames = videoFrames(File(wallpaperDir(), choice.removePrefix("video:")), thumb.width, thumb.height)
                     if (frames.isNotEmpty()) ui.post { if (load == wallpaperLoad) { wpFrames = frames; fitInk() } }
                 }
                 if (old == null || shown == null) {
-                    glassPixels = screen
-                    sharpPixels = sharp
-                    applyGlass()
-                    view.setImageBitmap(shown)
+                    showWallpaper()
                     if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
                     return@post
                 }
                 // Soft change from one photo to the next; then drop the old one so only one stays in memory.
-                val fade = TransitionDrawable(arrayOf(old, BitmapDrawable(resources, shown))).apply { isCrossFadeEnabled = true }
+                val fade = TransitionDrawable(arrayOf(old, BitmapDrawable(resources, shown)))
                 view.setImageDrawable(fade)
-                fade.startTransition(800)
+                val duration = (800 * Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)).toInt()
+                fade.startTransition(duration)
                 ui.postDelayed({
                     if (isDestroyed || load != wallpaperLoad) return@postDelayed
-                    if (view.drawable === fade) view.setImageBitmap(shown)
-                    glassPixels = screen
-                    sharpPixels = sharp
-                    applyGlass() // the frost changes with the picture, when the crossfade lands
-                }, 900)
+                    showWallpaper()
+                }, duration.toLong())
                 if (video) videoWallpaper.show(File(wallpaperDir(), choice.removePrefix("video:")), resumed)
             }
         }
@@ -1998,9 +2000,12 @@ class MainActivity : Activity() {
         val photos = wallpaperChoices(forDark).filter { it.second.startsWith("file:") }
         val videos = uploads.mapNotNull { it.second }
         val tiles = uploads.map { (choice, video) ->
-            Tile(wallpaperName(choice), choice) {
+            Tile(wallpaperName(choice), choice, help = R.string.wall_apply_photo_hint.takeIf { video == null }) {
                 if (video != null) previewVideo(forDark, video) { pickUploads(forDark, choice) }
-                else previewPhotoChoice(forDark, choice, listOf(choice)) { pickUploads(forDark, choice) }
+                else if (choice != currentWallpaper(forDark)) {
+                    setWallpaper(forDark, choice)
+                    pickUploads(forDark, choice)
+                }
             }
         } + listOf(Tile(getString(R.string.add_from_phone), icon = R.drawable.ms_add_photo_alternate) {
             uploadWallpaper(forDark, applyPhoto = false) { pickUploads(forDark, getString(R.string.add_from_phone)) }
