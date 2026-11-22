@@ -624,19 +624,18 @@ internal class CueView(private val a: MainActivity) {
     }
 
     /**
-     * The top bar's Cue icon: the stopwatch, the last timer lengths used (hold OK on one to take it off), any other
-     * length, and today's games, one click from Home. Nothing to set up: the list follows what people start.
+     * The top bar's Timers icon: a custom timer, the stopwatch, recent timer lengths (hold OK to remove one), and live games.
      */
     fun MainActivity.timerMenu(anchor: View) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
         val recent = recentTimers()
-        holdMenu(anchor, listOf(getString(R.string.isl_stopwatch) to { CueTimers.startStopwatch(this); cueStarted("stopwatch") }) +
+        holdMenu(anchor, listOf(
+            getString(R.string.isl_timer) to { showPanel(); editTimer(::closeLauncherSettings) },
+            getString(R.string.isl_stopwatch) to { CueTimers.startStopwatch(this); cueStarted("stopwatch") },
+        ) +
             recent.map { m -> mins(m) to { startTimer(m) } } +
-            listOf(
-                getString(R.string.isl_custom) to { showPanel(); editTimer() },
-                getString(R.string.isl_games_now) to { showPanel(); pickLiveNow() },
-            ), below = true,
-            holds = listOf(null) + recent.map { m -> { saveRecent(recentTimers() - m); timerMenu(anchor) } })
+            listOf(getString(R.string.isl_games_now) to { showPanel(); pickLiveNow() }), below = true,
+            holds = listOf(null, null) + recent.map { m -> { saveRecent(recentTimers() - m); timerMenu(anchor) } })
     }
 
     private val RECENT_PREF = "isl_recent_t" // the timer icon's lengths, newest first; "" when all were taken off
@@ -681,7 +680,7 @@ internal class CueView(private val a: MainActivity) {
     }
 
     /** A timer of any length: minutes typed with the remote's number keys. */
-    fun MainActivity.editTimer() {
+    fun MainActivity.editTimer(back: () -> Unit) {
         fun start(value: String, field: EditText) {
             val m = value.trim().toIntOrNull()?.takeIf { it in 1..999 } ?: return
             getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(field.windowToken, 0)
@@ -691,8 +690,8 @@ internal class CueView(private val a: MainActivity) {
         lateinit var field: EditText
         field = textField("", getString(R.string.isl_custom_hint), InputType.TYPE_CLASS_NUMBER, EditorInfo.IME_ACTION_DONE) { start(it, field) }
         field.filters = arrayOf(InputFilter.LengthFilter(3))
-        showPage(getString(R.string.isl_custom), listOf(page(getString(R.string.isl_start)) { start(field.text.toString(), field) }),
-            top = field.parent as LinearLayout, crumb = getString(R.string.isl_timers)) { pickCueTimer(0) }
+        showPage(getString(R.string.isl_timer), listOf(page(getString(R.string.isl_start)) { start(field.text.toString(), field) }),
+            top = field.parent as LinearLayout, crumb = getString(R.string.isl_timers), back = back)
         val go = settingsList.getChildAt(1)
         go.nextFocusUpId = field.id
         field.nextFocusDownId = go.id
@@ -702,7 +701,7 @@ internal class CueView(private val a: MainActivity) {
     /** Once, when Cue could show music and alerts but has no access: say why, and open the screen that gives it. */
     fun MainActivity.askCueAccess() {
         if (!on("isl_on") || !homeSetUp() || setupDialog?.isShowing == true) return
-        // A bar set up before Cue has no Cue icon: say once where timers and Games now are.
+        // A bar set up before Cue has no Timers icon: say once where to find it.
         if (R.id.timerButton !in shownTop() && !prefs.getBoolean("isl_tip", false) && (prefs.getBoolean("isl_access_asked", false) || listenerOn())) {
             prefs.edit().putBoolean("isl_tip", true).apply()
             return toast(getString(R.string.isl_tip), long = true)
@@ -736,7 +735,7 @@ internal class CueView(private val a: MainActivity) {
     fun hold() = a.cueHoldMenu()
     fun started(key: String) = a.cueStarted(key)
     fun askAccess() = a.askCueAccess()
-    fun customTimer() = a.editTimer()
+    fun customTimer() = a.editTimer { a.pickCueTimer(0) }
     fun startTimer(m: Int) = a.startTimer(m)
 
     /** A logo from an address into [into], 24 dp, for settings rows. */
