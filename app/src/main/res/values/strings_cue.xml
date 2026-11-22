@@ -40,7 +40,7 @@
     <string name="isl_idle_1">After 1 min</string>
     <string name="isl_idle_5">After 5 min</string>
     <string name="isl_timers">Timers</string>
-    <string name="help_isl_timers">Start a timer or the stopwatch. You can add a timer icon to the top bar.</string>
+    <string name="help_isl_timers">Start a timer or the stopwatch. You can add Timers to the top bar.</string>
     <string name="isl_timer">Timer</string>
     <string name="isl_stopwatch">Stopwatch</string>
     <plurals name="isl_minutes">
@@ -75,7 +75,7 @@
     <string name="isl_custom_hint">Minutes</string>
     <string name="isl_start">Start</string>
     <string name="isl_games_now">Live now</string>
-    <string name="isl_tip">Timers and Games now are on the Cue icon. To add it: hold OK on a top-bar icon, then select Add icon.</string>
+    <string name="isl_tip">To add Timers, hold OK on a top-bar icon, then select Timers from the icons below.</string>
     <string name="isl_menu_hide">Hide this</string>
     <string name="isl_menu_mute">Turn off alerts from %1$s</string>
     <string name="isl_menu_unfollow">Stop following</string>
@@ -146,8 +146,7 @@
     <string name="isl_timer_done">Time\'s up</string>
     <string name="isl_timer_done_sub">%s timer</string>
     <string name="isl_timer_toast">Timer done</string>
-    <string name="isl_timer_stopwatch">Stopwatch</string>
-    <string name="isl_timer_paused">Paused</string>
+    <string name="isl_stopwatch_paused">Stopwatch · Paused</string>
     <string name="isl_timer_plus1">+1</string>
 
     <!-- Spoken by screen readers for Cue's buttons. -->

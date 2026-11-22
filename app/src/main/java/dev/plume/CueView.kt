@@ -61,7 +61,6 @@ internal class CueView(private val a: MainActivity) {
 
     var cueOpen = false // the shape the tile has now; the wanted shape can be ahead of it while content fades
     var cueWant: Boolean? = null // the shape the running fade is heading for
-    var cueInk = 0 // the ink last picked, for the progress between full refreshes
     var accent = 0 // the music art's colour (else the ink): its bars, its progress and its picked button
     var cueList: List<CueItem> = emptyList() // everything on Cue, in order, as last shown
     var cueItem: CueItem? = null // the one the tile shows
@@ -351,7 +350,6 @@ internal class CueView(private val a: MainActivity) {
         cueChips.animate().alpha(1f).setStartDelay(140).setDuration(150).start()
         cueTop.animate().alpha(1f).setStartDelay(140).setDuration(150).withEndAction(null).start()
         cueMore.animate().alpha(1f).setStartDelay(170).setDuration(150).start()
-        ui.postDelayed({ if (!isDestroyed) cueItem?.let { bindCue(it, cueOpen) } }, 320) // the ink again, over the new size
     }
 
     /** The tile hangs over the screen: its extra height (and any drop below the bar) is taken back, so nothing moves. */
@@ -423,11 +421,8 @@ internal class CueView(private val a: MainActivity) {
 
     /** Puts [item] on the tile in its [open] or resting form. */
     fun MainActivity.bindCue(item: CueItem, open: Boolean) {
-        // Cue is glass over the picture, open or not, so its text, bars and buttons take the ink fitted to the
-        // wallpaper behind it, with the top bar's shadow. A solid tile (Glass off) keeps the theme's colour.
         val glassy = glassActive()
-        val ink = if (!glassy) fg else if (cue.isShown && cue.width > 0) inkBehind(listOf(cue)) else iconInk
-        cueInk = ink
+        val ink = fg // Match the monochrome app tiles on the same themed surface.
         val music = item.kind == CueKind.MEDIA || item.kind == CueKind.MEDIA_PAUSED
         val rows = cueRows(item)
         val selRow = if (cue.isFocused) rows.getOrNull(cueRowAt) else null
@@ -540,8 +535,8 @@ internal class CueView(private val a: MainActivity) {
             else cuePosition(s.position, s.lastPositionUpdateTime, android.os.SystemClock.elapsedRealtime(), s.playbackSpeed, mediaPlaying(c), length)
         cueBar.color = accent
         cueBar.fraction = at.toFloat() / length
-        findViewById<TextView>(R.id.cueElapsed).apply { text = cueTime(at); if (glassActive()) ink(this, cueInk) else setTextColor(cueInk) }
-        findViewById<TextView>(R.id.cueLeft).apply { text = "-" + cueTime(length - at); if (glassActive()) ink(this, cueInk) else setTextColor(cueInk) }
+        findViewById<TextView>(R.id.cueElapsed).apply { text = cueTime(at); if (glassActive()) ink(this, fg) else setTextColor(fg) }
+        findViewById<TextView>(R.id.cueLeft).apply { text = "-" + cueTime(length - at); if (glassActive()) ink(this, fg) else setTextColor(fg) }
     }
 
     /**
@@ -624,19 +619,18 @@ internal class CueView(private val a: MainActivity) {
     }
 
     /**
-     * The top bar's Cue icon: the stopwatch, the last timer lengths used (hold OK on one to take it off), any other
-     * length, and today's games, one click from Home. Nothing to set up: the list follows what people start.
+     * The top bar's Timers icon: a custom timer, the stopwatch, recent timer lengths (hold OK to remove one), and live games.
      */
     fun MainActivity.timerMenu(anchor: View) {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
         val recent = recentTimers()
-        holdMenu(anchor, listOf(getString(R.string.isl_stopwatch) to { CueTimers.startStopwatch(this); cueStarted("stopwatch") }) +
+        holdMenu(anchor, listOf(
+            getString(R.string.isl_timer) to { showPanel(); editTimer(R.string.isl_timer, ::closeLauncherSettings) },
+            getString(R.string.isl_stopwatch) to { CueTimers.startStopwatch(this); cueStarted("stopwatch") },
+        ) +
             recent.map { m -> mins(m) to { startTimer(m) } } +
-            listOf(
-                getString(R.string.isl_custom) to { showPanel(); editTimer() },
-                getString(R.string.isl_games_now) to { showPanel(); pickLiveNow() },
-            ), below = true,
-            holds = listOf(null) + recent.map { m -> { saveRecent(recentTimers() - m); timerMenu(anchor) } })
+            listOf(getString(R.string.isl_games_now) to { showPanel(); pickLiveNow() }), below = true,
+            holds = listOf(null, null) + recent.map { m -> { saveRecent(recentTimers() - m); timerMenu(anchor) } })
     }
 
     private val RECENT_PREF = "isl_recent_t" // the timer icon's lengths, newest first; "" when all were taken off
@@ -681,7 +675,7 @@ internal class CueView(private val a: MainActivity) {
     }
 
     /** A timer of any length: minutes typed with the remote's number keys. */
-    fun MainActivity.editTimer() {
+    fun MainActivity.editTimer(title: Int, back: () -> Unit) {
         fun start(value: String, field: EditText) {
             val m = value.trim().toIntOrNull()?.takeIf { it in 1..999 } ?: return
             getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(field.windowToken, 0)
@@ -691,8 +685,8 @@ internal class CueView(private val a: MainActivity) {
         lateinit var field: EditText
         field = textField("", getString(R.string.isl_custom_hint), InputType.TYPE_CLASS_NUMBER, EditorInfo.IME_ACTION_DONE) { start(it, field) }
         field.filters = arrayOf(InputFilter.LengthFilter(3))
-        showPage(getString(R.string.isl_custom), listOf(page(getString(R.string.isl_start)) { start(field.text.toString(), field) }),
-            top = field.parent as LinearLayout, crumb = getString(R.string.isl_timers)) { pickCueTimer(0) }
+        showPage(getString(title), listOf(page(getString(R.string.isl_start)) { start(field.text.toString(), field) }),
+            top = field.parent as LinearLayout, crumb = getString(R.string.isl_timers), back = back)
         val go = settingsList.getChildAt(1)
         go.nextFocusUpId = field.id
         field.nextFocusDownId = go.id
@@ -702,7 +696,7 @@ internal class CueView(private val a: MainActivity) {
     /** Once, when Cue could show music and alerts but has no access: say why, and open the screen that gives it. */
     fun MainActivity.askCueAccess() {
         if (!on("isl_on") || !homeSetUp() || setupDialog?.isShowing == true) return
-        // A bar set up before Cue has no Cue icon: say once where timers and Games now are.
+        // A bar set up before Cue has no Timers icon: say once where to find it.
         if (R.id.timerButton !in shownTop() && !prefs.getBoolean("isl_tip", false) && (prefs.getBoolean("isl_access_asked", false) || listenerOn())) {
             prefs.edit().putBoolean("isl_tip", true).apply()
             return toast(getString(R.string.isl_tip), long = true)
@@ -716,6 +710,7 @@ internal class CueView(private val a: MainActivity) {
 
     /** A timer just started: make sure Cue is on to show it. */
     fun MainActivity.cueStarted(key: String) {
+        cueHidden -= key
         if (!on("isl_on")) prefs.edit().putBoolean("isl_on", true).apply()
         showCue()
         cue.requestFocus()
@@ -736,7 +731,7 @@ internal class CueView(private val a: MainActivity) {
     fun hold() = a.cueHoldMenu()
     fun started(key: String) = a.cueStarted(key)
     fun askAccess() = a.askCueAccess()
-    fun customTimer() = a.editTimer()
+    fun customTimer(back: () -> Unit) = a.editTimer(R.string.isl_custom, back)
     fun startTimer(m: Int) = a.startTimer(m)
 
     /** A logo from an address into [into], 24 dp, for settings rows. */

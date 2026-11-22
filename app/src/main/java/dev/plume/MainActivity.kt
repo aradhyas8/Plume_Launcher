@@ -1187,7 +1187,7 @@ class MainActivity : Activity() {
     private var wpThumb: Bitmap? = null
     private var wpFrames: List<Bitmap> = emptyList() // what the text is measured on: the still's thumb, or a video's frames
     private var watchInk = Color.BLACK
-    internal var iconInk = Color.BLACK
+    private var iconInk = Color.BLACK
     private var appsInk = Color.BLACK
 
     private fun topIcons() = TOP_KEYS.keys.toList()
@@ -1218,7 +1218,6 @@ class MainActivity : Activity() {
             is ProgressBar -> v.progressDrawable = progressBarDrawable(watchInk)
             is TextView -> if (v.tag == INK_MARK) v.compoundDrawablesRelative[0]?.setTint(watchInk)
         }
-        isl.show() // the pill at rest takes the top bar's ink
     }
 
     /**
@@ -1250,7 +1249,7 @@ class MainActivity : Activity() {
      * White or near-black for text over [views], readable on every frame of the wallpaper (one for a photo, a video's
      * samples, see [inkFor]); the theme colour without a picture.
      */
-    internal fun inkBehind(views: List<View>): Int {
+    private fun inkBehind(views: List<View>): Int {
         val t = wpFrames.firstOrNull() ?: return fg
         val wall = findViewById<View>(R.id.wallpaper)
         val at = IntArray(2)
@@ -3665,17 +3664,18 @@ class MainActivity : Activity() {
     }
 
     /** Timer and stopwatch. Starting one closes the panel, so it shows on Cue at once. */
-    internal fun pickCueTimer(focus: Int = 0) {
+    private fun pickCueTimer() {
         val mins = { m: Int -> resources.getQuantityString(R.plurals.isl_minutes, m, m) }
         fun start(key: String, go: () -> Unit) { closeLauncherSettings(); go(); isl.started(key) }
+        fun pickLength(focus: Int) {
+            showPage(getString(R.string.isl_timer), CUE_TIMERS.map { m -> page(mins(m)) { closeLauncherSettings(); isl.startTimer(m) } } +
+                page(getString(R.string.isl_custom), "›") { isl.customTimer { pickLength(CUE_TIMERS.size) } },
+                focus, crumb = getString(R.string.isl_timers)) { pickCueTimer() }
+        }
         showPage(getString(R.string.isl_timers), listOf(
-            page(getString(R.string.isl_timer), "›") {
-                showPage(getString(R.string.isl_timer), CUE_TIMERS.map { m -> page(mins(m)) { closeLauncherSettings(); isl.startTimer(m) } } +
-                    page(getString(R.string.isl_custom), "›") { isl.customTimer() },
-                    crumb = getString(R.string.isl_timers)) { pickCueTimer(0) }
-            },
+            page(getString(R.string.isl_timer), "›") { pickLength(0) },
             page(getString(R.string.isl_stopwatch)) { start("stopwatch") { CueTimers.startStopwatch(this) } },
-        ), focus, crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_timers) }
+        ), crumb = getString(R.string.isl_section)) { renderSettings(R.string.isl_timers) }
     }
 
     /** The apps that sent alerts so far, each on or off. */
@@ -7033,7 +7033,7 @@ class MainActivity : Activity() {
             setTextColor(fg)
             setHintTextColor(Color.argb(120, Color.red(fg), Color.green(fg), Color.blue(fg)))
             isSingleLine = true
-            inputType = InputType.TYPE_CLASS_TEXT or flags
+            inputType = if (flags and InputType.TYPE_MASK_CLASS == 0) InputType.TYPE_CLASS_TEXT or flags else flags
             imeOptions = ime
             setPadding(dp(14), 0, dp(14), 0)
             background = GradientDrawable().apply {

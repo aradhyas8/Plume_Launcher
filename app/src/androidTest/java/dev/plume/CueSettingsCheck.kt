@@ -5,9 +5,11 @@ import android.app.Instrumentation
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import android.text.InputType
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.TextView
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -63,6 +65,7 @@ class CueSettingsCheck(private val runner: Instrumentation) {
             val activity = home
             await { activity.hasWindowFocus() }
             runOnMainSync { activity.findViewById<View>(R.id.launcherSettings).performClick() }
+            checkTimerPage(activity)
             checkLetterJumps(activity)
             checkExpiredGame(activity)
             checkSportsPages(activity)
@@ -88,6 +91,24 @@ class CueSettingsCheck(private val runner: Instrumentation) {
     private fun sportsField(name: String) = CueSports::class.java.getDeclaredField(name).apply { isAccessible = true }
     private fun call(activity: MainActivity, name: String) =
         MainActivity::class.java.getDeclaredMethod(name).apply { isAccessible = true }.invoke(activity)
+
+    private fun checkTimerPage(activity: MainActivity) = runner.runOnMainSync {
+        val rows = activity.findViewById<ViewGroup>(R.id.settingsList)
+        val title = activity.findViewById<TextView>(R.id.settingsTitle)
+        call(activity, "pickCueTimer")
+        check(hasText(rows.getChildAt(0), activity.getString(R.string.isl_timer)))
+        check(hasText(rows.getChildAt(1), activity.getString(R.string.isl_stopwatch)))
+        check(rows.getChildAt(0).performClick())
+        val customIndex = rows.childCount - 1
+        check(rows.getChildAt(customIndex).performClick())
+        check(title.text == activity.getString(R.string.isl_custom))
+        val field = (rows.getChildAt(0) as ViewGroup).getChildAt(0) as EditText
+        check(field.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_NUMBER)
+        @Suppress("DEPRECATION")
+        activity.onBackPressed()
+        check(title.text == activity.getString(R.string.isl_timer))
+        check(rows.getChildAt(customIndex).hasFocus()) { "Back did not restore focus to Other length" }
+    }
 
     private fun pick(activity: MainActivity, method: String, list: List<CueSports.Team>? = null, focus: Int = 0) {
         MainActivity::class.java.getDeclaredMethod(method, CueSports.League::class.java, Int::class.javaPrimitiveType,

@@ -142,7 +142,7 @@
             </intent-filter>
         </service>
 
-        <!-- Cue's timers and sleep timer end here when Plume's own clock was not running. -->
+        <!-- Cue can finish the timer here when Plume's process is not running. -->
         <receiver
             android:name=".IslandAlarm"
             android:exported="false" />
