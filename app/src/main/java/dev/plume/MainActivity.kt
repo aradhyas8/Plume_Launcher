@@ -8021,9 +8021,13 @@ class MainActivity : Activity() {
             if (m != null) return c.drawBitmap(m, b.left.toFloat(), b.top.toFloat(), paint)
             // Still changing size (Cue opening): a new bitmap and texture upload per frame made every frame of the
             // shape change ~7 ms too long on the TV. Draw it live until the size holds, then bake that size.
+            // This instance's alpha and tint go on src only for this draw: the baked bitmap is shared, so it must
+            // hold the plain pixels (a sheen at alpha 0 would otherwise bake as a clear bitmap for every tile).
             src.alpha = paint.alpha
             src.colorFilter = paint.colorFilter
             c.save(); c.translate(b.left.toFloat(), b.top.toFloat()); src.draw(c); c.restore()
+            src.alpha = 255
+            src.colorFilter = null
             invalidateSelf()
         }
         override fun getOutline(o: Outline) { src.getOutline(o); o.offset(bounds.left, bounds.top) }
