@@ -14,11 +14,11 @@ Write every entry in ASD-STE100 Simplified Technical English:
 
 Put changes that are not released under `## Unreleased`. Rename that heading to the version number when you release.
 
-## Unreleased
+## 1.8
 
 ### New
 - **Meet Cue.** A live glass tile at the top of your home screen. See your music, timers, alerts, rain and live scores at a glance. Pin a game, or follow your teams.
-- **Alerts over any app.** Calls, doorbells and finished timers show over your movie. Press Up to open one. Turn it on in **Cue** settings.
+- **Alerts over any app.** Calls, doorbells and finished timers show over your movie. Press Up to open one. Select **Cue → Alerts over apps**.
 - **Recent apps.** Press Home two times to see your open apps. Press Left or Right to jump between them.
 - **Icon packs.** Give every app a new look with an icon pack that you install. Select **Apps row → Icon pack**.
 - **Wallpaper gallery.** Browse every wallpaper source in one place. Preview a slideshow of your own photos before you apply it.
@@ -38,9 +38,11 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - **Sharper show art.** **Your shows** uses pictures that fill the screen, in 4K on supported TVs. Add a TMDB key from your phone for even better art.
 - **A cleaner home.** **All apps** hides the mobile apps that came with your TV. Press Right on the last app to go back to the first.
 - A fresh **Bing picture of the day** greets you on a new install.
+- **Shows row sources.** Select **Plume settings → Shows row → Rows**, then **Mixed**, **By title** or **Per channel**.
 - The Shows row slides in the direction that you press, with dots that show where you are.
 - Plume settings shows more on each screen, and the home screen rows sit closer together.
-- The remote's Apps button opens **All apps** directly via Android's `ALL_APPS` action.
+- On some TVs, the **Apps** button on your remote opens **All apps**.
+- Press **OK** one time to apply a photo that you uploaded from your phone.
 
 ### Fixes
 - **Faster Home on Fire TV.** Plume opens sooner after you press Home.
@@ -77,7 +79,6 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - A video wallpaper shows its own first frame while it starts.
 - With **Large** or **Largest** apps, the apps row no longer covers the Continue watching title.
 - Glass rows no longer show a grey edge after the last tile.
-- **Rows of the shows row.** Select **Plume settings → Shows row → Rows**, then select **Mixed** (the default), **By title** or **Per channel**. The page says what each choice does and which buttons to press. By title and Per channel show one source at a time: Watch Next, or one channel that an app adds. The cards stay in place and change their picture, title and progress.
 - Continue watching shows the show you watched last first in apps such as Nuvio.
 - On Fire TV, Plume comes back when you press Home on the Plume home screen or in the Plume settings.
 - On Google TV, a notice or a sign-in screen no longer brings Plume to the front.

@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://github.com/aradhyas8/Plume_Launcher/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/aradhyas8/Plume_Launcher?label=release"></a>
   <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-3ddc84">
-  <img alt="APK size" src="https://img.shields.io/badge/APK-0.4%20MB-blue">
+  <img alt="APK size" src="https://img.shields.io/badge/APK-0.6%20MB-blue">
   <a href="https://github.com/aradhyas8/Plume_Launcher/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/aradhyas8/Plume_Launcher/total"></a>
   <a href="LICENSE"><img alt="GPL-3.0 License" src="https://img.shields.io/github/license/aradhyas8/Plume_Launcher"></a>
 </p>
@@ -60,7 +60,7 @@ Measured on a Hisense Google TV (Android 12, 1.8 GB RAM):
 
 | | Plume | Projectivy Launcher | Google TV launcher |
 |---|---|---|---|
-| APK size | **0.4 MB** | ~10–14 MB | ~25 MB |
+| APK size | **0.6 MB** | ~10–14 MB | ~25 MB |
 | RAM while running | **~50–70 MB** | ~65–70 MB | ~93 MB, plus a ~22 MB helper process |
 | Extra background services | **Optional notification listener** | 2 | 1 always-on helper |
 | Return to home from an app | **~95 ms** | – | – |
