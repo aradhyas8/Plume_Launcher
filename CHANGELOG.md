@@ -18,7 +18,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 
 ### New
 - **Meet Cue.** A live glass tile at the top of your home screen. See your music, timers, alerts, rain and live scores at a glance. Pin a game, or follow your teams.
-- **Alerts over any app.** Calls, doorbells and finished timers show over your movie. Press Up to open one. Turn it on in **Cue** settings.
+- **Alerts over any app.** Calls, doorbells and finished timers show over your movie. Press Up to open one. Select **Cue → Alerts over apps**.
 - **Recent apps.** Press Home two times to see your open apps. Press Left or Right to jump between them.
 - **Icon packs.** Give every app a new look with an icon pack that you install. Select **Apps row → Icon pack**.
 - **Wallpaper gallery.** Browse every wallpaper source in one place. Preview a slideshow of your own photos before you apply it.
