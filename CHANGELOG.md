@@ -29,6 +29,7 @@ Put changes that are not released under `## Unreleased`. Rename that heading to 
 - **Hola.** Plume now speaks Spanish.
 
 ### More to like
+- Plume has a new app icon and TV launcher banner.
 - **App window previews.** Recent apps show the last screen of each app, on Android 11 and later.
 - **Timers.** Start a timer or a stopwatch from the top bar. Your last 4 lengths are one press away.
 - **Your clock, your format.** Pick a date and time format in **Clock & weather**, or type your own.
