@@ -8004,13 +8004,32 @@ class MainActivity : Activity() {
     private inner class Baked(private val key: String, private val src: Drawable) : Drawable() {
         private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
         private var bmp: Bitmap? = null
+        private var resizedAt = 0L
         override fun onBoundsChange(b: Rect) {
             src.setBounds(0, 0, b.width(), b.height())
-            bmp = if (b.isEmpty) null else baked.getOrPut("$key ${b.width()}x${b.height()}") {
-                Bitmap.createBitmap(b.width(), b.height(), Bitmap.Config.ARGB_8888).also { src.draw(Canvas(it)) }
-            }
+            bmp = if (b.isEmpty) null else baked["$key ${b.width()}x${b.height()}"]
+            resizedAt = SystemClock.uptimeMillis()
         }
-        override fun draw(c: Canvas) { bmp?.let { c.drawBitmap(it, bounds.left.toFloat(), bounds.top.toFloat(), paint) } }
+        override fun draw(c: Canvas) {
+            val b = bounds
+            if (bmp == null && !b.isEmpty && SystemClock.uptimeMillis() - resizedAt > SETTLE_MS) {
+                bmp = baked.getOrPut("$key ${b.width()}x${b.height()}") {
+                    Bitmap.createBitmap(b.width(), b.height(), Bitmap.Config.ARGB_8888).also { src.draw(Canvas(it)) }
+                }
+            }
+            val m = bmp
+            if (m != null) return c.drawBitmap(m, b.left.toFloat(), b.top.toFloat(), paint)
+            // Still changing size (Cue opening): a new bitmap and texture upload per frame made every frame of the
+            // shape change ~7 ms too long on the TV. Draw it live until the size holds, then bake that size.
+            // This instance's alpha and tint go on src only for this draw: the baked bitmap is shared, so it must
+            // hold the plain pixels (a sheen at alpha 0 would otherwise bake as a clear bitmap for every tile).
+            src.alpha = paint.alpha
+            src.colorFilter = paint.colorFilter
+            c.save(); c.translate(b.left.toFloat(), b.top.toFloat()); src.draw(c); c.restore()
+            src.alpha = 255
+            src.colorFilter = null
+            invalidateSelf()
+        }
         override fun getOutline(o: Outline) { src.getOutline(o); o.offset(bounds.left, bounds.top) }
         override fun setAlpha(a: Int) { if (paint.alpha != a) { paint.alpha = a; invalidateSelf() } }
         override fun getAlpha() = paint.alpha
@@ -8019,8 +8038,9 @@ class MainActivity : Activity() {
         override fun setTintList(t: ColorStateList?) { paint.colorFilter = t?.let { PorterDuffColorFilter(it.defaultColor, PorterDuff.Mode.SRC_IN) }; invalidateSelf() }
         @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.TRANSLUCENT
     }
-    // ponytail: never evicted; fine while only a few tile sizes exist, cap it if views start animating their size
+    // ponytail: never evicted; only settled sizes are baked (see Baked.draw), so it holds a few per tile shape
     private val baked = HashMap<String, Bitmap>()
+    private val SETTLE_MS = 300L // a size that holds this long is baked
 
     /** Supporting text: the secondary grey in dark mode, [lightAlpha] of the main colour in light mode. */
     private fun TextView.secondary(lightAlpha: Float) = if (dark) setTextColor(text2()) else alpha = lightAlpha
