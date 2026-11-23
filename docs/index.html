@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plume Launcher</title>
 <meta name="description" content="A minimal, ad-free home screen for Android TV and Google TV. Install it with Downloader code 2125356.">
-<meta name="theme-color" content="#0f1c33" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#8fc3ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c0b07" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#7d6a8e" media="(prefers-color-scheme: light)">
 <link rel="icon" href="plume-icon.png">
 <link rel="apple-touch-icon" href="plume-icon.png">
 <link rel="stylesheet" href="style.css">
@@ -21,7 +21,6 @@
 <main>
   <section class="hero wrap">
     <img class="logo" src="plume-icon.png" alt="Plume logo" width="112" height="112">
-    <p class="eyebrow">Home screen for Android TV and Google TV</p>
     <h1>Light as a feather.</h1>
     <p class="lede">Your apps and what you were watching. No ads, no sponsored rows, no account. Nothing else.</p>
     <div class="cta">
@@ -33,17 +32,17 @@
         <span>Downloader code</span><strong>2125356</strong>
       </a>
     </div>
-    <p class="fine">Free and open source · Android 8.0 or newer · GPL-3.0</p>
+    <p class="fine">For Android TV and Google TV · Android 8.0 or newer · Free and open source</p>
   </section>
 
   <section class="showcase wrap" aria-label="Screenshots">
     <div class="tv">
-      <img id="shot" src="home-dark.jpg" alt="Plume home screen, dark theme" width="1920" height="1080">
+      <img id="shot" src="home-dark.webp" alt="Plume home screen with Sand Dunes wallpaper, dark theme and frosted glass" width="1920" height="1080">
     </div>
     <div class="tv-stand" aria-hidden="true"></div>
     <div class="toggle" role="group" aria-label="Site and screenshot theme">
-      <button type="button" data-shot="dark" aria-pressed="true">Dark</button>
-      <button type="button" data-shot="light" aria-pressed="false">Light</button>
+      <button type="button" data-shot="dark" aria-pressed="true"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>Dark</button>
+      <button type="button" data-shot="light" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Light</button>
     </div>
   </section>
 
@@ -58,29 +57,40 @@
   <section class="features wrap" id="features">
     <h2>Everything you use. Nothing you don't.</h2>
     <div class="tiles">
-      <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66l.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></svg>
-        <h3>Tiny and fast</h3><p>No third-party libraries and no extra background services. Home is there the moment you press it.</p>
+      <div class="tile lead">
+        <div class="lead-text">
+          <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+          <h3>Glass you can see through</h3><p>Tiles, cards and settings in Clear or Frosted glass, or solid. The selected tile rises out of its row and its edge catches the light. Text and icons change colour to stay readable on any wallpaper.</p>
+        </div>
+        <img src="feature-clear.webp" alt="Plume home screen with Moonlit Ridge wallpaper and clear glass tiles" width="1280" height="720" loading="lazy">
       </div>
       <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M18,8h-1V6c0,-2.76 -2.24,-5 -5,-5S7,3.24 7,6v2H6c-1.1,0 -2,0.9 -2,2v10c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V10c0,-1.1 -0.9,-2 -2,-2zM12,17c-1.1,0 -2,-0.9 -2,-2s0.9,-2 2,-2 2,0.9 2,2 -0.9,2 -2,2zM15.1,8H8.9V6c0,-1.71 1.39,-3.1 3.1,-3.1 1.71,0 3.1,1.39 3.1,3.1v2z"/></svg>
-        <h3>No ads, no tracking</h3><p>No sponsored rows, no account, no analytics. Your settings stay on your TV.</p>
+        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z"/></svg>
+        <h3>Wallpapers your way</h3><p>250+ Apple, Amazon and NASA scenes, Bing&#8217;s photo of the day, your own photos or a USB drive. The Wallpaper theme picks light or dark from the picture.</p>
       </div>
       <div class="tile">
         <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M21,3H3c-1.11,0 -2,0.89 -2,2v12c0,1.1 0.89,2 2,2h5v2h8v-2h5c1.1,0 1.99,-0.9 1.99,-2L23,5c0,-1.11 -0.9,-2 -2,-2zM21,17H3V5h18v12zM16,11l-7,4V7z"/></svg>
-        <h3>Continue Watching</h3><p>Resume shows and films from your apps, including Stremio, right from the home screen.</p>
+        <h3>Continue Watching</h3><p>Resume shows and films from your apps, including Stremio and Nuvio, right from the home screen.</p>
       </div>
       <div class="tile">
         <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M5.5,3h4a1.5,1.5 0 0 1 1.5,1.5v4a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5v-4a1.5,1.5 0 0 1 1.5,-1.5zM14.5,3h4a1.5,1.5 0 0 1 1.5,1.5v4a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5v-4a1.5,1.5 0 0 1 1.5,-1.5zM5.5,12h4a1.5,1.5 0 0 1 1.5,1.5v4a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5v-4a1.5,1.5 0 0 1 1.5,-1.5zM14.5,12h4a1.5,1.5 0 0 1 1.5,1.5v4a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5v-4a1.5,1.5 0 0 1 1.5,-1.5z"/></svg>
-        <h3>A clean apps row</h3><p>Monochrome or colour logos. Reorder, sort by most used, hide apps, or lock the layout with a PIN.</p>
+        <h3>A clean apps row</h3><p>Monochrome logos, colour logos, banners or an icon pack. Reorder, sort by most used, hide apps, or lock the layout with a PIN.</p>
       </div>
       <div class="tile">
         <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M10,20v-6h4v6h5v-8h3L12,3 2,12h3v8z"/></svg>
         <h3>Your Home button</h3><p>The Home button on your remote opens Plume, even on Google TV. Hold it for the Google TV dashboard.</p>
       </div>
       <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z"/></svg>
-        <h3>Your look</h3><p>Frosted or clear glass over your wallpaper. Photos, video scenes, light, dark or automatic with the sun.</p>
+        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+        <h3>Cue alerts</h3><p>A small pill shows live scores for the teams you follow and warns you before rain, on Home and over your apps.</p>
+      </div>
+      <div class="tile">
+        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M15 2H9c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-3 9c-1.38 0-2.5-1.12-2.5-2.5S10.62 6 12 6s2.5 1.12 2.5 2.5S13.38 11 12 11z"/></svg>
+        <h3>Remote keys and Sources</h3><p>Remap the TV, Netflix or Settings button, with a separate action on hold. Switch HDMI inputs from the top bar.</p>
+      </div>
+      <div class="tile">
+        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M18,8h-1V6c0,-2.76 -2.24,-5 -5,-5S7,3.24 7,6v2H6c-1.1,0 -2,0.9 -2,2v10c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V10c0,-1.1 -0.9,-2 -2,-2zM12,17c-1.1,0 -2,-0.9 -2,-2s0.9,-2 2,-2 2,0.9 2,2 -0.9,2 -2,2zM15.1,8H8.9V6c0,-1.71 1.39,-3.1 3.1,-3.1 1.71,0 3.1,1.39 3.1,3.1v2z"/></svg>
+        <h3>No ads, no tracking</h3><p>No sponsored rows, no account, no analytics. Your settings stay on your TV.</p>
       </div>
     </div>
   </section>
@@ -109,7 +119,7 @@
       <div class="more-body">
         <p><strong>USB drive.</strong> <a href="https://github.com/aradhyas8/Plume_Launcher/releases/latest">Download the APK</a>, copy it to a USB drive and open it with a file manager on the TV.</p>
         <p><strong>adb.</strong> From a computer on the same network:</p>
-        <div class="cmd"><code>adb install Plume-1.7.apk</code><button type="button" class="copy-icon" data-copy="adb install Plume-1.7.apk" aria-label="Copy command"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></button></div>
+        <div class="cmd"><code>adb install Plume-1.8.apk</code><button type="button" class="copy-icon" data-copy="adb install Plume-1.8.apk" aria-label="Copy command"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></button></div>
         <p><strong>Android 13 and newer.</strong> Android greys out the Home button switch for apps installed outside the Play Store. The <a href="https://github.com/aradhyas8/Plume_Launcher#home-button-on-android-13-and-newer">README explains the one-time fix</a>.</p>
       </div>
     </details>
@@ -131,11 +141,34 @@
   var shot = document.getElementById('shot');
   var buttons = document.querySelectorAll('[data-shot]');
   function show(theme) {
-    shot.src = 'home-' + theme + '.jpg';
-    shot.alt = 'Plume home screen, ' + theme + ' theme';
+    shot.src = 'home-' + theme + '.webp';
+    shot.alt = theme === 'light'
+      ? 'Plume home screen with Humpback Whale wallpaper, light theme and frosted glass'
+      : 'Plume home screen with Sand Dunes wallpaper, dark theme and frosted glass';
     buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.shot === theme)); });
   }
-  buttons.forEach(function (b) { b.addEventListener('click', function () { plumeSetTheme(b.dataset.shot); }); });
+  // Preload both shots so the switch never waits on the network.
+  ['dark', 'light'].forEach(function (t) { new Image().src = 'home-' + t + '.webp'; });
+
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var theme = b.dataset.shot;
+      if (theme === plumeTheme()) return;
+      var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!document.startViewTransition || still) return plumeSetTheme(theme);
+      var r = b.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      var radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+      document.startViewTransition(function () {
+        plumeSetTheme(theme);
+        return shot.decode ? shot.decode().catch(function () {}) : null;
+      }).ready.then(function () {
+        document.documentElement.animate(
+          { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + radius + 'px at ' + x + 'px ' + y + 'px)'] },
+          { duration: 650, easing: 'cubic-bezier(.2, .8, .2, 1)', pseudoElement: '::view-transition-new(root)' }
+        );
+      });
+    });
+  });
   document.addEventListener('themechange', function (e) { show(e.detail); });
   show(plumeTheme());
 
