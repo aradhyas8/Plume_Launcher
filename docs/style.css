@@ -1,8 +1,8 @@
-/* The page sits on a Plume wallpaper and every card is frosted glass, like the TV home screen. */
+/* The page sits on a Plume wallpaper (Autumn Canopy dark, Alpine Dawn light) and every card is frosted glass, like the TV home screen. */
 :root {
   --wall: url("wall-dark.webp");
   --wall-crop: 0px;
-  --base: #0f1c33;
+  --base: #1c0b07;
   --fg: #ffffff;
   --text: #eef1ee;
   --muted: rgba(255, 255, 255, .78);
@@ -12,48 +12,58 @@
   --glass-2: rgba(255, 255, 255, .16);
   --sheen: inset 0 1px 0 rgba(255, 255, 255, .22);
   --accent: rgba(255, 255, 255, .94);
-  --on-accent: #0f1c33;
+  --on-accent: #1c0b07;
   --glow: rgba(0, 0, 0, .35);
   --shadow: 0 30px 80px -24px rgba(0, 0, 0, .6);
   --text-shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 2px 18px rgba(0, 0, 0, .35);
+  /* Text that sits straight on the wallpaper, not on glass. */
+  --wall-fg: #ffffff;
+  --wall-muted: rgba(255, 255, 255, .86);
+  --wall-shadow: var(--text-shadow);
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --wall: url("wall-light.webp");
-    --wall-crop: -45vh; /* hide the top branch so headings sit on clear sky */
-    --base: #8fc3ee;
-    --fg: #0d2540;
-    --text: #17304c;
-    --muted: rgba(13, 37, 64, .78);
+    --wall-crop: 0px;
+    --base: #7d6a8e;
+    --fg: #22132f;
+    --text: #2b1a3a;
+    --muted: rgba(34, 19, 47, .78);
     --line: rgba(255, 255, 255, .6);
     --line-hi: rgba(255, 255, 255, .9);
     --glass: rgba(255, 255, 255, .42);
     --glass-2: rgba(255, 255, 255, .6);
     --sheen: inset 0 1px 0 rgba(255, 255, 255, .8);
-    --accent: #0d2540;
+    --accent: #22132f;
     --on-accent: #ffffff;
-    --glow: rgba(13, 37, 64, .25);
-    --shadow: 0 30px 70px -25px rgba(13, 37, 64, .45);
+    --glow: rgba(34, 19, 47, .25);
+    --shadow: 0 30px 70px -25px rgba(34, 19, 47, .45);
     --text-shadow: 0 1px 14px rgba(255, 255, 255, .55);
+    --wall-fg: #ffffff;
+    --wall-muted: rgba(255, 255, 255, .92);
+    --wall-shadow: 0 1px 2px rgba(34, 19, 47, .45), 0 2px 20px rgba(34, 19, 47, .5);
   }
 }
 :root[data-theme="light"] {
   --wall: url("wall-light.webp");
-    --wall-crop: -45vh; /* hide the top branch so headings sit on clear sky */
-  --base: #8fc3ee;
-  --fg: #0d2540;
-  --text: #17304c;
-  --muted: rgba(13, 37, 64, .78);
+  --wall-crop: 0px;
+  --base: #7d6a8e;
+  --fg: #22132f;
+  --text: #2b1a3a;
+  --muted: rgba(34, 19, 47, .78);
   --line: rgba(255, 255, 255, .6);
   --line-hi: rgba(255, 255, 255, .9);
   --glass: rgba(255, 255, 255, .42);
   --glass-2: rgba(255, 255, 255, .6);
   --sheen: inset 0 1px 0 rgba(255, 255, 255, .8);
-  --accent: #0d2540;
+  --accent: #22132f;
   --on-accent: #ffffff;
-  --glow: rgba(13, 37, 64, .25);
-  --shadow: 0 30px 70px -25px rgba(13, 37, 64, .45);
+  --glow: rgba(34, 19, 47, .25);
+  --shadow: 0 30px 70px -25px rgba(34, 19, 47, .45);
   --text-shadow: 0 1px 14px rgba(255, 255, 255, .55);
+  --wall-fg: #ffffff;
+  --wall-muted: rgba(255, 255, 255, .92);
+  --wall-shadow: 0 1px 2px rgba(34, 19, 47, .45), 0 2px 20px rgba(34, 19, 47, .5);
 }
 :root[data-theme="dark"] { color-scheme: dark; }
 :root[data-theme="light"] { color-scheme: light; }
@@ -78,10 +88,12 @@ svg .fill, svg.ico { fill: currentColor; stroke: none; }
 .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; border-radius: 8px; }
 section[id] { scroll-margin-top: 80px; }
-h1, h2, .lede, .eyebrow, .stats, .sub, .fine, .after { text-shadow: var(--text-shadow); }
+.stats { text-shadow: var(--text-shadow); }
+.hero h1, main > section > h2, .lede, .sub, .fine, .after { color: var(--wall-muted); text-shadow: var(--wall-shadow); }
+.hero h1, main > section > h2, .after b { color: var(--wall-fg); }
 
 /* One frosted surface, used by every card. */
-header, .tile, .panel, .steps li, .more, .code-chip, .toggle, .stats, .doc {
+header .wrap, .tile, .panel, .steps li, .more, .code-chip, .toggle, .stats, .doc {
   background: var(--glass);
   border: 1px solid var(--line);
   box-shadow: var(--sheen);
@@ -90,10 +102,11 @@ header, .tile, .panel, .steps li, .more, .code-chip, .toggle, .stats, .doc {
 }
 
 /* Header */
-header { position: sticky; top: 0; z-index: 10; border-width: 0 0 1px; }
-header .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; padding-top: 12px; padding-bottom: 12px; }
+/* A floating glass pill, not a full-width bar. */
+header { position: sticky; top: 12px; z-index: 10; padding: 0 16px; margin-top: 12px; }
+header .wrap { max-width: 1008px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; padding: 8px 8px 8px 14px; border-radius: 999px; box-shadow: var(--sheen), 0 10px 30px -14px var(--glow); }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 600; font-size: 19px; letter-spacing: -0.2px; }
-.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.brand img { width: 34px; height: 34px; }
 nav { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; }
 nav a { color: var(--muted); text-decoration: none; font-size: 15px; }
 nav a:hover, nav a[aria-current] { color: var(--fg); }
@@ -110,24 +123,25 @@ nav a.btn { color: var(--on-accent); }
 
 /* Hero */
 .hero { text-align: center; padding: 80px 16px 48px; }
-.hero .logo { width: 112px; height: 112px; border-radius: 26px; margin: 0 auto 28px; box-shadow: 0 0 0 1px var(--line-hi), 0 20px 60px -10px var(--glow), 0 0 0 0 transparent; }
-.eyebrow { margin: 0 0 12px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; }
+.hero .logo { width: 128px; height: 128px; margin: 0 auto 24px; filter: drop-shadow(0 14px 22px var(--glow)); }
 .hero h1 { font-size: clamp(40px, 7vw, 72px); line-height: 1.05; font-weight: 300; margin: 0; letter-spacing: -1.5px; }
-.lede { color: var(--muted); font-size: clamp(18px, 2.2vw, 21px); margin: 18px auto 36px; max-width: 560px; }
+.lede { font-size: clamp(18px, 2.2vw, 21px); margin: 18px auto 36px; max-width: 560px; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; }
 .code-chip { display: inline-flex; align-items: center; gap: 12px; padding: 9px 9px 9px 20px; border-radius: 999px; color: var(--muted); text-decoration: none; font-size: 15px; }
 .code-chip strong { color: var(--fg); background: var(--glass-2); padding: 5px 14px; border-radius: 999px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 16px; letter-spacing: 1.5px; }
 .code-chip:hover { border-color: var(--line-hi); }
-.fine { margin: 22px 0 0; color: var(--muted); font-size: 14px; }
+.fine { margin: 22px 0 0; font-size: 14px; }
 
 /* Showcase: the TV stays a real black TV. */
 .showcase { display: flex; flex-direction: column; align-items: center; padding-bottom: 24px; }
 .tv { width: 100%; padding: 10px; border-radius: 22px; background: #050505; border: 1px solid #2a2a2c; box-shadow: var(--shadow); }
 .tv img { border-radius: 13px; aspect-ratio: 16 / 9; width: 100%; object-fit: cover; }
 .tv-stand { width: 22%; height: 10px; margin-top: 14px; border-radius: 999px; background: var(--glass-2); border: 1px solid var(--line); }
-.toggle { display: inline-flex; margin-top: 28px; padding: 4px; border-radius: 999px; }
-.toggle button { font: inherit; font-size: 14px; font-weight: 600; padding: 7px 18px; border-radius: 999px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.toggle { display: inline-flex; align-items: center; margin-top: 28px; padding: 4px; border-radius: 999px; }
+.toggle button { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 14px; font-weight: 600; padding: 7px 18px 7px 14px; border-radius: 999px; border: 0; background: none; color: var(--muted); cursor: pointer; }
 .toggle button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.toggle svg { width: 18px; height: 18px; stroke-width: 2; }
+.toggle button[data-shot="dark"] svg { fill: currentColor; stroke: none; }
 
 /* Stats: one glass strip */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 48px; padding: 28px 16px 20px; border-radius: 22px; text-align: center; }
@@ -140,15 +154,17 @@ nav a.btn { color: var(--on-accent); }
 /* Sections */
 section h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 300; letter-spacing: -0.8px; text-align: center; margin: 0 0 12px; line-height: 1.15; }
 .features, .install { padding-top: 72px; padding-bottom: 24px; }
-.sub { text-align: center; color: var(--muted); margin: 0 auto 40px; max-width: 520px; }
+.sub { text-align: center; margin: 0 auto 40px; max-width: 520px; }
 
 /* Feature tiles */
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 40px; }
-.tile { border-radius: 18px; padding: 24px; transition: transform .2s ease, border-color .2s ease, background .2s ease; }
-.tile:hover { transform: translateY(-3px); border-color: var(--line-hi); background: var(--glass-2); }
+.tile { border-radius: 18px; padding: 24px; }
 .tile svg { width: 30px; height: 30px; margin-bottom: 14px; color: var(--fg); }
 .tile h3 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
-.tile p { margin: 0; color: var(--muted); font-size: 15px; }
+.tile p { margin: 0; color: var(--text); font-size: 16px; line-height: 1.55; }
+.tile.lead { grid-column: span 2; display: grid; grid-template-columns: 1fr 1.25fr; gap: 24px; align-items: center; }
+.tile.lead img { border-radius: 12px; aspect-ratio: 16 / 9; width: 100%; object-fit: cover; box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .5); }
+.tile.lead h3 { font-size: 21px; }
 
 /* Install */
 .install-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: stretch; }
@@ -177,8 +193,8 @@ section h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 300; letter-spacing
 .copy-icon { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; border: 0; background: none; color: var(--muted); cursor: pointer; }
 .copy-icon:hover { color: var(--fg); background: var(--glass); }
 .copy-icon svg { width: 18px; height: 18px; }
-.after { text-align: center; color: var(--muted); font-size: 15px; margin: 28px 0 72px; }
-.after b { color: var(--fg); font-weight: 600; }
+.after { text-align: center; font-size: 15px; margin: 28px 0 72px; }
+.after b { font-weight: 600; }
 
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; padding: 10px 18px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 600; transition: opacity .2s ease, transform .2s ease; }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
@@ -201,12 +217,15 @@ footer .wrap { display: flex; justify-content: space-between; align-items: cente
 footer a { color: var(--muted); }
 footer a:hover { color: var(--fg); }
 .foot-brand { display: flex; align-items: center; gap: 10px; }
-.foot-brand img { width: 22px; height: 22px; border-radius: 6px; }
+.foot-brand img { width: 24px; height: 24px; }
 
 /* No backdrop blur: fall back to a solid tint so text stays readable. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  header, .tile, .panel, .steps li, .more, .code-chip, .toggle, .stats, .doc, footer { background: color-mix(in srgb, var(--base) 88%, transparent); }
+  header .wrap, .tile, .panel, .steps li, .more, .code-chip, .toggle, .stats, .doc, footer { background: color-mix(in srgb, var(--base) 88%, transparent); }
 }
+
+/* Theme switch: the new theme opens in a circle from the button (see index.html). */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -218,6 +237,7 @@ footer a:hover { color: var(--fg); }
   .install-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
+  .tile.lead { grid-column: auto; grid-template-columns: 1fr; }
   .doc { margin: 16px auto 48px; padding: 28px 20px; }
   nav { gap: 16px; }
   nav .wide { display: none; }
