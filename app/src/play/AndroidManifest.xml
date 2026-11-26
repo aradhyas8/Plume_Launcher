@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Google Play build. Play updates it, so it has no self-updater. Its setup never uses adb, it shows
+     only on TVs (no LAUNCHER entry), and wallpapers come from a phone, not from the TV's photos. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+
+    <application>
+        <activity-alias android:name=".LauncherEntry" tools:node="remove" />
+        <provider android:name=".ApkProvider" tools:node="remove" />
+    </application>
+</manifest>

@@ -156,7 +156,8 @@ class HomeOverride : AccessibilityService() {
 
     fun openRecentApps() = requestHome(recents = true)
 
-    private fun previewsEnabled() = getSharedPreferences("home", MODE_PRIVATE).getBoolean(RECENT_PREVIEWS, false)
+    // Play build: no screen capture (its service config has no canTakeScreenshot).
+    private fun previewsEnabled() = !BuildConfig.PLAY && getSharedPreferences("home", MODE_PRIVATE).getBoolean(RECENT_PREVIEWS, false)
 
     private fun requestHome(recents: Boolean) {
         pendingHome?.let { it.recents = recents; return }

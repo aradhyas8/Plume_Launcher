@@ -334,6 +334,8 @@ cd Plume_Launcher
 
 The APK is written to `app/build/outputs/apk/release/`. Without a `keystore.properties` file, release builds are signed with your local debug key, which is fine for installing your own build.
 
+`./gradlew bundlePlay` builds the Google Play bundle into `app/build/outputs/bundle/play/`. That build has no self-updater, no ADB setup steps, no Recent apps screen captures and no photo permission, because Google Play's policies don't allow them there.
+
 ## Contributing
 
 Bug reports, design ideas, translations and pull requests are welcome. Plume stays small on purpose, so please read [CONTRIBUTING.md](CONTRIBUTING.md) first: it lists what's in and out of scope and how to send a change. Open an issue before starting on a feature.

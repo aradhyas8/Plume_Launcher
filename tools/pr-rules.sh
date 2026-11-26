@@ -8,7 +8,7 @@ added() { git diff "$base"...HEAD -- "$@" | grep '^+[^+]'; }
 fail=0
 
 deps=$(added '*.gradle.kts' | grep -E '^\+\s*(implementation|api|compileOnly|runtimeOnly|ksp|kapt|annotationProcessor)\(|^\+\s*id\(')
-perms=$(added '*AndroidManifest.xml' | grep -E 'uses-permission|<permission')
+perms=$(added '*AndroidManifest.xml' | grep -E 'uses-permission|<permission' | grep -v 'tools:node="remove"')
 changed=$(git diff --name-only "$base"...HEAD -- app/src/main)
 notes=$(git diff "$base"...HEAD -- CHANGELOG.md | grep -c '^+- ')
 
