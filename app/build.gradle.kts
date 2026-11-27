@@ -13,7 +13,7 @@ android {
         applicationId = "dev.plume"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
+        versionCode = 12
         versionName = "1.8"
         testInstrumentationRunner = "dev.plume.ActivityTest"
         // What's new: only this version's section of CHANGELOG.md ships, one entry per line, ** marks kept for bold.
