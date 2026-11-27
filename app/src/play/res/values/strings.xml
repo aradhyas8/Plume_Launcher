@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Play build: no "Your photos" screensaver (no photo permission). -->
+    <string name="help_screensaver_pick">Paintings, Aerial Views, or the TV\'s own screensaver.</string>
+</resources>
