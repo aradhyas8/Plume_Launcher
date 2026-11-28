@@ -4,150 +4,179 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plume Launcher</title>
-<meta name="description" content="A minimal, ad-free home screen for Android TV and Google TV. Install it with Downloader code 2125356.">
-<meta name="theme-color" content="#1c0b07" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#7d6a8e" media="(prefers-color-scheme: light)">
+<meta name="description" content="Your TV, minus the ads. A 0.6 MB, open-source home screen for Android TV and Google TV. Install it with Downloader code 2125356.">
+<meta name="theme-color" content="#0f1012" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f9f9fb" media="(prefers-color-scheme: light)">
+<meta property="og:title" content="Plume Launcher">
+<meta property="og:description" content="Your TV, minus the ads. A 0.6 MB, open-source home screen for Android TV and Google TV.">
+<meta property="og:image" content="https://plumelauncher.xyz/home-dark.webp">
 <link rel="icon" href="plume-icon.png">
 <link rel="apple-touch-icon" href="plume-icon.png">
+<link rel="preload" href="fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
 </head>
 <body>
-<header><div class="wrap">
-  <a class="brand" href="./"><img src="plume-icon.png" alt="">Plume</a>
-  <nav><a class="wide" href="#features">Features</a><a class="wide" href="#install">Install</a><a href="https://github.com/aradhyas8/Plume_Launcher">GitHub</a><a class="btn small" href="#install">Get Plume</a></nav>
-</div></header>
+<div class="top">
+  <a class="mark frost" href="./"><span class="logo" role="img" aria-label="Plume logo"></span>Plume</a>
+  <a class="pill frost" href="#get"><span class="wide">Get Plume&nbsp;·&nbsp;</span><span id="top-version">v1.8</span></a>
+</div>
 
 <main>
   <section class="hero wrap">
-    <img class="logo" src="plume-icon.png" alt="Plume logo" width="112" height="112">
-    <h1>Light as a feather.</h1>
-    <p class="lede">Your apps and what you were watching. No ads, no sponsored rows, no account. Nothing else.</p>
+    <h1>Your TV.<br><span>Minus the ads.</span></h1>
+    <p class="lede">A 0.6 MB home screen for Android TV and Google TV. Your apps and your shows. Nothing else.</p>
     <div class="cta">
       <a class="btn" id="download" href="https://github.com/aradhyas8/Plume_Launcher/releases/latest">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M5,20h14v-2H5v2zM19,9h-4V3H9v6H5l7,7 7,-7z"/></svg>
-        <span>Download APK</span><span class="btn-meta" id="download-meta">0.6 MB</span>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5,20h14v-2H5v2zM19,9h-4V3H9v6H5l7,7 7,-7z"/></svg>
+        <span>Download APK</span><span class="meta" id="download-meta">0.6 MB</span>
       </a>
-      <a class="code-chip" href="#install" aria-label="Downloader code 2125356, see install steps">
-        <span>Downloader code</span><strong>2125356</strong>
-      </a>
+      <a class="btn line" href="#get" aria-label="Downloader code 2125356, see install steps">Downloader&nbsp;<code>2125356</code></a>
     </div>
-    <p class="fine">For Android TV and Google TV · Android 8.0 or newer · Free and open source</p>
+    <p class="fine">Free and open source · No account · Android 8.0 or newer</p>
   </section>
 
-  <section class="showcase wrap" aria-label="Screenshots">
-    <div class="tv">
-      <img id="shot" src="home-dark.webp" alt="Plume home screen with Sand Dunes wallpaper, dark theme and frosted glass" width="1920" height="1080">
-    </div>
-    <div class="tv-stand" aria-hidden="true"></div>
+  <div class="screen">
+    <img id="shot" src="home-dark.webp" alt="Plume home screen with Sand Dunes wallpaper, dark theme and frosted glass" width="1920" height="1080">
+  </div>
+  <div class="switch">
     <div class="toggle" role="group" aria-label="Site and screenshot theme">
       <button type="button" data-shot="dark" aria-pressed="true"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>Dark</button>
-      <button type="button" data-shot="light" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Light</button>
+      <button type="button" data-shot="light" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM11 1h2v3h-2zM11 20h2v3h-2zM1 11h3v2H1zM20 11h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zM16.3 17.7l1.4-1.4 2.1 2.1-1.4 1.4zM4.2 18.4l2.1-2.1 1.4 1.4-2.1 2.1zM16.3 6.3l2.1-2.1 1.4 1.4-2.1 2.1z"/></svg>Light</button>
     </div>
-  </section>
+  </div>
 
-  <section class="stats wrap" aria-label="Measured on a Hisense Google TV">
-    <div><strong>0.6 MB</strong><span>APK size</span></div>
-    <div><strong>~60 MB</strong><span>RAM while running</span></div>
-    <div><strong>0</strong><span>Background services</span></div>
-    <div><strong>~95 ms</strong><span>Back to home</span></div>
-    <p>Measured on a Hisense Google TV (Android 12). The stock Google TV launcher is ~25 MB and uses ~93 MB of RAM.</p>
-  </section>
+  <div class="wrap">
+    <section class="press" aria-label="Press">
+      <figure>
+        <blockquote>“Navigating Plume feels far quicker and more intentional than any other launcher I've used on my Chromecast.”</blockquote>
+        <figcaption>Andy Walker, <a href="https://www.androidauthority.com/plume-launcher-google-tv-chromecast-3737579/">Android Authority</a></figcaption>
+      </figure>
+      <figure>
+        <blockquote>“Plume is a brilliant little launcher.”</blockquote>
+        <figcaption><a href="https://www.androidauthority.com/plume-launcher-google-tv-chromecast-3737579/">Android Authority</a></figcaption>
+      </figure>
+      <figure>
+        <blockquote lang="it">“L'essenzialità non sacrifica l'estetica.”</blockquote>
+        <figcaption><a href="https://www.tuttoandroid.net/news/2026/11/24/plume-launcher-chromecast-google-tv-4k-veloce-1184668/">TuttoAndroid</a> · Minimalism that doesn't sacrifice looks</figcaption>
+      </figure>
+    </section>
 
-  <section class="features wrap" id="features">
-    <h2>Everything you use. Nothing you don't.</h2>
-    <div class="tiles">
-      <div class="tile lead">
-        <div class="lead-text">
-          <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-          <h3>Glass you can see through</h3><p>Tiles, cards and settings in Clear or Frosted glass, or solid. The selected tile rises out of its row and its edge catches the light. Text and icons change colour to stay readable on any wallpaper.</p>
-        </div>
-        <img src="feature-clear.webp" alt="Plume home screen with Moonlit Ridge wallpaper and clear glass tiles" width="1280" height="720" loading="lazy">
+    <section class="feat" id="features">
+      <h2>Wallpapers you'll stop to look at.</h2>
+      <div class="cols">
+        <p>250+ scenes from Apple, Amazon and NASA. Bing's photo of the day. Your own photos and videos, sent from your phone or a USB drive.</p>
+        <ul class="chips"><li>Live video</li><li>Photo of the day</li><li>From your phone</li><li>USB drive</li><li>Light or dark, from the picture</li></ul>
       </div>
-      <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z"/></svg>
-        <h3>Wallpapers your way</h3><p>250+ Apple, Amazon and NASA scenes, Bing&#8217;s photo of the day, your own photos or a USB drive. The Wallpaper theme picks light or dark from the picture.</p>
+      <div class="pair">
+        <figure><img src="readme/library.jpg" alt="Plume's built-in wallpaper picker" width="1280" height="720" loading="lazy"><figcaption>The built-in library</figcaption></figure>
+        <figure><img src="readme/live-home.jpg" alt="A live video wallpaper behind the home screen" width="1280" height="720" loading="lazy"><figcaption>A live wallpaper</figcaption></figure>
       </div>
-      <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M21,3H3c-1.11,0 -2,0.89 -2,2v12c0,1.1 0.89,2 2,2h5v2h8v-2h5c1.1,0 1.99,-0.9 1.99,-2L23,5c0,-1.11 -0.9,-2 -2,-2zM21,17H3V5h18v12zM16,11l-7,4V7z"/></svg>
-        <h3>Continue Watching</h3><p>Resume shows and films from your apps, including Stremio and Nuvio, right from the home screen.</p>
-      </div>
-      <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M5.5,3h4a1.5,1.5 0 0 1 1.5,1.5v4a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5v-4a1.5,1.5 0 0 1 1.5,-1.5zM14.5,3h4a1.5,1.5 0 0 1 1.5,1.5v4a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5v-4a1.5,1.5 0 0 1 1.5,-1.5zM5.5,12h4a1.5,1.5 0 0 1 1.5,1.5v4a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5v-4a1.5,1.5 0 0 1 1.5,-1.5zM14.5,12h4a1.5,1.5 0 0 1 1.5,1.5v4a1.5,1.5 0 0 1 -1.5,1.5h-4a1.5,1.5 0 0 1 -1.5,-1.5v-4a1.5,1.5 0 0 1 1.5,-1.5z"/></svg>
-        <h3>A clean apps row</h3><p>Monochrome logos, colour logos, banners or an icon pack. Reorder, sort by most used, hide apps, or lock the layout with a PIN.</p>
-      </div>
-      <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M10,20v-6h4v6h5v-8h3L12,3 2,12h3v8z"/></svg>
-        <h3>Your Home button</h3><p>The Home button on your remote opens Plume, even on Google TV. Hold it for the Google TV dashboard.</p>
-      </div>
-      <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
-        <h3>Cue alerts</h3><p>A small pill shows live scores for the teams you follow and warns you before rain, on Home and over your apps.</p>
-      </div>
-      <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M15 2H9c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-3 9c-1.38 0-2.5-1.12-2.5-2.5S10.62 6 12 6s2.5 1.12 2.5 2.5S13.38 11 12 11z"/></svg>
-        <h3>Remote keys and Sources</h3><p>Remap the TV, Netflix or Settings button, with a separate action on hold. Switch HDMI inputs from the top bar.</p>
-      </div>
-      <div class="tile">
-        <svg aria-hidden="true" class="ico" viewBox="0 0 24 24"><path d="M18,8h-1V6c0,-2.76 -2.24,-5 -5,-5S7,3.24 7,6v2H6c-1.1,0 -2,0.9 -2,2v10c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V10c0,-1.1 -0.9,-2 -2,-2zM12,17c-1.1,0 -2,-0.9 -2,-2s0.9,-2 2,-2 2,0.9 2,2 -0.9,2 -2,2zM15.1,8H8.9V6c0,-1.71 1.39,-3.1 3.1,-3.1 1.71,0 3.1,1.39 3.1,3.1v2z"/></svg>
-        <h3>No ads, no tracking</h3><p>No sponsored rows, no account, no analytics. Your settings stay on your TV.</p>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="install wrap" id="install">
-    <h2>Install in a minute</h2>
-    <p class="sub">Plume isn't on the Play Store. Install it straight on your TV with the free Downloader app.</p>
-
-    <div class="install-grid">
-      <div class="panel code-panel">
-        <p class="label">Downloader code</p>
-        <div class="digits" aria-label="2 1 2 5 3 5 6"><span>2</span><span>1</span><span>2</span><span>5</span><span>3</span><span>5</span><span>6</span></div>
-        <button type="button" class="btn ghost small" data-copy="2125356">Copy code</button>
-        <p class="hint">Always points to the latest release.</p>
+    <section class="feat">
+      <h2>Glass you can see through.</h2>
+      <div class="cols">
+        <p>Tiles and cards in Clear or Frosted glass, or solid. The selected tile rises and its edge catches the light.</p>
+        <p>Text and icons change colour to stay readable on any wallpaper.</p>
       </div>
+      <figure class="bleed"><img src="feature-clear.webp" alt="Plume home screen with Arctic Aurora wallpaper and clear glass tiles" width="1920" height="1080" loading="lazy"><figcaption>Arctic Aurora · Dark · Clear glass</figcaption></figure>
+    </section>
 
+    <section class="feat">
+      <h2>Pick up where you left off.</h2>
+      <div class="cols">
+        <p>Continue Watching brings your shows and films from your apps to the home screen, with the time left. Stremio and Nuvio too.</p>
+        <p>Cue, a small pill at the top, shows what's playing, live scores for your teams and a warning before rain. Then it goes away.</p>
+      </div>
+      <figure class="bleed"><img id="shot-2" src="home-light.webp" alt="Continue Watching and the Cue pill over the Humpback Whale wallpaper" width="1920" height="1080" loading="lazy"><figcaption id="shot-2-cap">Humpback Whale · Light · Frosted glass</figcaption></figure>
+    </section>
+
+    <section class="feat">
+      <h2>Make it yours.</h2>
+      <div class="cols">
+        <p>Five tile sizes. Mono logos, colour logos, banners or an icon pack. Reorder your apps, hide the ones you never open, or sort by most used.</p>
+        <ul class="chips"><li>Icon packs</li><li>Banners</li><li>Hide apps</li><li>PIN lock</li><li>Most used first</li></ul>
+      </div>
+      <figure class="bleed"><img src="readme/size-largest.jpg" alt="Plume with the largest app tile size" width="1280" height="720" loading="lazy"><figcaption>Largest tile size</figcaption></figure>
+    </section>
+
+    <section class="feat" aria-label="More features">
+      <h2>And the small things.</h2>
+      <div class="small">
+        <div><h3>Your Home button</h3><p>Home opens Plume, even on Google TV. Hold it for the Google TV dashboard.</p></div>
+        <div><h3>Remote keys</h3><p>Remap the TV, Netflix or Settings button, with a separate action on hold.</p></div>
+        <div><h3>Sources</h3><p>Switch HDMI inputs and consoles from the top bar.</p></div>
+        <div><h3>Recent apps</h3><p>Press Home twice to jump back into the apps you just used.</p></div>
+        <div><h3>Updates itself</h3><p>New versions install from Plume settings.</p></div>
+        <div><h3>No ads, no tracking</h3><p>No sponsored rows, no account, no analytics. Your settings stay on your TV.</p></div>
+      </div>
+    </section>
+
+    <section aria-label="Numbers">
+      <div class="stats">
+        <div><strong>0.6 MB</strong><span>APK size</span></div>
+        <div><strong>~60 MB</strong><span>RAM while running</span></div>
+        <div><strong>0</strong><span>Ads, trackers, accounts</span></div>
+        <div><strong id="stars">433</strong><span>GitHub stars</span></div>
+      </div>
+      <p class="stats-note">Size and RAM measured on a Hisense Google TV (Android 12). The stock Google TV launcher is ~25 MB and uses ~93 MB of RAM.</p>
+    </section>
+
+    <section class="end" id="get">
+      <h2>Get Plume.</h2>
+      <div class="digits" aria-label="Downloader code 2 1 2 5 3 5 6"><span>2</span><span>1</span><span>2</span><span>5</span><span>3</span><span>5</span><span>6</span></div>
+      <div class="cta">
+        <button type="button" class="btn" data-copy="2125356">Copy code</button>
+        <a class="btn line" id="download-2" href="https://github.com/aradhyas8/Plume_Launcher/releases/latest">Download APK</a>
+      </div>
       <ol class="steps">
         <li><strong>Get Downloader</strong><span>Search the Play Store on your TV for <em>Downloader</em> by AFTVnews and install it.</span></li>
-        <li><strong>Enter the code</strong><span>Open Downloader, type <b>2125356</b> and select <em>Go</em>. Allow Downloader to install apps when asked.</span></li>
-        <li><strong>Open Plume</strong><span>Install, then open Plume from your apps. Its settings open on first launch to set the Home button and default launcher.</span></li>
+        <li><strong>Enter the code</strong><span>Open Downloader, type <b>2125356</b> and select Go. Allow it to install apps when asked.</span></li>
+        <li><strong>Open Plume</strong><span>Its settings open on first launch to set the Home button. After that, Plume updates itself.</span></li>
       </ol>
-    </div>
-
-    <details class="more">
-      <summary>Other ways to install</summary>
-      <div class="more-body">
-        <p><strong>USB drive.</strong> <a href="https://github.com/aradhyas8/Plume_Launcher/releases/latest">Download the APK</a>, copy it to a USB drive and open it with a file manager on the TV.</p>
-        <p><strong>adb.</strong> From a computer on the same network:</p>
-        <div class="cmd"><code>adb install Plume-1.8.apk</code><button type="button" class="copy-icon" data-copy="adb install Plume-1.8.apk" aria-label="Copy command"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></button></div>
-        <p><strong>Android 13 and newer.</strong> Android greys out the Home button switch for apps installed outside the Play Store. The <a href="https://github.com/aradhyas8/Plume_Launcher#home-button-on-android-13-and-newer">README explains the one-time fix</a>.</p>
-      </div>
-    </details>
-
-    <p class="after">After that, Plume updates itself from <b>Plume settings → Updates</b>.</p>
-  </section>
+      <details class="more">
+        <summary>Other ways to install</summary>
+        <div class="more-body">
+          <p><strong>USB drive.</strong> <a href="https://github.com/aradhyas8/Plume_Launcher/releases/latest">Download the APK</a>, copy it to a USB drive and open it with a file manager on the TV.</p>
+          <p><strong>adb.</strong> From a computer on the same network:</p>
+          <div class="cmd"><code>adb install Plume-1.8.apk</code><button type="button" class="copy" data-copy="adb install Plume-1.8.apk" aria-label="Copy command"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button></div>
+          <p><strong>Android 13 and newer.</strong> Android greys out the Home button switch for apps installed outside the Play Store. The <a href="https://github.com/aradhyas8/Plume_Launcher#home-button-on-android-13-and-newer">README explains the one-time fix</a>.</p>
+        </div>
+      </details>
+      <p class="play">Coming soon to Google Play.</p>
+    </section>
+  </div>
 </main>
 
 <footer><div class="wrap">
-  <span class="foot-brand"><img src="plume-icon.png" alt="">Plume Launcher by aradhyas8 · GPL-3.0</span>
-  <span><a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="https://github.com/aradhyas8/Plume_Launcher/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/aradhyas8/Plume_Launcher">GitHub</a></span>
+  <span class="foot-brand"><span class="logo" role="img" aria-label="Plume logo"></span>Plume Launcher · GPL-3.0</span>
+  <span class="foot-links"><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="https://github.com/aradhyas8/Plume_Launcher/blob/main/CHANGELOG.md">Changelog</a><a href="https://github.com/aradhyas8/Plume_Launcher">GitHub</a></span>
 </div></footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (function () {
-  // The Dark/Light switch under the screenshot sets the theme of the screenshot and the whole site.
+  // The Dark/Light switch sets the theme of the whole site. The hero shows the matching home screen
+  // and the Continue Watching chapter shows the other one.
   var shot = document.getElementById('shot');
+  var shot2 = document.getElementById('shot-2');
+  var cap2 = document.getElementById('shot-2-cap');
   var buttons = document.querySelectorAll('[data-shot]');
+  var info = {
+    dark: { alt: 'Plume home screen with Sand Dunes wallpaper, dark theme and frosted glass', cap: 'Sand Dunes · Dark · Frosted glass' },
+    light: { alt: 'Plume home screen with Humpback Whale wallpaper, light theme and frosted glass', cap: 'Humpback Whale · Light · Frosted glass' }
+  };
   function show(theme) {
+    var other = theme === 'light' ? 'dark' : 'light';
     shot.src = 'home-' + theme + '.webp';
-    shot.alt = theme === 'light'
-      ? 'Plume home screen with Humpback Whale wallpaper, light theme and frosted glass'
-      : 'Plume home screen with Sand Dunes wallpaper, dark theme and frosted glass';
+    shot.alt = info[theme].alt;
+    shot2.src = 'home-' + other + '.webp';
+    shot2.alt = info[other].alt;
+    cap2.textContent = info[other].cap;
     buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.shot === theme)); });
   }
-  // Preload both shots so the switch never waits on the network.
   ['dark', 'light'].forEach(function (t) { new Image().src = 'home-' + t + '.webp'; });
 
   buttons.forEach(function (b) {
@@ -187,19 +216,25 @@
     });
   });
 
-  // Point the download button straight at the latest APK when GitHub answers.
-  fetch('https://api.github.com/repos/aradhyas8/Plume_Launcher/releases/latest')
+  // Point the download buttons straight at the latest APK, and show the live star count, when GitHub answers.
+  var api = 'https://api.github.com/repos/aradhyas8/Plume_Launcher';
+  fetch(api + '/releases/latest')
     .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
     .then(function (rel) {
       var apk = (rel.assets || []).filter(function (a) { return /\.apk$/i.test(a.name); })[0];
       if (!apk) return;
+      var version = 'v' + rel.tag_name.replace(/^v/i, '');
       document.getElementById('download').href = apk.browser_download_url;
-      document.getElementById('download-meta').textContent =
-        'v' + rel.tag_name.replace(/^v/i, '') + ' · ' + (apk.size / 1048576).toFixed(1) + ' MB';
-      var name = apk.name;
-      document.querySelectorAll('.cmd code').forEach(function (c) { c.textContent = 'adb install ' + name; });
-      document.querySelectorAll('.cmd [data-copy]').forEach(function (b) { b.dataset.copy = 'adb install ' + name; });
+      document.getElementById('download-2').href = apk.browser_download_url;
+      document.getElementById('download-meta').textContent = version + ' · ' + (apk.size / 1048576).toFixed(1) + ' MB';
+      document.getElementById('top-version').textContent = version;
+      document.querySelectorAll('.cmd code').forEach(function (c) { c.textContent = 'adb install ' + apk.name; });
+      document.querySelectorAll('.cmd [data-copy]').forEach(function (b) { b.dataset.copy = 'adb install ' + apk.name; });
     })
+    .catch(function () {});
+  fetch(api)
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function (repo) { if (repo.stargazers_count) document.getElementById('stars').textContent = repo.stargazers_count.toLocaleString('en'); })
     .catch(function () {});
 })();
 </script>
