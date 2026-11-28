@@ -10,6 +10,8 @@
     <string name="isl_access_off">Give access</string>
     <string name="help_isl_access">Needed for music and alerts from other apps. Plume reads only what Cue shows and sends nothing.</string>
     <string name="isl_access_adb">Needs ADB</string>
+    <string name="isl_access_none">Not on this TV</string>
+    <string name="isl_access_none_hint">This TV has no screen to give this access.</string>
     <string name="isl_overlay_access">Show over apps</string>
     <string name="help_isl_overlay_access">Lets Cue show alerts on top of other apps. Cue never takes the remote from the app.</string>
     <string name="isl_overlay_low">Not on this TV</string>

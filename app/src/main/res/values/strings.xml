@@ -259,6 +259,13 @@
     <string name="help_remote_home">Make Home open Plume, and change what the buttons on your remote do.</string>
     <string name="help_lock">A PIN that stops other people from changing your home screen.</string>
     <string name="help_updates">Plume checks for a new version once a day. Install it here.</string>
+    <string name="help_updates_play">The Play Store updates Plume. This shows what is new in your version.</string>
+    <string name="play_updates_row">Version %1$s · from the Play Store</string>
+    <string name="open_play_store">Open in Play Store</string>
+    <string name="a11y_disclosure_title">Before you turn on the Home button</string>
+    <string name="a11y_disclosure_body">Plume uses an Android accessibility service to make the Home button open Plume and to do what you set for your remote buttons. The service sees which app is open and which remote buttons you press. Plume uses this only for the Home button, your remote buttons and the Recent apps list. It does not read what is on the screen, and nothing leaves your TV.</string>
+    <string name="a11y_agree">Agree and continue</string>
+    <string name="screensaver_delay_play">Set the screensaver timeout in Android settings.</string>
     <string name="help_finish_setup">Home still opens the TV\'s own home screen. Set it to open Plume.</string>
     <string name="help_location">For the weather, and for sunrise and sunset in Auto. Automatic finds it from your internet address.</string>
     <string name="help_rearrange">Move the apps in the row. You can also hold OK on an app.</string>

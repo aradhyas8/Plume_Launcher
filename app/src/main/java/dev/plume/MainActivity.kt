@@ -763,6 +763,7 @@ class MainActivity : Activity() {
 
     /** The Home key service is an accessibility service, which Android only lets the user switch on. */
     private fun turnOnHomeButton() {
+        if (needsDisclosure()) return disclose { turnOnHomeButton() }
         prefs.edit().remove("home_off").apply()
         ensureHomeService() // works where the adb permission was granted
         if (homeServiceOn()) {
@@ -873,7 +874,8 @@ class MainActivity : Activity() {
     private fun afterHomeRole() = if (isDefaultHome() || homeServiceOn()) testPopup(1) else tryHomeService()
 
     /** Service still off after Accessibility: on Android 13+ a sideloaded app's toggle is greyed until App info allows it. */
-    private fun serviceStillOff() = if (sdk() >= 33 && !restrictedTried) restrictedPopup() else adbPopup()
+    private fun serviceStillOff() = if (BuildConfig.PLAY) servicePopup() // Play installs have no restricted settings
+        else if (sdk() >= 33 && !restrictedTried) restrictedPopup() else adbPopup()
 
     private fun tryHomeService() {
         prefs.edit().remove("home_off").apply()
@@ -913,7 +915,8 @@ class MainActivity : Activity() {
             getString(R.string.setup_skip_check) to { homeTest = 0; if (way == 1) tryHomeService() else adbPopup() })
     }
 
-    private fun servicePopup() = homePopup(2, getString(R.string.setup_service_title), getString(R.string.setup_service_body), null,
+    private fun servicePopup(): Unit = if (needsDisclosure()) disclose { servicePopup() }
+        else homePopup(2, getString(R.string.setup_service_title), getString(R.string.setup_service_body), null,
         getString(R.string.setup_open_accessibility) to {
             setupStep = 2
             if (!openHomeServiceSettings()) {
@@ -939,8 +942,24 @@ class MainActivity : Activity() {
             getString(R.string.setup_no_menu) to { adbPopup() })
     }
 
+    /**
+     * Play build: Google Play asks apps to say what their accessibility service does, and get a yes, before they
+     * send people to switch it on. Asked again until the user agrees; the GitHub build goes straight on.
+     */
+    private fun needsDisclosure() = BuildConfig.PLAY && !prefs.getBoolean("a11y_agreed", false)
+
+    private fun disclose(then: () -> Unit) = homePopup(0, getString(R.string.a11y_disclosure_title), getString(R.string.a11y_disclosure_body), null,
+        getString(R.string.a11y_agree) to {
+            prefs.edit().putBoolean("a11y_agreed", true).apply()
+            setupDialog?.dismiss()
+            then()
+        },
+        getString(R.string.setup_not_now) to { setupDialog?.dismiss() })
+
     /** The one-time grant lets Plume switch the service on itself, past the greyed-out toggle. */
     private fun adbPopup() {
+        // Play build: no adb route. With the service on, setup is done; with it off, Accessibility is the way.
+        if (BuildConfig.PLAY) return if (homeServiceOn()) donePopup() else servicePopup()
         val mono = Typeface.MONOSPACE
         val code = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1841,15 +1860,16 @@ class MainActivity : Activity() {
     }
 
     private fun pickMyPhotos(forDark: Boolean, focusOn: String? = null) {
-        val rows = listOf(
-            page(getString(R.string.wall_tv_photos)) { browsePhotoFolders(forDark) },
+        val tvPhotos = !BuildConfig.PLAY // Play build: no photo permission, photos come from a phone
+        val rows = listOfNotNull(
+            page(getString(R.string.wall_tv_photos)) { browsePhotoFolders(forDark) }.takeIf { tvPhotos },
             page(getString(R.string.my_uploads)) { pickUploads(forDark) },
             page(getString(R.string.add_from_phone)) {
                 uploadWallpaper(forDark, applyPhoto = false) { pickUploads(forDark, getString(R.string.add_from_phone)) }
             },
         )
-        val styles = listOf(
-            RowStyle(icon = R.drawable.ms_folder, sub = getString(R.string.wall_tv_photos_detail)),
+        val styles = listOfNotNull(
+            RowStyle(icon = R.drawable.ms_folder, sub = getString(R.string.wall_tv_photos_detail)).takeIf { tvPhotos },
             RowStyle(icon = R.drawable.ms_photo_library, sub = getString(R.string.help_my_uploads)),
             RowStyle(icon = R.drawable.ms_add_photo_alternate, sub = getString(R.string.wall_phone_detail)),
         )
@@ -3428,6 +3448,7 @@ class MainActivity : Activity() {
                 checking -> getString(R.string.checking)
                 availableUpdate() != null -> getString(R.string.update_available_row, availableUpdate())
                 notesUnseen() -> getString(R.string.whats_new_title, myVersion())
+                BuildConfig.PLAY -> getString(R.string.play_updates_row, myVersion())
                 else -> getString(R.string.up_to_date_row, myVersion())
             }) { showUpdates() },
             R.string.lock_layout to Triple(getString(R.string.lock_layout), toggle(lockOn())) {
@@ -3524,7 +3545,7 @@ class MainActivity : Activity() {
             // Home app is Android TV's own way (Google TV and Fire OS keep their home); Fire OS never passes keys to us, so no smooth volume there.
             Triple(R.string.section_remote_home, if (homeSetUp()) getString(R.string.home_button) else on(false),
                 listOfNotNull(R.string.home_button, R.string.default_launcher.takeIf { !googleTv() && !fireTv() }, R.string.smooth_volume.takeIf { !fireTv() },
-                    R.string.recent_previews.takeIf { Build.VERSION.SDK_INT >= 30 && !fireTv() },
+                    R.string.recent_previews.takeIf { Build.VERSION.SDK_INT >= 30 && !fireTv() && !BuildConfig.PLAY },
                     R.string.section_keys, R.string.setup_home)),
         )
         val section = sections.firstOrNull { at in it.third }
@@ -3597,7 +3618,8 @@ class MainActivity : Activity() {
             Triple(R.string.backup, page(getString(R.string.backup), "›") { showBackup() },
                 RowStyle(R.drawable.ms_folder, help = getString(R.string.help_backup))) +
             Triple(R.string.updates, rows[R.string.updates]!!.let { (t, _, a) -> page(t, "›", a) },
-                RowStyle(R.drawable.ms_system_update, rows[R.string.updates]!!.second, help = getString(R.string.help_updates))) +
+                RowStyle(R.drawable.ms_system_update, rows[R.string.updates]!!.second,
+                    help = getString(if (BuildConfig.PLAY) R.string.help_updates_play else R.string.help_updates))) +
             listOfNotNull(if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) null
                 else Triple(R.string.preview_home_setup, page(getString(R.string.preview_home_setup)) { closeLauncherSettings(); previewHomeSetup() },
                     RowStyle(R.drawable.ms_code)))
@@ -3624,7 +3646,8 @@ class MainActivity : Activity() {
 
     /** A Cue access row's value: Allowed, Give access (the TV has the screen) or Needs ADB. */
     private fun accessValue(on: Boolean, screen: Intent) =
-        getString(if (on) R.string.isl_access_on else if (hasScreen(screen)) R.string.isl_access_off else R.string.isl_access_adb)
+        getString(if (on) R.string.isl_access_on else if (hasScreen(screen)) R.string.isl_access_off
+            else if (BuildConfig.PLAY) R.string.isl_access_none else R.string.isl_access_adb)
 
     /** The TV's own Notification access screen; a TV without one gets the ADB sheet. */
     internal fun openListenerAccess() = openAccess(listenerScreen(), R.string.isl_access)
@@ -3648,6 +3671,7 @@ class MainActivity : Activity() {
 
     /** One sheet for both accesses: the TV gives them to itself over its own ADB, or a computer does. */
     private fun cueAdbSheet(body: String? = null) {
+        if (BuildConfig.PLAY) return toast(getString(R.string.isl_access_none_hint), long = true) // Play build: no adb route
         val adbOn = Settings.Global.getInt(contentResolver, Settings.Global.ADB_ENABLED, 0) == 1
         val text = body ?: listOfNotNull(
             getString(if (fireTv()) R.string.isl_adb_fire else R.string.isl_adb_tv),
@@ -6511,7 +6535,8 @@ class MainActivity : Activity() {
         val paintings = galleryOn() && photoScreensaver() == null && !aerialScreensaverOn()
         val photos = galleryOn() && photoScreensaver() != null
         val other = if (galleryOn()) prefs.getString("prev_screensaver", "").orEmpty() else currentScreensaver()
-        showPage(getString(R.string.screensaver), listOf(
+        val otherAt = if (BuildConfig.PLAY) 2 else 3 // Play build: no "Your photos" row (no photo permission)
+        showPage(getString(R.string.screensaver), listOfNotNull(
             page(getString(R.string.gallery_paintings), if (paintings) CHOSEN else if (downloading) getString(R.string.downloading) else PAINTINGS_MB) {
                 useGallery(null)
                 pickScreensaver(0)
@@ -6524,10 +6549,10 @@ class MainActivity : Activity() {
                     useGallery(choice)
                     pickScreensaver(2)
                 }
-            },
+            }.takeUnless { BuildConfig.PLAY },
             page(screensaverName(other), if (galleryOn()) "" else CHOSEN) {
                 if (galleryOn()) stopGallery()
-                pickScreensaver(3)
+                pickScreensaver(otherAt)
             },
         ), focus) { renderSettings(R.string.screensaver) }
     }
@@ -6641,7 +6666,8 @@ class MainActivity : Activity() {
 
     private fun pickScreensaverDelay() {
         if (checkSelfPermission(WRITE_SECURE) != PackageManager.PERMISSION_GRANTED) {
-            val hint = label(getString(R.string.screensaver_delay_permission) + "\n\nadb shell pm grant $packageName $WRITE_SECURE", 14f)
+            val hint = label(if (BuildConfig.PLAY) getString(R.string.screensaver_delay_play)
+                else getString(R.string.screensaver_delay_permission) + "\n\nadb shell pm grant $packageName $WRITE_SECURE", 14f)
                 .apply { maxLines = 8; ellipsize = null }
             return showPage(getString(R.string.screensaver_timing),
                 listOf(page(getString(R.string.act_settings), "") { openScreensaverSettings() }), top = hint) {
@@ -6753,6 +6779,7 @@ class MainActivity : Activity() {
     internal fun availableUpdate() = prefs.getString("upd_ver", null)?.takeIf { newerVersion(it, myVersion()) }
 
     private fun checkUpdate(force: Boolean) {
+        if (BuildConfig.PLAY) return // Play updates the Play build
         if (checking || !force && System.currentTimeMillis() - prefs.getLong("upd_time", 0) < 24 * 3600_000L) return
         checking = true
         if (force) renderSettings(R.string.updates)
@@ -6849,7 +6876,8 @@ class MainActivity : Activity() {
         updateBadge()
         val ver = availableUpdate()
         showPage(getString(R.string.whats_new_title, myVersion()), listOf(
-            if (ver != null) page(getString(R.string.install_update, ver)) { installUpdate(ver) }
+            if (BuildConfig.PLAY) page(getString(R.string.open_play_store)) { openPlayStore() }
+            else if (ver != null) page(getString(R.string.install_update, ver)) { installUpdate(ver) }
             else page(getString(R.string.check_updates)) { checkUpdate(force = true) },
         ), back = { renderSettings(R.string.updates) })
         // Focusable, lit on focus, so Down walks through notes longer than the panel and it scrolls along.
@@ -6906,8 +6934,15 @@ class MainActivity : Activity() {
         icon.overlay.add(badge)
     }
 
+    /** Plume's page in the Play Store app, or on the web where the TV has no Play Store. */
+    private fun openPlayStore() = try {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")))
+    } catch (e: Exception) {
+        openSettings(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
+    }
+
     private fun installUpdate(ver: String) {
-        if (updating) return
+        if (BuildConfig.PLAY || updating) return
         if (!packageManager.canRequestPackageInstalls()) {
             toast(getString(R.string.allow_installs), long = true, system = true)
             return openSettings(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))

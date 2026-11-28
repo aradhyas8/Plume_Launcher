@@ -13,7 +13,7 @@ android {
         applicationId = "dev.plume"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
+        versionCode = 12
         versionName = "1.8"
         testInstrumentationRunner = "dev.plume.ActivityTest"
         // What's new: only this version's section of CHANGELOG.md ships, one entry per line, ** marks kept for bold.
@@ -31,6 +31,7 @@ android {
 
     buildFeatures {
         resValues = true
+        buildConfig = true
     }
 
     // CI fails on new lint errors only; the ones already here are listed in lint-baseline.xml
@@ -72,6 +73,16 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            buildConfigField("boolean", "PLAY", "false")
+        }
+        // The Google Play build (./gradlew bundlePlay): Play updates it and its policies limit what it may do,
+        // so it has no self-updater, no adb setup, no screen capture and no photo access. See src/play/.
+        create("play") {
+            initWith(getByName("release"))
+            buildConfigField("boolean", "PLAY", "true")
+        }
+        debug {
+            buildConfigField("boolean", "PLAY", "false")
         }
     }
 }
